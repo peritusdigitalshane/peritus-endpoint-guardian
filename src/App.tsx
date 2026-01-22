@@ -11,6 +11,7 @@ import Dashboard from "./pages/Dashboard";
 import Endpoints from "./pages/Endpoints";
 import Threats from "./pages/Threats";
 import Policies from "./pages/Policies";
+import AgentDownload from "./pages/AgentDownload";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -54,6 +55,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Policies />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/deploy"
+              element={
+                <ProtectedRoute>
+                  <AgentDownload />
                 </ProtectedRoute>
               }
             />

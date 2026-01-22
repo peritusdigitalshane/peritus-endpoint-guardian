@@ -9,6 +9,7 @@ import {
   FileText,
   Activity,
   ChevronLeft,
+  Download,
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
@@ -18,6 +19,7 @@ const navigation = [
   { name: "Endpoints", href: "/endpoints", icon: Monitor },
   { name: "Threats", href: "/threats", icon: AlertTriangle },
   { name: "Policies", href: "/policies", icon: FileText },
+  { name: "Deploy Agent", href: "/deploy", icon: Download },
   { name: "Activity", href: "/activity", icon: Activity },
   { name: "Users", href: "/users", icon: Users },
   { name: "Settings", href: "/settings", icon: Settings },
