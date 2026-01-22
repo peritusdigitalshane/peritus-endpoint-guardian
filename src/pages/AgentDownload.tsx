@@ -1208,40 +1208,47 @@ function Apply-Policy {
 
 function Download-TrayIcon {
     # Download the Peritus icon from the server and save as ICO
-    $iconUrl = "${apiBaseUrl}".Replace("/functions/v1/agent-api", "") + "/peritus-icon.png"
-    # Use the published app URL for the icon
     $iconUrl = "https://id-preview--587aeb0c-5923-4707-8f47-ecfcbb3274e6.lovable.app/peritus-icon.png"
     
     try {
         Add-Type -AssemblyName System.Drawing
         
-        # Download PNG
+        # Download PNG to memory stream first (avoids file locking issues)
         $webClient = New-Object System.Net.WebClient
-        $pngPath = "$ConfigPath\\peritus-icon.png"
-        $webClient.DownloadFile($iconUrl, $pngPath)
-        Write-Log "Downloaded icon from: $iconUrl"
+        $pngBytes = $webClient.DownloadData($iconUrl)
+        Write-Log "Downloaded icon from: $iconUrl (Size: $($pngBytes.Length) bytes)"
         
-        # Convert PNG to ICO
-        if (Test-Path $pngPath) {
-            $bitmap = New-Object System.Drawing.Bitmap($pngPath)
-            # Resize to 32x32 for tray icon
-            $resized = New-Object System.Drawing.Bitmap($bitmap, 32, 32)
-            $iconHandle = $resized.GetHicon()
-            $icon = [System.Drawing.Icon]::FromHandle($iconHandle)
-            
-            # Save as ICO file
-            $fileStream = [System.IO.File]::Create($TrayIconFile)
-            $icon.Save($fileStream)
-            $fileStream.Close()
-            
-            $bitmap.Dispose()
-            $resized.Dispose()
-            
-            Write-Log "Icon saved to: $TrayIconFile"
-            return $true
-        }
+        # Load from memory stream
+        $memStream = New-Object System.IO.MemoryStream(,$pngBytes)
+        $originalBitmap = [System.Drawing.Image]::FromStream($memStream)
+        Write-Log "Loaded image: $($originalBitmap.Width)x$($originalBitmap.Height)"
+        
+        # Create 32x32 bitmap for tray icon
+        $resized = New-Object System.Drawing.Bitmap(32, 32)
+        $graphics = [System.Drawing.Graphics]::FromImage($resized)
+        $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+        $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+        $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+        $graphics.DrawImage($originalBitmap, 0, 0, 32, 32)
+        $graphics.Dispose()
+        
+        # Convert to icon
+        $iconHandle = $resized.GetHicon()
+        $icon = [System.Drawing.Icon]::FromHandle($iconHandle)
+        
+        # Save as ICO file
+        $fileStream = [System.IO.File]::Create($TrayIconFile)
+        $icon.Save($fileStream)
+        $fileStream.Close()
+        
+        $originalBitmap.Dispose()
+        $resized.Dispose()
+        $memStream.Dispose()
+        
+        Write-Log "Icon saved to: $TrayIconFile"
+        return $true
     } catch {
-        Write-Log "Failed to download icon: $_" -Level "WARN"
+        Write-Log "Failed to download/convert icon: $_" -Level "WARN"
     }
     return $false
 }
