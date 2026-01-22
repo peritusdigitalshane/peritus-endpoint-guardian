@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { DefenderPolicy } from "@/lib/defender-settings";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { logActivity } from "@/hooks/useActivityLogs";
 
 export interface PolicyOption {
   id: string;
@@ -85,11 +86,16 @@ export function useCreatePolicy() {
         .single();
 
       if (error) throw error;
+      
+      // Log activity
+      await logActivity(orgId, "create", "policy", data.id, { name: data.name });
+      
       return data as DefenderPolicy;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["policies"] });
       queryClient.invalidateQueries({ queryKey: ["policy-options"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
     },
   });
 }
@@ -113,26 +119,38 @@ export function useUpdatePolicy() {
         .single();
 
       if (error) throw error;
+      
+      // Log activity
+      await logActivity(data.organization_id, "update", "policy", id, { name: data.name });
+      
       return data as DefenderPolicy;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["policies"] });
       queryClient.invalidateQueries({ queryKey: ["policy-options"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
     },
   });
 }
 
 export function useDeletePolicy() {
   const queryClient = useQueryClient();
+  const { currentOrganization } = useTenant();
 
   return useMutation({
-    mutationFn: async ({ id }: { id: string }) => {
+    mutationFn: async ({ id, name }: { id: string; name?: string }) => {
       const { error } = await supabase.from("defender_policies").delete().eq("id", id);
       if (error) throw error;
+      
+      // Log activity
+      if (currentOrganization?.id) {
+        await logActivity(currentOrganization.id, "delete", "policy", id, { name: name || "Unknown" });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["policies"] });
       queryClient.invalidateQueries({ queryKey: ["policy-options"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
     },
   });
 }
@@ -144,9 +162,15 @@ export function useAssignPolicy() {
     mutationFn: async ({
       endpointId,
       policyId,
+      orgId,
+      endpointName,
+      policyName,
     }: {
       endpointId: string;
       policyId: string | null;
+      orgId?: string;
+      endpointName?: string;
+      policyName?: string;
     }) => {
       const { error } = await supabase
         .from("endpoints")
@@ -154,9 +178,22 @@ export function useAssignPolicy() {
         .eq("id", endpointId);
 
       if (error) throw error;
+      
+      // Log activity
+      if (orgId) {
+        await logActivity(
+          orgId, 
+          "policy_applied", 
+          "endpoint", 
+          endpointId, 
+          { endpoint: endpointName, policy: policyName || "None" },
+          endpointId
+        );
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["endpoints"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
     },
   });
 }

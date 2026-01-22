@@ -138,7 +138,7 @@ const Users = () => {
     if (!memberToRemove) return;
 
     try {
-      await removeMember.mutateAsync({ membershipId: memberToRemove.id });
+      await removeMember.mutateAsync({ membershipId: memberToRemove.id, email: memberToRemove.email });
       toast({
         title: "Member removed",
         description: `${memberToRemove.email} has been removed from the organization.`,
@@ -156,13 +156,13 @@ const Users = () => {
   const handleToggleSuperAdmin = async (userId: string, currentlySuper: boolean, email: string) => {
     try {
       if (currentlySuper) {
-        await revokeSuperAdmin.mutateAsync({ userId });
+        await revokeSuperAdmin.mutateAsync({ userId, email });
         toast({
           title: "Super Admin revoked",
           description: `${email} is no longer a Super Admin.`,
         });
       } else {
-        await grantSuperAdmin.mutateAsync({ userId });
+        await grantSuperAdmin.mutateAsync({ userId, email });
         toast({
           title: "Super Admin granted",
           description: `${email} is now a Super Admin.`,

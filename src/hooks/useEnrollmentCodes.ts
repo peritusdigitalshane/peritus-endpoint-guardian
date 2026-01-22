@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { logActivity } from "@/hooks/useActivityLogs";
 
 export interface EnrollmentCode {
   id: string;
@@ -85,10 +86,19 @@ export function useCreateEnrollmentCode() {
         .single();
 
       if (error) throw error;
+      
+      // Log activity
+      await logActivity(organizationId, "create", "enrollment_code", data.id, { 
+        code: data.code, 
+        role,
+        isSingleUse 
+      });
+      
       return data as EnrollmentCode;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["enrollment-codes"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
     },
   });
 }
