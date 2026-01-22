@@ -38,7 +38,13 @@ const getStatusDisplay = (status: string): { variant: "healthy" | "warning" | "c
   };
 };
 
-export function ThreatsList() {
+export function ThreatsList({
+  limit = 5,
+  showHeaderLink = true,
+}: {
+  limit?: number;
+  showHeaderLink?: boolean;
+}) {
   const { data: threats, isLoading, error } = useEndpointThreats();
 
   if (isLoading) {
@@ -73,7 +79,7 @@ export function ThreatsList() {
     );
   }
 
-  const displayThreats = threats?.slice(0, 5) || [];
+  const displayThreats = threats?.slice(0, limit) || [];
 
   return (
     <div className="rounded-xl border border-border bg-card shadow-card">
@@ -82,9 +88,11 @@ export function ThreatsList() {
           <AlertTriangle className="h-5 w-5 text-status-warning" />
           <h3 className="font-semibold text-foreground">Recent Threats</h3>
         </div>
-        <Link to="/threats" className="text-sm text-primary hover:underline">
-          View All
-        </Link>
+        {showHeaderLink ? (
+          <Link to="/threats" className="text-sm text-primary hover:underline">
+            View All
+          </Link>
+        ) : null}
       </div>
       
       {displayThreats.length === 0 ? (
