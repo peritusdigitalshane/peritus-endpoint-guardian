@@ -31,7 +31,7 @@ const generatePowershellScript = (orgId: string, apiBaseUrl: string) => {
     .\\PeritusSecureAgent.ps1 -ForceFullLogSync
     Forces collection of all Defender events from the past hour, ignoring last sync time.
 .NOTES
-    Version: 2.2.1
+    Version: 2.2.2
     Requires: Windows 10/11, PowerShell 5.1+, Administrator privileges
 #>
 
@@ -463,7 +463,10 @@ function Send-DefenderLogs {
         Write-Log "Logs reported: $($response.message)"
 
         # Only advance last_log_time after the API confirms receipt.
-        ($result.max_event_time ?? $result.fallback_time) | Set-Content -Path $lastLogTimeFile -Force -ErrorAction SilentlyContinue
+        # PowerShell 5.1 doesn't support the null-coalescing operator (??), so use explicit fallback.
+        $cursorTime = $result.max_event_time
+        if (-not $cursorTime) { $cursorTime = $result.fallback_time }
+        $cursorTime | Set-Content -Path $lastLogTimeFile -Force -ErrorAction SilentlyContinue
     } catch {
         Write-Log "Failed to send logs: $_" -Level "ERROR"
     }
@@ -803,7 +806,7 @@ function Apply-Policy {
 # ==================== MAIN EXECUTION ====================
 
 Write-Log "=========================================="
-Write-Log "Peritus Secure Agent v2.2.1"
+Write-Log "Peritus Secure Agent v2.2.2"
 Write-Log "=========================================="
 
 if ($Uninstall) { Uninstall-Agent }
