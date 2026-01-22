@@ -108,6 +108,16 @@ export function useLatestEndpointStatuses() {
   });
 }
 
+export interface SecurityRecommendation {
+  id: string;
+  title: string;
+  description: string;
+  impact: number; // Points gained if fixed
+  severity: "critical" | "high" | "medium" | "low";
+  affectedCount: number;
+  action: string;
+}
+
 export function useDashboardStats() {
   const { data: endpoints, isLoading: endpointsLoading } = useEndpoints();
   const { data: threats, isLoading: threatsLoading } = useEndpointThreats();
@@ -133,6 +143,119 @@ export function useDashboardStats() {
   const compliancePercentage = totalEndpoints > 0 
     ? Math.round((compliantEndpoints / totalEndpoints) * 100) 
     : 0;
+
+  // Detailed status checks for recommendations
+  const unprotectedEndpoints = statuses?.filter(s => s.realtime_protection_enabled !== true) || [];
+  const outdatedSignatures = statuses?.filter(s => s.antivirus_signature_age !== null && s.antivirus_signature_age > 1) || [];
+  const antivirusDisabled = statuses?.filter(s => s.antivirus_enabled !== true) || [];
+  const behaviorMonitorDisabled = statuses?.filter(s => s.behavior_monitor_enabled !== true) || [];
+  const ioavDisabled = statuses?.filter(s => s.ioav_protection_enabled !== true) || [];
+  const endpointsWithoutPolicy = endpoints?.filter(e => !e.policy_id) || [];
+  const offlineEndpoints = endpoints?.filter(e => !e.is_online) || [];
+
+  // Generate recommendations
+  const generateRecommendations = (): SecurityRecommendation[] => {
+    const recommendations: SecurityRecommendation[] = [];
+
+    if (activeThreats > 0) {
+      recommendations.push({
+        id: "active-threats",
+        title: "Resolve Active Threats",
+        description: `${activeThreats} active threat${activeThreats > 1 ? "s" : ""} detected across your fleet`,
+        impact: Math.min(activeThreats * 10, 30),
+        severity: "critical",
+        affectedCount: activeThreats,
+        action: "Review and remediate threats in the Threats page",
+      });
+    }
+
+    if (unprotectedEndpoints.length > 0) {
+      recommendations.push({
+        id: "realtime-protection",
+        title: "Enable Real-time Protection",
+        description: "Endpoints without real-time protection are vulnerable to malware",
+        impact: Math.round((unprotectedEndpoints.length / Math.max(totalEndpoints, 1)) * 30),
+        severity: "critical",
+        affectedCount: unprotectedEndpoints.length,
+        action: "Apply a policy with real-time monitoring enabled",
+      });
+    }
+
+    if (antivirusDisabled.length > 0) {
+      recommendations.push({
+        id: "antivirus-disabled",
+        title: "Enable Antivirus Protection",
+        description: "Endpoints with disabled antivirus are at high risk",
+        impact: Math.round((antivirusDisabled.length / Math.max(totalEndpoints, 1)) * 25),
+        severity: "critical",
+        affectedCount: antivirusDisabled.length,
+        action: "Ensure antivirus is enabled in the applied policy",
+      });
+    }
+
+    if (outdatedSignatures.length > 0) {
+      recommendations.push({
+        id: "outdated-signatures",
+        title: "Update Virus Definitions",
+        description: "Outdated signatures miss new threats - should be updated daily",
+        impact: Math.round((outdatedSignatures.length / Math.max(totalEndpoints, 1)) * 20),
+        severity: "high",
+        affectedCount: outdatedSignatures.length,
+        action: "Run Update-MpSignature or reduce signature update interval in policy",
+      });
+    }
+
+    if (endpointsWithoutPolicy.length > 0) {
+      recommendations.push({
+        id: "no-policy",
+        title: "Assign Security Policies",
+        description: "Endpoints without policies use default Windows settings",
+        impact: Math.round((endpointsWithoutPolicy.length / Math.max(totalEndpoints, 1)) * 15),
+        severity: "high",
+        affectedCount: endpointsWithoutPolicy.length,
+        action: "Assign a policy to unmanaged endpoints in the Endpoints page",
+      });
+    }
+
+    if (behaviorMonitorDisabled.length > 0) {
+      recommendations.push({
+        id: "behavior-monitor",
+        title: "Enable Behavior Monitoring",
+        description: "Behavior monitoring detects suspicious activity patterns",
+        impact: Math.round((behaviorMonitorDisabled.length / Math.max(totalEndpoints, 1)) * 10),
+        severity: "medium",
+        affectedCount: behaviorMonitorDisabled.length,
+        action: "Enable behavior monitoring in the applied policy",
+      });
+    }
+
+    if (ioavDisabled.length > 0) {
+      recommendations.push({
+        id: "ioav-protection",
+        title: "Enable Download Protection",
+        description: "IOAV scans files downloaded from the internet",
+        impact: Math.round((ioavDisabled.length / Math.max(totalEndpoints, 1)) * 10),
+        severity: "medium",
+        affectedCount: ioavDisabled.length,
+        action: "Enable IOAV protection in the applied policy",
+      });
+    }
+
+    if (offlineEndpoints.length > 0 && totalEndpoints > 0) {
+      recommendations.push({
+        id: "offline-endpoints",
+        title: "Reconnect Offline Endpoints",
+        description: "Offline endpoints may not receive policy updates or report threats",
+        impact: 5,
+        severity: "low",
+        affectedCount: offlineEndpoints.length,
+        action: "Verify agent is running on offline endpoints",
+      });
+    }
+
+    // Sort by impact (highest first)
+    return recommendations.sort((a, b) => b.impact - a.impact);
+  };
 
   // Calculate security score based on multiple factors
   const calculateSecurityScore = () => {
@@ -164,5 +287,6 @@ export function useDashboardStats() {
     endpoints: endpoints || [],
     threats: threats || [],
     statuses: statuses || [],
+    recommendations: generateRecommendations(),
   };
 }
