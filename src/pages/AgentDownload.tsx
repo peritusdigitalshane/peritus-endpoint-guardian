@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,8 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Download, Copy, CheckCircle, Shield, Terminal, Clock, Zap, AlertCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useTenant } from "@/contexts/TenantContext";
 
 const generatePowershellScript = (orgId: string, apiBaseUrl: string) => {
   return `#Requires -RunAsAdministrator
@@ -630,55 +630,13 @@ Write-Log "Agent run complete."
 };
 
 const AgentDownload = () => {
-  const [orgId, setOrgId] = useState<string | null>(null);
-  const [orgName, setOrgName] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { currentOrganization, isLoading } = useTenant();
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();
 
-  useEffect(() => {
-    const fetchOrganization = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          setError("You must be logged in to deploy agents.");
-          return;
-        }
-        
-        // Fetch user's organization membership
-        const { data: membership, error: membershipError } = await supabase
-          .from("organization_memberships")
-          .select("organization_id, organizations(id, name)")
-          .eq("user_id", user.id)
-          .limit(1)
-          .single();
-        
-        if (membershipError || !membership) {
-          setError("No organization found. Please contact support.");
-          return;
-        }
-        
-        const org = membership.organizations as { id: string; name: string } | null;
-        if (org) {
-          setOrgId(org.id);
-          setOrgName(org.name);
-        } else {
-          setError("Could not load organization details.");
-        }
-      } catch (err) {
-        console.error("Error fetching organization:", err);
-        setError("Failed to load organization. Please try again.");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    fetchOrganization();
-  }, []);
+  const orgId = currentOrganization?.id || null;
+  const orgName = currentOrganization?.name || null;
+  const error = !isLoading && !currentOrganization ? "No organization found. Please contact support." : null;
 
   const apiBaseUrl = "https://njdcyjxgtckgtzgzoctw.supabase.co/functions/v1/agent-api";
   const powershellScript = orgId ? generatePowershellScript(orgId, apiBaseUrl) : "";
