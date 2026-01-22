@@ -61,6 +61,8 @@ export function useEndpoints() {
       if (error) throw error;
       return data as Endpoint[];
     },
+    refetchInterval: 30000, // Refetch every 30 seconds
+    staleTime: 10000, // Consider data stale after 10 seconds
   });
 }
 
@@ -80,6 +82,8 @@ export function useEndpointThreats() {
       if (error) throw error;
       return data as EndpointThreat[];
     },
+    refetchInterval: 30000,
+    staleTime: 10000,
   });
 }
 
@@ -105,6 +109,8 @@ export function useLatestEndpointStatuses() {
       
       return Array.from(latestByEndpoint.values());
     },
+    refetchInterval: 30000, // Refetch every 30 seconds
+    staleTime: 10000, // Consider data stale after 10 seconds
   });
 }
 
