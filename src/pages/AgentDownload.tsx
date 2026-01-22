@@ -1303,7 +1303,7 @@ function Show-StatusForm {
         
         # Protection Status
         $lblProtection = New-Object System.Windows.Forms.Label
-        $protectionStatus = if ($StatusData.status.realtime_protection) { "✓ Protected" } else { "⚠ Not Protected" }
+        $protectionStatus = if ($StatusData.status.realtime_protection) { "[OK] Protected" } else { "[!] Not Protected" }
         $lblProtection.Text = "Real-time Protection: $protectionStatus"
         $lblProtection.Font = New-Object System.Drawing.Font("Segoe UI", 10)
         $lblProtection.ForeColor = if ($StatusData.status.realtime_protection) { [System.Drawing.Color]::LightGreen } else { [System.Drawing.Color]::Orange }
@@ -1314,7 +1314,7 @@ function Show-StatusForm {
         
         # Separator
         $sep1 = New-Object System.Windows.Forms.Label
-        $sep1.Text = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        $sep1.Text = "----------------------------------------"
         $sep1.ForeColor = [System.Drawing.Color]::Gray
         $sep1.Location = New-Object System.Drawing.Point(15, $y)
         $sep1.Size = New-Object System.Drawing.Size(380, 20)
@@ -1373,7 +1373,7 @@ function Show-StatusForm {
         # Threats
         $threatCount = $StatusData.threats.active_count
         $lblThreats = New-Object System.Windows.Forms.Label
-        $lblThreats.Text = if ($threatCount -gt 0) { "⚠ Active Threats: $threatCount" } else { "✓ No Active Threats" }
+        $lblThreats.Text = if ($threatCount -gt 0) { "[!] Active Threats: $threatCount" } else { "[OK] No Active Threats" }
         $lblThreats.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
         $lblThreats.ForeColor = if ($threatCount -gt 0) { [System.Drawing.Color]::Orange } else { [System.Drawing.Color]::LightGreen }
         $lblThreats.Location = New-Object System.Drawing.Point(15, $y)
