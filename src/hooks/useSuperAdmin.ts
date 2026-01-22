@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { logActivity } from "@/hooks/useActivityLogs";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface Organization {
   id: string;
@@ -73,6 +75,7 @@ export function useOrganizationsWithStats() {
 
 export function useCreateOrganization() {
   const queryClient = useQueryClient();
+  const { currentOrganization } = useTenant();
 
   return useMutation({
     mutationFn: async ({ name, slug }: { name: string; slug: string }) => {
@@ -83,11 +86,18 @@ export function useCreateOrganization() {
         .single();
 
       if (error) throw error;
+      
+      // Log activity
+      if (currentOrganization?.id) {
+        await logActivity(currentOrganization.id, "create", "organization", data.id, { name, slug });
+      }
+      
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-organizations"] });
       queryClient.invalidateQueries({ queryKey: ["admin-organizations-with-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
     },
   });
 }

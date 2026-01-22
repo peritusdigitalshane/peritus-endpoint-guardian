@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { logActivity } from "@/hooks/useActivityLogs";
 
 export type OrgRole = "owner" | "admin" | "member";
 
@@ -72,6 +73,7 @@ export function useOrganizationMembers() {
 
 export function useUpdateMemberRole() {
   const queryClient = useQueryClient();
+  const { currentOrganization } = useTenant();
 
   return useMutation({
     mutationFn: async ({
@@ -87,27 +89,40 @@ export function useUpdateMemberRole() {
         .eq("id", membershipId);
 
       if (error) throw error;
+      
+      // Log activity
+      if (currentOrganization?.id) {
+        await logActivity(currentOrganization.id, "update", "user", membershipId, { newRole });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["organization-members"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
     },
   });
 }
 
 export function useRemoveMember() {
   const queryClient = useQueryClient();
+  const { currentOrganization } = useTenant();
 
   return useMutation({
-    mutationFn: async ({ membershipId }: { membershipId: string }) => {
+    mutationFn: async ({ membershipId, email }: { membershipId: string; email?: string }) => {
       const { error } = await supabase
         .from("organization_memberships")
         .delete()
         .eq("id", membershipId);
 
       if (error) throw error;
+      
+      // Log activity
+      if (currentOrganization?.id) {
+        await logActivity(currentOrganization.id, "delete", "user", membershipId, { email });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["organization-members"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
     },
   });
 }
@@ -162,45 +177,66 @@ export function useAddMember() {
 
       if (insertError) throw insertError;
 
+      // Log activity
+      await logActivity(currentOrganization.id, "create", "user", profile.id, { 
+        email: profile.email, 
+        role 
+      });
+
       return { userId: profile.id, email: profile.email };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["organization-members"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
     },
   });
 }
 
 export function useGrantSuperAdmin() {
   const queryClient = useQueryClient();
+  const { currentOrganization } = useTenant();
 
   return useMutation({
-    mutationFn: async ({ userId }: { userId: string }) => {
+    mutationFn: async ({ userId, email }: { userId: string; email?: string }) => {
       const { error } = await supabase
         .from("super_admins")
         .insert({ user_id: userId });
 
       if (error) throw error;
+      
+      // Log activity
+      if (currentOrganization?.id) {
+        await logActivity(currentOrganization.id, "create", "super_admin", userId, { email });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["organization-members"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
     },
   });
 }
 
 export function useRevokeSuperAdmin() {
   const queryClient = useQueryClient();
+  const { currentOrganization } = useTenant();
 
   return useMutation({
-    mutationFn: async ({ userId }: { userId: string }) => {
+    mutationFn: async ({ userId, email }: { userId: string; email?: string }) => {
       const { error } = await supabase
         .from("super_admins")
         .delete()
         .eq("user_id", userId);
 
       if (error) throw error;
+      
+      // Log activity
+      if (currentOrganization?.id) {
+        await logActivity(currentOrganization.id, "delete", "super_admin", userId, { email });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["organization-members"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
     },
   });
 }
