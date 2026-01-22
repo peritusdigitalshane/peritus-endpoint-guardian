@@ -66,9 +66,19 @@ Deno.serve(async (req) => {
       return await handleLogs(req);
     }
 
+    // Route: POST /apps - Report discovered applications
+    if (path === "/apps" && req.method === "POST") {
+      return await handleApps(req);
+    }
+
     // Route: GET /policy - Get assigned policy
     if (path === "/policy" && req.method === "GET") {
       return await handleGetPolicy(req);
+    }
+
+    // Route: GET /wdac-policy - Get assigned WDAC policy with rules
+    if (path === "/wdac-policy" && req.method === "GET") {
+      return await handleGetWdacPolicy(req);
     }
 
     return new Response(JSON.stringify({ error: "Not found" }), {
@@ -406,6 +416,78 @@ async function handleLogs(req: Request) {
   );
 }
 
+// POST /apps - Receive discovered applications from agent
+async function handleApps(req: Request) {
+  const endpoint = await validateAgentToken(req);
+  const body = await req.json();
+  const { apps, source } = body;
+
+  if (!Array.isArray(apps)) {
+    return new Response(JSON.stringify({ error: "Invalid apps format" }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  let processedCount = 0;
+
+  for (const app of apps) {
+    if (!app.file_name || !app.file_path) continue;
+
+    // Check if app already exists for this endpoint
+    const { data: existing } = await supabase
+      .from("wdac_discovered_apps")
+      .select("id, execution_count, discovery_source")
+      .eq("endpoint_id", endpoint.id)
+      .eq("file_path", app.file_path)
+      .eq("file_hash", app.file_hash || "")
+      .maybeSingle();
+
+    const discoverySource = source || "agent_inventory";
+
+    if (existing) {
+      // Update existing app
+      let newSource = existing.discovery_source;
+      if (existing.discovery_source !== discoverySource && existing.discovery_source !== "both") {
+        newSource = "both";
+      }
+
+      await supabase
+        .from("wdac_discovered_apps")
+        .update({
+          last_seen_at: new Date().toISOString(),
+          execution_count: existing.execution_count + (app.execution_count || 1),
+          discovery_source: newSource,
+          publisher: app.publisher || undefined,
+          product_name: app.product_name || undefined,
+          file_version: app.file_version || undefined,
+        })
+        .eq("id", existing.id);
+    } else {
+      // Insert new app
+      await supabase.from("wdac_discovered_apps").insert({
+        organization_id: endpoint.organization_id,
+        endpoint_id: endpoint.id,
+        file_name: app.file_name,
+        file_path: app.file_path,
+        file_hash: app.file_hash || null,
+        publisher: app.publisher || null,
+        product_name: app.product_name || null,
+        file_version: app.file_version || null,
+        discovery_source: discoverySource,
+        execution_count: app.execution_count || 1,
+        raw_data: app.raw_data || null,
+      });
+    }
+    processedCount++;
+  }
+
+  return new Response(
+    JSON.stringify({ success: true, message: `Processed ${processedCount} applications` }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+
 // GET /policy - Get assigned policy for endpoint
 async function handleGetPolicy(req: Request) {
   const endpoint = await validateAgentToken(req);
@@ -427,6 +509,40 @@ async function handleGetPolicy(req: Request) {
 
   return new Response(
     JSON.stringify({ success: true, policy }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+
+// GET /wdac-policy - Get assigned WDAC policy with rules
+async function handleGetWdacPolicy(req: Request) {
+  const endpoint = await validateAgentToken(req);
+
+  if (!endpoint.wdac_policy_id) {
+    return new Response(
+      JSON.stringify({ success: true, wdac_policy: null, rules: [], message: "No WDAC policy assigned" }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  // Fetch the WDAC policy
+  const { data: policy, error: policyError } = await supabase
+    .from("wdac_policies")
+    .select("*")
+    .eq("id", endpoint.wdac_policy_id)
+    .single();
+
+  if (policyError) throw policyError;
+
+  // Fetch associated rules
+  const { data: rules, error: rulesError } = await supabase
+    .from("wdac_rules")
+    .select("*")
+    .eq("policy_id", endpoint.wdac_policy_id);
+
+  if (rulesError) throw rulesError;
+
+  return new Response(
+    JSON.stringify({ success: true, wdac_policy: policy, rules: rules || [] }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
 }

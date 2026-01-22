@@ -25,7 +25,7 @@ const generatePowershellScript = (orgId: string, apiBaseUrl: string) => {
 .PARAMETER Uninstall
     Remove the scheduled task and agent configuration
 .NOTES
-    Version: 2.0.0
+    Version: 2.1.0
     Requires: Windows 10/11, PowerShell 5.1+, Administrator privileges
 #>
 
@@ -378,6 +378,133 @@ function Get-AssignedPolicy {
     }
 }
 
+function Get-WdacPolicy {
+    param([string]$AgentToken)
+    try {
+        $headers = @{ "Content-Type" = "application/json"; "x-agent-token" = $AgentToken }
+        $response = Invoke-RestMethod -Uri "$ApiBaseUrl/wdac-policy" -Method GET -Headers $headers
+        return $response
+    } catch {
+        Write-Log "Could not fetch WDAC policy: $_" -Level "WARN"
+        return $null
+    }
+}
+
+# ==================== APP DISCOVERY ====================
+
+function Get-InstalledApplications {
+    Write-Log "Collecting installed applications..."
+    $apps = @()
+    
+    # Get from Uninstall registry keys (both 32-bit and 64-bit)
+    $registryPaths = @(
+        "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*",
+        "HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*",
+        "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*"
+    )
+    
+    foreach ($path in $registryPaths) {
+        try {
+            $regApps = Get-ItemProperty $path -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName }
+            foreach ($app in $regApps) {
+                $installLocation = $app.InstallLocation
+                if (-not $installLocation) { continue }
+                
+                # Find main executable
+                $exeFiles = Get-ChildItem -Path $installLocation -Filter "*.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($exeFiles) {
+                    $fileInfo = $exeFiles | Get-AuthenticodeSignature -ErrorAction SilentlyContinue
+                    $versionInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($exeFiles.FullName)
+                    
+                    $apps += @{
+                        file_name = $exeFiles.Name
+                        file_path = $exeFiles.FullName
+                        file_hash = (Get-FileHash -Path $exeFiles.FullName -Algorithm SHA256 -ErrorAction SilentlyContinue).Hash
+                        publisher = if ($fileInfo -and $fileInfo.SignerCertificate) { $fileInfo.SignerCertificate.Subject } else { $app.Publisher }
+                        product_name = $app.DisplayName
+                        file_version = $versionInfo.FileVersion
+                    }
+                }
+            }
+        } catch {
+            Write-Log "Error reading registry path $path : $_" -Level "WARN"
+        }
+    }
+    
+    Write-Log "Found $($apps.Count) installed applications"
+    return $apps
+}
+
+function Get-RunningProcesses {
+    Write-Log "Collecting running processes..."
+    $apps = @()
+    $seenPaths = @{}
+    
+    $processes = Get-Process | Where-Object { $_.Path } | Select-Object -Property Name, Path -Unique
+    
+    foreach ($proc in $processes) {
+        if ($seenPaths.ContainsKey($proc.Path)) { continue }
+        $seenPaths[$proc.Path] = $true
+        
+        try {
+            $fileInfo = Get-AuthenticodeSignature -FilePath $proc.Path -ErrorAction SilentlyContinue
+            $versionInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($proc.Path)
+            
+            $apps += @{
+                file_name = Split-Path $proc.Path -Leaf
+                file_path = $proc.Path
+                file_hash = (Get-FileHash -Path $proc.Path -Algorithm SHA256 -ErrorAction SilentlyContinue).Hash
+                publisher = if ($fileInfo -and $fileInfo.SignerCertificate) { $fileInfo.SignerCertificate.Subject } else { $versionInfo.CompanyName }
+                product_name = $versionInfo.ProductName
+                file_version = $versionInfo.FileVersion
+            }
+        } catch {
+            # Skip files we can't access
+        }
+    }
+    
+    Write-Log "Found $($apps.Count) running processes"
+    return $apps
+}
+
+function Send-DiscoveredApps {
+    param([string]$AgentToken)
+    
+    # Combine installed apps and running processes
+    $installedApps = Get-InstalledApplications
+    $runningApps = Get-RunningProcesses
+    
+    # Merge and dedupe by path
+    $allApps = @{}
+    foreach ($app in $installedApps) {
+        $key = $app.file_path.ToLower()
+        $allApps[$key] = $app
+    }
+    foreach ($app in $runningApps) {
+        $key = $app.file_path.ToLower()
+        if (-not $allApps.ContainsKey($key)) {
+            $allApps[$key] = $app
+        }
+    }
+    
+    $apps = @($allApps.Values)
+    
+    if ($apps.Count -eq 0) {
+        Write-Log "No applications to report"
+        return
+    }
+    
+    Write-Log "Reporting $($apps.Count) discovered applications..."
+    $body = @{ apps = $apps; source = "agent_inventory" }
+    
+    try {
+        $response = Invoke-ApiRequest -Endpoint "/apps" -Body $body -AgentToken $AgentToken
+        Write-Log "Apps reported: $($response.message)"
+    } catch {
+        Write-Log "Failed to send apps: $_" -Level "ERROR"
+    }
+}
+
 # ASR Rule GUIDs
 $AsrRuleGuids = @{
     "block_vulnerable_drivers" = "56a863a9-875e-4185-98a7-b882c64b5ce5"
@@ -614,15 +741,25 @@ if ($isFirstRun) {
 Send-Heartbeat -AgentToken $agentToken
 Send-Threats -AgentToken $agentToken
 Send-DefenderLogs -AgentToken $agentToken
+Send-DiscoveredApps -AgentToken $agentToken
 
-# Fetch and apply policy
+# Fetch and apply Defender policy
 $policy = Get-AssignedPolicy -AgentToken $agentToken
 if ($policy) {
-    Write-Log "Policy assigned: $($policy.name) (updated: $($policy.updated_at))"
+    Write-Log "Defender Policy assigned: $($policy.name) (updated: $($policy.updated_at))"
     $applied = Apply-Policy -Policy $policy -Force:$ForcePolicy
-    if ($applied) { Write-Log "Policy enforcement complete" }
+    if ($applied) { Write-Log "Defender policy enforcement complete" }
 } else {
-    Write-Log "No policy assigned to this endpoint"
+    Write-Log "No Defender policy assigned to this endpoint"
+}
+
+# Fetch WDAC policy (informational - actual enforcement requires WDAC tooling)
+$wdacResponse = Get-WdacPolicy -AgentToken $agentToken
+if ($wdacResponse -and $wdacResponse.wdac_policy) {
+    Write-Log "WDAC Policy assigned: $($wdacResponse.wdac_policy.name) (mode: $($wdacResponse.wdac_policy.mode))"
+    Write-Log "  Rules count: $($wdacResponse.rules.Count)"
+} else {
+    Write-Log "No WDAC policy assigned to this endpoint"
 }
 
 Write-Log "Agent run complete."
