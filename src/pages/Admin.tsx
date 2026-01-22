@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { useTenant } from "@/contexts/TenantContext";
 import { useOrganizationsWithStats, useCreateOrganization } from "@/hooks/useSuperAdmin";
@@ -27,13 +27,16 @@ import {
   Users, 
   Monitor, 
   Eye, 
-  Settings,
+  Ticket,
   Loader2,
   ShieldAlert,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
+import { EnrollmentCodesSection } from "@/components/admin/EnrollmentCodesSection";
 
 const Admin = () => {
   const { isSuperAdmin, setImpersonatedOrg, isLoading: tenantLoading } = useTenant();
@@ -45,6 +48,7 @@ const Admin = () => {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [newOrgName, setNewOrgName] = useState("");
   const [newOrgSlug, setNewOrgSlug] = useState("");
+  const [expandedOrgId, setExpandedOrgId] = useState<string | null>(null);
 
   // Generate slug from name
   const handleNameChange = (name: string) => {
@@ -91,6 +95,10 @@ const Admin = () => {
       description: `Now viewing as ${org.name}. Use the header to switch or exit.`,
     });
     navigate("/dashboard");
+  };
+
+  const toggleExpanded = (orgId: string) => {
+    setExpandedOrgId(expandedOrgId === orgId ? null : orgId);
   };
 
   if (tenantLoading || isLoading) {
@@ -197,7 +205,8 @@ const Admin = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {organizations.map((org) => (
+            {organizations.map((org) => (
+              <React.Fragment key={org.id}>
                 <TableRow key={org.id}>
                   <TableCell>
                     <div className="flex items-center gap-3">
@@ -220,6 +229,20 @@ const Admin = () => {
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
                       <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => toggleExpanded(org.id)}
+                        title="Manage enrollment codes"
+                      >
+                        <Ticket className="h-4 w-4 mr-1" />
+                        Codes
+                        {expandedOrgId === org.id ? (
+                          <ChevronUp className="h-4 w-4 ml-1" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 ml-1" />
+                        )}
+                      </Button>
+                      <Button
                         variant="outline"
                         size="sm"
                         onClick={() => handleViewAsTenant(org)}
@@ -227,21 +250,29 @@ const Admin = () => {
                         <Eye className="h-4 w-4 mr-1" />
                         View as Tenant
                       </Button>
-                      <Button variant="ghost" size="icon">
-                        <Settings className="h-4 w-4" />
-                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
-              {organizations.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                    No customers found. Create your first customer to get started.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
+                {expandedOrgId === org.id && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="bg-muted/30 p-4">
+                      <EnrollmentCodesSection 
+                        organizationId={org.id} 
+                        organizationName={org.name} 
+                      />
+                    </TableCell>
+                  </TableRow>
+                )}
+              </React.Fragment>
+            ))}
+            {organizations.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  No customers found. Create your first customer to get started.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
           </Table>
         </div>
 
