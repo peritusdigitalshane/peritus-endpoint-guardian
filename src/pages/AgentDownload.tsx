@@ -121,14 +121,13 @@ function Install-AgentTask {
     $triggerStartup = New-ScheduledTaskTrigger -AtStartup
 
     # Some Windows builds won't start a repeating trigger if the StartBoundary is already in the past.
-    # Create an immediate trigger slightly in the future, plus a daily trigger to keep it running long-term.
+    # Create a repeating trigger slightly in the future with a long repetition duration.
     $startAt = (Get-Date).AddSeconds(15)
-    $triggerImmediate = New-ScheduledTaskTrigger -Once -At $startAt -RepetitionInterval (New-TimeSpan -Seconds $scheduleIntervalSeconds) -RepetitionDuration (New-TimeSpan -Days 1)
-    $triggerDaily = New-ScheduledTaskTrigger -Daily -At (Get-Date).Date -RepetitionInterval (New-TimeSpan -Seconds $scheduleIntervalSeconds) -RepetitionDuration (New-TimeSpan -Days 1)
+    $triggerRepeat = New-ScheduledTaskTrigger -Once -At $startAt -RepetitionInterval (New-TimeSpan -Seconds $scheduleIntervalSeconds) -RepetitionDuration (New-TimeSpan -Days (365 * 20))
     $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Seconds 30)
     
-    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggerStartup,$triggerImmediate,$triggerDaily -Principal $principal -Settings $settings -Description "Peritus Secure Agent - Windows Defender Management" | Out-Null
+    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggerStartup,$triggerRepeat -Principal $principal -Settings $settings -Description "Peritus Secure Agent - Windows Defender Management" | Out-Null
 
     try {
         Start-ScheduledTask -TaskName $TaskName -ErrorAction Stop
@@ -303,6 +302,7 @@ $RelevantEventIds = @{
         1011,        # Quarantine delete failed
         1013,        # History deleted
         1015, 1016,  # Behavior suspicious/blocked
+        1116,        # Malware detected (commonly triggered by EICAR)
         1117,        # Threat action successful
         1118,        # Threat action failed
         1119,        # Critical threat action error
