@@ -116,13 +116,26 @@ function Install-AgentTask {
         $scheduleIntervalSeconds = 60
     }
 
-    $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -File \`"$ScriptPath\`""
+    # NOTE: We include -NoProfile/-NonInteractive to reduce variability and prevent prompts.
+    $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File \`"$ScriptPath\`""
     $triggerStartup = New-ScheduledTaskTrigger -AtStartup
-    $triggerRepeat = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Seconds $scheduleIntervalSeconds) -RepetitionDuration (New-TimeSpan -Days 9999)
+
+    # Some Windows builds won't start a repeating trigger if the StartBoundary is already in the past.
+    # Create an immediate trigger slightly in the future, plus a daily trigger to keep it running long-term.
+    $startAt = (Get-Date).AddSeconds(15)
+    $triggerImmediate = New-ScheduledTaskTrigger -Once -At $startAt -RepetitionInterval (New-TimeSpan -Seconds $scheduleIntervalSeconds) -RepetitionDuration (New-TimeSpan -Days 1)
+    $triggerDaily = New-ScheduledTaskTrigger -Daily -At (Get-Date).Date -RepetitionInterval (New-TimeSpan -Seconds $scheduleIntervalSeconds) -RepetitionDuration (New-TimeSpan -Days 1)
     $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Seconds 30)
     
-    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggerStartup,$triggerRepeat -Principal $principal -Settings $settings -Description "Peritus Secure Agent - Windows Defender Management" | Out-Null
+    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggerStartup,$triggerImmediate,$triggerDaily -Principal $principal -Settings $settings -Description "Peritus Secure Agent - Windows Defender Management" | Out-Null
+
+    try {
+        Start-ScheduledTask -TaskName $TaskName -ErrorAction Stop
+        Write-Log "Scheduled task started"
+    } catch {
+        Write-Log "Scheduled task created but could not be started immediately: $_" -Level "WARN"
+    }
     
     Write-Log "Scheduled task '$TaskName' created successfully"
     Write-Log "  - Runs at system startup"
