@@ -383,10 +383,20 @@ async function handleThreats(req: Request) {
     // Check if threat already exists
     const { data: existing } = await supabase
       .from("endpoint_threats")
-      .select("id")
+      .select("id, manual_resolution_active")
       .eq("endpoint_id", endpoint.id)
       .eq("threat_id", threat.threat_id)
       .maybeSingle();
+
+    const incomingStatus = String(threat.status || "Active");
+    const incomingStatusLc = incomingStatus.toLowerCase();
+    const incomingIndicatesNewActivity = [
+      "active",
+      "allowed",
+      "executing",
+      "quarantined",
+      "blocked",
+    ].includes(incomingStatusLc);
 
     if (existing) {
       // Update existing threat
@@ -396,6 +406,14 @@ async function handleThreats(req: Request) {
           status: threat.status,
           last_threat_status_change_time: threat.last_threat_status_change_time,
           raw_data: threat.raw_data,
+          // If a threat comes back (new activity), clear any manual "resolved" override.
+          ...(existing.manual_resolution_active && incomingIndicatesNewActivity
+            ? {
+                manual_resolution_active: false,
+                manual_resolved_at: null,
+                manual_resolved_by: null,
+              }
+            : {}),
         })
         .eq("id", existing.id);
     } else {
@@ -411,6 +429,9 @@ async function handleThreats(req: Request) {
         last_threat_status_change_time: threat.last_threat_status_change_time,
         resources: threat.resources,
         raw_data: threat.raw_data,
+        manual_resolution_active: false,
+        manual_resolved_at: null,
+        manual_resolved_by: null,
       });
 
       // Log the new threat
@@ -539,7 +560,7 @@ async function handleLogs(req: Request) {
     for (const threat of candidateThreats) {
       const { data: existing } = await supabase
         .from("endpoint_threats")
-        .select("id")
+        .select("id, manual_resolution_active")
         .eq("endpoint_id", endpoint.id)
         .eq("threat_id", threat.threat_id)
         .maybeSingle();
@@ -555,6 +576,14 @@ async function handleLogs(req: Request) {
             last_threat_status_change_time: threat.last_threat_status_change_time,
             resources: threat.resources as any,
             raw_data: threat.raw_data as any,
+            // Any new Defender threat event clears manual resolution override.
+            ...(existing.manual_resolution_active
+              ? {
+                  manual_resolution_active: false,
+                  manual_resolved_at: null,
+                  manual_resolved_by: null,
+                }
+              : {}),
           })
           .eq("id", existing.id);
       } else {
@@ -569,6 +598,9 @@ async function handleLogs(req: Request) {
           last_threat_status_change_time: threat.last_threat_status_change_time,
           resources: threat.resources as any,
           raw_data: threat.raw_data as any,
+          manual_resolution_active: false,
+          manual_resolved_at: null,
+          manual_resolved_by: null,
         });
       }
     }

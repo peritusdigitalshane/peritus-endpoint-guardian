@@ -89,7 +89,7 @@ const Threats = () => {
           />
         </div>
 
-        <ThreatsList limit={50} showHeaderLink={false} />
+        <ThreatsList limit={50} showHeaderLink={false} enableResolveActions />
       </div>
     </MainLayout>
   );

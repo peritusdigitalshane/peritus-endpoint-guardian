@@ -540,6 +540,9 @@ export type Database = {
           id: string
           initial_detection_time: string | null
           last_threat_status_change_time: string | null
+          manual_resolution_active: boolean
+          manual_resolved_at: string | null
+          manual_resolved_by: string | null
           raw_data: Json | null
           resources: Json | null
           severity: string
@@ -554,6 +557,9 @@ export type Database = {
           id?: string
           initial_detection_time?: string | null
           last_threat_status_change_time?: string | null
+          manual_resolution_active?: boolean
+          manual_resolved_at?: string | null
+          manual_resolved_by?: string | null
           raw_data?: Json | null
           resources?: Json | null
           severity: string
@@ -568,6 +574,9 @@ export type Database = {
           id?: string
           initial_detection_time?: string | null
           last_threat_status_change_time?: string | null
+          manual_resolution_active?: boolean
+          manual_resolved_at?: string | null
+          manual_resolved_by?: string | null
           raw_data?: Json | null
           resources?: Json | null
           severity?: string
