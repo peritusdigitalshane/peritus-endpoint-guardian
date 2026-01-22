@@ -108,9 +108,17 @@ function Install-AgentTask {
         Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
     }
     
+    # Task Scheduler repetition intervals under 1 minute are not supported on many Windows builds.
+    # If the user requests < 60s, clamp to 60s so installation doesn't fail.
+    $scheduleIntervalSeconds = $HeartbeatIntervalSeconds
+    if ($scheduleIntervalSeconds -lt 60) {
+        Write-Log "Task Scheduler does not support repetition intervals under 60 seconds. Using 60 seconds for the scheduled task." -Level "WARN"
+        $scheduleIntervalSeconds = 60
+    }
+
     $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -File \`"$ScriptPath\`""
     $triggerStartup = New-ScheduledTaskTrigger -AtStartup
-    $triggerRepeat = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Seconds $HeartbeatIntervalSeconds) -RepetitionDuration (New-TimeSpan -Days 9999)
+    $triggerRepeat = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Seconds $scheduleIntervalSeconds) -RepetitionDuration (New-TimeSpan -Days 9999)
     $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Seconds 30)
     
@@ -118,7 +126,7 @@ function Install-AgentTask {
     
     Write-Log "Scheduled task '$TaskName' created successfully"
     Write-Log "  - Runs at system startup"
-    Write-Log "  - Repeats every $HeartbeatIntervalSeconds seconds"
+    Write-Log "  - Repeats every $scheduleIntervalSeconds seconds"
     Write-Log "  - Runs as SYSTEM account"
     return $true
 }
