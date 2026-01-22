@@ -12,6 +12,10 @@ export interface Endpoint {
   created_at: string;
   organization_id: string;
   policy_id: string | null;
+  defender_policies?: {
+    id: string;
+    name: string;
+  } | null;
 }
 
 export interface EndpointThreat {
@@ -48,7 +52,10 @@ export function useEndpoints() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("endpoints")
-        .select("*")
+        .select(`
+          *,
+          defender_policies(id, name)
+        `)
         .order("last_seen_at", { ascending: false });
 
       if (error) throw error;
