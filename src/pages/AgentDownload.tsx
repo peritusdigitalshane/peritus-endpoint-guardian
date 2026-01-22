@@ -31,7 +31,7 @@ const generatePowershellScript = (orgId: string, apiBaseUrl: string) => {
     .\\PeritusSecureAgent.ps1 -ForceFullLogSync
     Forces collection of all Defender events from the past hour, ignoring last sync time.
 .NOTES
-    Version: 2.2.2
+    Version: 2.3.0
     Requires: Windows 10/11, PowerShell 5.1+, Administrator privileges
 #>
 
@@ -346,7 +346,9 @@ function Get-RelevantDefenderLogs {
     )
     
     $logs = @()
-    $startTime = (Get-Date).AddMinutes(-$MaxAgeMinutes)
+    # Use UTC internally for all time comparisons to avoid timezone issues
+    $nowUtc = (Get-Date).ToUniversalTime()
+    $startTimeUtc = $nowUtc.AddMinutes(-$MaxAgeMinutes)
     $lastLogTimeFile = "$ConfigPath\\last_log_time.txt"
     $maxSeenEventTime = $null
     
@@ -363,11 +365,12 @@ function Get-RelevantDefenderLogs {
         $lastLogTime = Get-Content $lastLogTimeFile -ErrorAction SilentlyContinue
         if ($lastLogTime) {
             try {
-                $parsedTime = [DateTime]::Parse($lastLogTime).AddSeconds(1)
+                # Parse and convert to UTC for consistent comparison
+                $parsedTimeUtc = [DateTime]::Parse($lastLogTime).ToUniversalTime().AddSeconds(1)
                 # Only use last log time if it's within the max age window
-                if ($parsedTime -gt $startTime) {
-                    $startTime = $parsedTime
-                    Write-Log "Using last log collection time: $lastLogTime"
+                if ($parsedTimeUtc -gt $startTimeUtc) {
+                    $startTimeUtc = $parsedTimeUtc
+                    Write-Log "Using last log collection time: $lastLogTime (UTC: $($startTimeUtc.ToString('o')))"
                 } else {
                     Write-Log "Last log time is older than $MaxAgeMinutes minutes, using full window"
                 }
@@ -377,7 +380,9 @@ function Get-RelevantDefenderLogs {
         }
     }
     
-    Write-Log "Collecting Defender events since: $($startTime.ToString('o'))"
+    # Convert UTC back to local time for Get-WinEvent (which expects local time)
+    $startTimeLocal = $startTimeUtc.ToLocalTime()
+    Write-Log "Collecting Defender events since: $($startTimeLocal.ToString('o')) (UTC: $($startTimeUtc.ToString('u')))"
     
     foreach ($logName in $RelevantEventIds.Keys) {
         $eventIds = $RelevantEventIds[$logName]
@@ -387,14 +392,14 @@ function Get-RelevantDefenderLogs {
                 Write-Log "  Querying $logName (force mode: no Event ID filter, max 250 events)"
                 $events = @(Get-WinEvent -FilterHashtable @{
                     LogName = $logName
-                    StartTime = $startTime
+                    StartTime = $startTimeLocal
                 } -ErrorAction SilentlyContinue | Select-Object -First 250)
             } else {
                 Write-Log "  Querying $logName for events: $($eventIds -join ', ')"
                 $events = @(Get-WinEvent -FilterHashtable @{
                     LogName = $logName
                     ID = $eventIds
-                    StartTime = $startTime
+                    StartTime = $startTimeLocal
                 } -ErrorAction SilentlyContinue)
             }
             
@@ -449,9 +454,10 @@ function Send-DefenderLogs {
     $lastLogTimeFile = "$ConfigPath\\last_log_time.txt"
 
     if ($logs.Count -eq 0) {
-        # Still advance the cursor to avoid re-scanning the same window forever.
-        $result.fallback_time | Set-Content -Path $lastLogTimeFile -Force -ErrorAction SilentlyContinue
-        Write-Log "No new Defender logs to report"
+        # CRITICAL: Do NOT advance cursor when no events found.
+        # If we advance, we lose events that may exist but weren't captured due to timing/filter issues.
+        # The next run will re-scan the same window, which is safe (dedup happens server-side if needed).
+        Write-Log "No new Defender logs to report (cursor not advanced)"
         return
     }
     
@@ -806,7 +812,7 @@ function Apply-Policy {
 # ==================== MAIN EXECUTION ====================
 
 Write-Log "=========================================="
-Write-Log "Peritus Secure Agent v2.2.2"
+Write-Log "Peritus Secure Agent v2.3.0"
 Write-Log "=========================================="
 
 if ($Uninstall) { Uninstall-Agent }
