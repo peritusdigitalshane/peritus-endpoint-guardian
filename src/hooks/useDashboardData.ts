@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 
 export interface Endpoint {
   id: string;
@@ -31,6 +32,7 @@ export interface EndpointThreat {
   created_at: string;
   endpoints?: {
     hostname: string;
+    organization_id: string;
   };
 }
 
@@ -47,10 +49,14 @@ export interface EndpointStatus {
 }
 
 export function useEndpoints() {
+  const { currentOrganization } = useTenant();
+  const orgId = currentOrganization?.id;
+
   return useQuery({
-    queryKey: ["endpoints"],
+    queryKey: ["endpoints", orgId],
+    enabled: !!orgId,
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("endpoints")
         .select(`
           *,
@@ -58,24 +64,44 @@ export function useEndpoints() {
         `)
         .order("last_seen_at", { ascending: false });
 
+      if (orgId) {
+        query = query.eq("organization_id", orgId);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return data as Endpoint[];
     },
-    refetchInterval: 30000, // Refetch every 30 seconds
-    staleTime: 10000, // Consider data stale after 10 seconds
+    refetchInterval: 30000,
+    staleTime: 10000,
   });
 }
 
 export function useEndpointThreats() {
+  const { currentOrganization } = useTenant();
+  const orgId = currentOrganization?.id;
+
   return useQuery({
-    queryKey: ["endpoint_threats"],
+    queryKey: ["endpoint_threats", orgId],
+    enabled: !!orgId,
     queryFn: async () => {
+      // First get endpoints for current org
+      const { data: endpoints } = await supabase
+        .from("endpoints")
+        .select("id")
+        .eq("organization_id", orgId!);
+
+      const endpointIds = endpoints?.map(e => e.id) || [];
+      
+      if (endpointIds.length === 0) return [];
+
       const { data, error } = await supabase
         .from("endpoint_threats")
         .select(`
           *,
-          endpoints(hostname)
+          endpoints(hostname, organization_id)
         `)
+        .in("endpoint_id", endpointIds)
         .order("created_at", { ascending: false })
         .limit(10);
 
@@ -88,13 +114,28 @@ export function useEndpointThreats() {
 }
 
 export function useLatestEndpointStatuses() {
+  const { currentOrganization } = useTenant();
+  const orgId = currentOrganization?.id;
+
   return useQuery({
-    queryKey: ["endpoint_statuses"],
+    queryKey: ["endpoint_statuses", orgId],
+    enabled: !!orgId,
     queryFn: async () => {
+      // First get endpoints for current org
+      const { data: endpoints } = await supabase
+        .from("endpoints")
+        .select("id")
+        .eq("organization_id", orgId!);
+
+      const endpointIds = endpoints?.map(e => e.id) || [];
+      
+      if (endpointIds.length === 0) return [];
+
       // Get the latest status for each endpoint
       const { data, error } = await supabase
         .from("endpoint_status")
         .select("*")
+        .in("endpoint_id", endpointIds)
         .order("collected_at", { ascending: false });
 
       if (error) throw error;
@@ -109,8 +150,8 @@ export function useLatestEndpointStatuses() {
       
       return Array.from(latestByEndpoint.values());
     },
-    refetchInterval: 30000, // Refetch every 30 seconds
-    staleTime: 10000, // Consider data stale after 10 seconds
+    refetchInterval: 30000,
+    staleTime: 10000,
   });
 }
 

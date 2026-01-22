@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { TenantSwitcher } from "./TenantSwitcher";
 
 export function Header() {
   const { user, signOut } = useAuth();
@@ -37,6 +38,8 @@ export function Header() {
       </div>
 
       <div className="flex items-center gap-4">
+        <TenantSwitcher />
+        
         <StatusBadge status="healthy" label="All Systems Operational" pulse />
         
         <Button variant="ghost" size="icon" className="relative">

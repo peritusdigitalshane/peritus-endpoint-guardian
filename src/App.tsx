@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { TenantProvider } from "@/contexts/TenantContext";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
@@ -14,6 +15,7 @@ import Policies from "./pages/Policies";
 import AgentDownload from "./pages/AgentDownload";
 import EventLogs from "./pages/EventLogs";
 import Activity from "./pages/Activity";
+import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -25,67 +27,77 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <Routes>
-            <Route path="/" element={<Landing />} />
-            <Route path="/login" element={<Login />} />
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/endpoints"
-              element={
-                <ProtectedRoute>
-                  <Endpoints />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/threats"
-              element={
-                <ProtectedRoute>
-                  <Threats />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/policies"
-              element={
-                <ProtectedRoute>
-                  <Policies />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/deploy"
-              element={
-                <ProtectedRoute>
-                  <AgentDownload />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/logs"
-              element={
-                <ProtectedRoute>
-                  <EventLogs />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/activity"
-              element={
-                <ProtectedRoute>
-                  <Activity />
-                </ProtectedRoute>
-              }
-            />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <TenantProvider>
+            <Routes>
+              <Route path="/" element={<Landing />} />
+              <Route path="/login" element={<Login />} />
+              <Route
+                path="/dashboard"
+                element={
+                  <ProtectedRoute>
+                    <Dashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/endpoints"
+                element={
+                  <ProtectedRoute>
+                    <Endpoints />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/threats"
+                element={
+                  <ProtectedRoute>
+                    <Threats />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/policies"
+                element={
+                  <ProtectedRoute>
+                    <Policies />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/deploy"
+                element={
+                  <ProtectedRoute>
+                    <AgentDownload />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/logs"
+                element={
+                  <ProtectedRoute>
+                    <EventLogs />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/activity"
+                element={
+                  <ProtectedRoute>
+                    <Activity />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin"
+                element={
+                  <ProtectedRoute>
+                    <Admin />
+                  </ProtectedRoute>
+                }
+              />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </TenantProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
