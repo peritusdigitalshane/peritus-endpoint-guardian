@@ -257,22 +257,44 @@ export function useDashboardStats() {
     return recommendations.sort((a, b) => b.impact - a.impact);
   };
 
-  // Calculate security score based on multiple factors
+  // Calculate security score based on the same factors as the compliance chart
   const calculateSecurityScore = () => {
-    if (totalEndpoints === 0) return 0;
+    if (totalEndpoints === 0 || !statuses || statuses.length === 0) return 0;
     
-    let score = 100;
+    const statusCount = statuses.length;
     
-    // Deduct for unprotected endpoints
-    const unprotectedRatio = 1 - (protectedCount / totalEndpoints);
-    score -= unprotectedRatio * 30;
+    // Calculate individual compliance percentages (matching ComplianceChart)
+    const realtimeCompliance = (statuses.filter(s => s.realtime_protection_enabled === true).length / statusCount) * 100;
+    const antivirusCompliance = (statuses.filter(s => s.antivirus_enabled === true).length / statusCount) * 100;
+    const signatureCompliance = (statuses.filter(s => s.antivirus_signature_age !== null && s.antivirus_signature_age <= 1).length / statusCount) * 100;
+    const behaviorCompliance = (statuses.filter(s => s.behavior_monitor_enabled === true).length / statusCount) * 100;
+    const ioavCompliance = (statuses.filter(s => s.ioav_protection_enabled === true).length / statusCount) * 100;
+    const policyCompliance = (endpoints?.filter(e => e.policy_id !== null).length || 0) / totalEndpoints * 100;
     
-    // Deduct for active threats
-    score -= Math.min(activeThreats * 10, 30);
+    // Weighted average matching the compliance chart categories
+    // Higher weights for critical protections
+    const weights = {
+      realtime: 25,
+      antivirus: 20,
+      signature: 20,
+      behavior: 15,
+      ioav: 10,
+      policy: 10,
+    };
     
-    // Deduct for non-compliance
-    const nonCompliantRatio = 1 - (compliantEndpoints / Math.max(statuses?.length || 1, 1));
-    score -= nonCompliantRatio * 20;
+    const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
+    
+    let score = (
+      (realtimeCompliance * weights.realtime) +
+      (antivirusCompliance * weights.antivirus) +
+      (signatureCompliance * weights.signature) +
+      (behaviorCompliance * weights.behavior) +
+      (ioavCompliance * weights.ioav) +
+      (policyCompliance * weights.policy)
+    ) / totalWeight;
+    
+    // Deduct for active threats (up to 20 points)
+    score -= Math.min(activeThreats * 5, 20);
     
     return Math.max(0, Math.round(score));
   };
