@@ -1,7 +1,7 @@
-import { Monitor, Shield, Clock, ChevronRight, Loader2, FileText } from "lucide-react";
+import { Monitor, Shield, Clock, ChevronRight, Loader2 } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useEndpoints } from "@/hooks/useDashboardData";
-import { usePolicies, useAssignPolicy } from "@/hooks/usePolicies";
+import { useAssignPolicy, usePolicyOptions } from "@/hooks/usePolicies";
 import { formatDistanceToNow } from "date-fns";
 import { Link } from "react-router-dom";
 import {
@@ -47,7 +47,7 @@ const getProtectionStatus = (status: "healthy" | "warning" | "critical") => {
 
 export function EndpointsTable() {
   const { data: endpoints, isLoading, error } = useEndpoints();
-  const { data: policies } = usePolicies();
+  const { data: policyOptions } = usePolicyOptions();
   const assignPolicy = useAssignPolicy();
   const { toast } = useToast();
 
@@ -201,22 +201,23 @@ export function EndpointsTable() {
                         disabled={assignPolicy.isPending}
                       >
                         <SelectTrigger className="w-[160px] h-8 text-xs">
-                          <SelectValue placeholder="No policy">
-                            <span className="flex items-center gap-1.5">
-                              <FileText className="h-3 w-3" />
-                              {endpoint.defender_policies?.name || "No policy"}
-                            </span>
-                          </SelectValue>
+                          <SelectValue placeholder="No policy" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">
                             <span className="text-muted-foreground">No policy</span>
                           </SelectItem>
-                          {policies?.map((policy) => (
-                            <SelectItem key={policy.id} value={policy.id}>
-                              {policy.name}
+                          {policyOptions && policyOptions.length > 0 ? (
+                            policyOptions.map((policy) => (
+                              <SelectItem key={policy.id} value={policy.id}>
+                                {policy.name}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <SelectItem value="__no_policies" disabled>
+                              No policies created yet
                             </SelectItem>
-                          ))}
+                          )}
                         </SelectContent>
                       </Select>
                     </td>
