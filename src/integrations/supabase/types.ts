@@ -167,6 +167,56 @@ export type Database = {
           },
         ]
       }
+      endpoint_event_logs: {
+        Row: {
+          created_at: string
+          endpoint_id: string
+          event_id: number
+          event_time: string
+          id: string
+          level: string
+          log_source: string
+          message: string
+          provider_name: string | null
+          raw_data: Json | null
+          task_category: string | null
+        }
+        Insert: {
+          created_at?: string
+          endpoint_id: string
+          event_id: number
+          event_time: string
+          id?: string
+          level: string
+          log_source: string
+          message: string
+          provider_name?: string | null
+          raw_data?: Json | null
+          task_category?: string | null
+        }
+        Update: {
+          created_at?: string
+          endpoint_id?: string
+          event_id?: number
+          event_time?: string
+          id?: string
+          level?: string
+          log_source?: string
+          message?: string
+          provider_name?: string | null
+          raw_data?: Json | null
+          task_category?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "endpoint_event_logs_endpoint_id_fkey"
+            columns: ["endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "endpoints"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       endpoint_logs: {
         Row: {
           created_at: string

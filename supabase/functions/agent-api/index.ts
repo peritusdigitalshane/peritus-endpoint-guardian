@@ -36,6 +36,11 @@ Deno.serve(async (req) => {
       return await handleThreats(req);
     }
 
+    // Route: POST /logs - Report event logs
+    if (path === "/logs" && req.method === "POST") {
+      return await handleLogs(req);
+    }
+
     // Route: GET /policy - Get assigned policy
     if (path === "/policy" && req.method === "GET") {
       return await handleGetPolicy(req);
@@ -300,6 +305,55 @@ async function handleThreats(req: Request) {
 
   return new Response(
     JSON.stringify({ success: true, message: `Processed ${threats.length} threats` }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+
+// POST /logs - Receive event logs from agent
+async function handleLogs(req: Request) {
+  const endpoint = await validateAgentToken(req);
+  const body = await req.json();
+  const { logs } = body;
+
+  if (!Array.isArray(logs) || logs.length === 0) {
+    return new Response(
+      JSON.stringify({ success: true, message: "No logs to process" }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  // Insert logs in batch
+  const logsToInsert = logs.map((log: {
+    event_id: number;
+    event_source: string;
+    level: string;
+    message: string;
+    event_time: string;
+    details?: Record<string, unknown>;
+  }) => ({
+    endpoint_id: endpoint.id,
+    event_id: log.event_id,
+    event_source: log.event_source,
+    level: log.level,
+    message: log.message,
+    event_time: log.event_time,
+    details: log.details || null,
+  }));
+
+  const { error: insertError } = await supabase
+    .from("endpoint_event_logs")
+    .insert(logsToInsert);
+
+  if (insertError) {
+    console.error("Error inserting logs:", insertError);
+    return new Response(
+      JSON.stringify({ success: false, error: "Failed to store logs" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  return new Response(
+    JSON.stringify({ success: true, message: `Processed ${logs.length} logs` }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
 }
