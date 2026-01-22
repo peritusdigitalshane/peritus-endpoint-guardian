@@ -269,7 +269,8 @@ $RelevantEventIds = @{
         1118,        # Threat action failed
         1119,        # Critical threat action error
         1121, 1122,  # ASR rule triggered (block/audit)
-        1125, 1126,  # Controlled folder access (block/audit)
+        1123, 1124,  # Controlled folder access (block/audit)
+        1125, 1126,  # Controlled folder access additional events
         1127, 1128,  # Network protection events
         1129,        # ASR warn mode event
         2000, 2001,  # Signature update started/completed
