@@ -239,6 +239,121 @@ function Send-Threats {
     Write-Log "Threats reported: $($response.message)"
 }
 
+# Relevant Windows Defender Event IDs to collect
+$RelevantEventIds = @{
+    # Windows Defender Operational Log
+    "Microsoft-Windows-Windows Defender/Operational" = @(
+        1000, 1001,  # Scan started/completed
+        1002,        # Scan cancelled
+        1005, 1006,  # Malware detected/action taken
+        1007,        # Failed to take action
+        1008,        # Failed to remove malware
+        1009,        # Malware quarantined
+        1010,        # Removed from quarantine
+        1011,        # Quarantine delete failed
+        1013,        # History deleted
+        1015, 1016,  # Behavior suspicious/blocked
+        1117,        # Threat action successful
+        1118,        # Threat action failed
+        1119,        # Critical threat action error
+        2000, 2001,  # Signature update started/completed
+        2002,        # Signature update failed
+        2003,        # Engine update started
+        2004, 2005,  # Engine update completed/failed
+        2010, 2011,  # Platform update started/completed
+        2012,        # Platform update failed
+        3002,        # Real-time protection failure
+        5000, 5001,  # Real-time protection enabled/disabled
+        5004, 5007,  # Configuration changed
+        5008,        # Engine state changed
+        5010, 5012   # Signature/platform outdated
+    )
+    # Security Log (ASR and Exploit Guard events)
+    "Security" = @(
+        1121, 1122,  # ASR rule triggered (block/audit)
+        1125, 1126,  # Controlled folder access (block/audit)
+        1127, 1128   # Network protection events
+    )
+}
+
+function Get-RelevantDefenderLogs {
+    param([int]$MaxAgeMinutes = 10)
+    
+    $logs = @()
+    $startTime = (Get-Date).AddMinutes(-$MaxAgeMinutes)
+    $lastLogTimeFile = "$ConfigPath\\last_log_time.txt"
+    
+    # Use last collection time if available
+    if (Test-Path $lastLogTimeFile) {
+        $lastLogTime = Get-Content $lastLogTimeFile -ErrorAction SilentlyContinue
+        if ($lastLogTime) {
+            try {
+                $startTime = [DateTime]::Parse($lastLogTime).AddSeconds(1)
+            } catch { }
+        }
+    }
+    
+    foreach ($logName in $RelevantEventIds.Keys) {
+        $eventIds = $RelevantEventIds[$logName]
+        
+        try {
+            $events = Get-WinEvent -FilterHashtable @{
+                LogName = $logName
+                ID = $eventIds
+                StartTime = $startTime
+            } -ErrorAction SilentlyContinue
+            
+            if ($events) {
+                foreach ($event in $events) {
+                    $logs += @{
+                        event_id = $event.Id
+                        event_source = $logName
+                        level = switch ($event.Level) { 1 { "Critical" } 2 { "Error" } 3 { "Warning" } 4 { "Information" } default { "Unknown" } }
+                        message = $event.Message
+                        event_time = $event.TimeCreated.ToString("o")
+                        details = @{
+                            provider = $event.ProviderName
+                            task = $event.TaskDisplayName
+                            keywords = $event.KeywordsDisplayNames -join ", "
+                            computer = $event.MachineName
+                            user = $event.UserId
+                            record_id = $event.RecordId
+                        }
+                    }
+                }
+            }
+        } catch {
+            # Log might not exist or be inaccessible
+            Write-Log "Could not read events from $($logName): $_" -Level "WARN"
+        }
+    }
+    
+    # Save collection time
+    (Get-Date).ToString("o") | Set-Content -Path $lastLogTimeFile -Force -ErrorAction SilentlyContinue
+    
+    return $logs
+}
+
+function Send-DefenderLogs {
+    param([string]$AgentToken)
+    
+    $logs = Get-RelevantDefenderLogs
+    if ($logs.Count -eq 0) { 
+        Write-Log "No new Defender logs to report"
+        return 
+    }
+    
+    Write-Log "Reporting $($logs.Count) Defender event logs..."
+    $body = @{ logs = $logs }
+    
+    try {
+        $response = Invoke-ApiRequest -Endpoint "/logs" -Body $body -AgentToken $AgentToken
+        Write-Log "Logs reported: $($response.message)"
+    } catch {
+        Write-Log "Failed to send logs: $_" -Level "ERROR"
+    }
+}
+
 function Get-AssignedPolicy {
     param([string]$AgentToken)
     try {
@@ -489,6 +604,7 @@ if ($isFirstRun) {
 
 Send-Heartbeat -AgentToken $agentToken
 Send-Threats -AgentToken $agentToken
+Send-DefenderLogs -AgentToken $agentToken
 
 # Fetch and apply policy
 $policy = Get-AssignedPolicy -AgentToken $agentToken
