@@ -7,6 +7,7 @@ import { formatDistanceToNow } from "date-fns";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 
 const severityStyles: Record<string, string> = {
   severe: "border-l-status-critical",
@@ -52,6 +53,7 @@ export function ThreatsList({
 }) {
   const { data: threats, isLoading, error } = useEndpointThreats();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const resolveThreat = async (threatId: string) => {
     try {
@@ -70,6 +72,9 @@ export function ThreatsList({
         .eq("id", threatId);
 
       if (updateError) throw updateError;
+
+      // Refresh list immediately so the status flips without waiting for the 30s poll.
+      await queryClient.invalidateQueries({ queryKey: ["endpoint_threats"] });
 
       toast({
         title: "Threat resolved",
