@@ -348,6 +348,7 @@ function Get-RelevantDefenderLogs {
     $logs = @()
     $startTime = (Get-Date).AddMinutes(-$MaxAgeMinutes)
     $lastLogTimeFile = "$ConfigPath\\last_log_time.txt"
+    $maxSeenEventTime = $null
     
     $forceSync = ($IgnoreLastLogTime -or $script:ForceFullLogSync)
 
@@ -400,12 +401,17 @@ function Get-RelevantDefenderLogs {
             if ($events) {
                 Write-Log "  Found $($events.Count) events in $logName"
                 foreach ($event in $events) {
+                    $eventTimeIso = $event.TimeCreated.ToString("o")
+                    if (-not $maxSeenEventTime -or ([DateTime]::Parse($eventTimeIso) -gt [DateTime]::Parse($maxSeenEventTime))) {
+                        $maxSeenEventTime = $eventTimeIso
+                    }
+
                     $logs += @{
                         event_id = $event.Id
                         event_source = $logName
                         level = switch ($event.Level) { 1 { "Critical" } 2 { "Error" } 3 { "Warning" } 4 { "Information" } default { "Unknown" } }
                         message = $event.Message
-                        event_time = $event.TimeCreated.ToString("o")
+                        event_time = $eventTimeIso
                         details = @{
                             provider = $event.ProviderName
                             task = $event.TaskDisplayName
@@ -424,20 +430,29 @@ function Get-RelevantDefenderLogs {
         }
     }
     
-    # Save collection time
-    (Get-Date).ToString("o") | Set-Content -Path $lastLogTimeFile -Force -ErrorAction SilentlyContinue
-    
     Write-Log "Total events collected: $($logs.Count)"
-    return $logs
+
+    # Return both the logs and the max event time we saw.
+    # IMPORTANT: We only advance last_log_time after a successful POST to the API.
+    return [pscustomobject]@{
+        logs = $logs
+        max_event_time = $maxSeenEventTime
+        fallback_time = (Get-Date).ToString("o")
+    }
 }
 
 function Send-DefenderLogs {
     param([string]$AgentToken)
     
-    $logs = Get-RelevantDefenderLogs
-    if ($logs.Count -eq 0) { 
+    $result = Get-RelevantDefenderLogs
+    $logs = @($result.logs)
+    $lastLogTimeFile = "$ConfigPath\\last_log_time.txt"
+
+    if ($logs.Count -eq 0) {
+        # Still advance the cursor to avoid re-scanning the same window forever.
+        $result.fallback_time | Set-Content -Path $lastLogTimeFile -Force -ErrorAction SilentlyContinue
         Write-Log "No new Defender logs to report"
-        return 
+        return
     }
     
     Write-Log "Reporting $($logs.Count) Defender event logs..."
@@ -446,6 +461,9 @@ function Send-DefenderLogs {
     try {
         $response = Invoke-ApiRequest -Endpoint "/logs" -Body $body -AgentToken $AgentToken
         Write-Log "Logs reported: $($response.message)"
+
+        # Only advance last_log_time after the API confirms receipt.
+        ($result.max_event_time ?? $result.fallback_time) | Set-Content -Path $lastLogTimeFile -Force -ErrorAction SilentlyContinue
     } catch {
         Write-Log "Failed to send logs: $_" -Level "ERROR"
     }

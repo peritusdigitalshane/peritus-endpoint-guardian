@@ -361,9 +361,17 @@ async function handleThreats(req: Request) {
 async function handleLogs(req: Request) {
   const endpoint = await validateAgentToken(req);
   const body = await req.json();
-  const { logs } = body;
+  // Be permissive: allow { logs: [...] } or a top-level array.
+  const logsRaw = (body && typeof body === "object" && "logs" in body) ? (body as any).logs : body;
+  const logs: any[] = Array.isArray(logsRaw) ? logsRaw : [];
 
-  if (!Array.isArray(logs) || logs.length === 0) {
+  console.log("/logs", {
+    endpoint_id: endpoint.id,
+    hostname: endpoint.hostname,
+    count: logs.length,
+  });
+
+  if (logs.length === 0) {
     return new Response(
       JSON.stringify({ success: true, message: "No logs to process" }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
