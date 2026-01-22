@@ -11,9 +11,11 @@ import {
   ChevronLeft,
   Download,
   ScrollText,
+  Building2,
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { useTenant } from "@/contexts/TenantContext";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -27,9 +29,14 @@ const navigation = [
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 
+const adminNavigation = [
+  { name: "Customers", href: "/admin", icon: Building2 },
+];
+
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
+  const { currentOrganization, isSuperAdmin, isImpersonating, isLoading } = useTenant();
 
   return (
     <aside
@@ -64,8 +71,50 @@ export function Sidebar() {
         </button>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 space-y-1 p-3">
+      {/* Super Admin Navigation */}
+      {isSuperAdmin && (
+        <nav className="border-b border-sidebar-border p-3 space-y-1">
+          {!collapsed && (
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-2">
+              Admin
+            </p>
+          )}
+          {adminNavigation.map((item) => {
+            const isActive = location.pathname === item.href;
+            return (
+              <Link
+                key={item.name}
+                to={item.href}
+                className={cn(
+                  "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
+                  isActive
+                    ? "bg-primary/10 text-primary"
+                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-foreground"
+                )}
+              >
+                <item.icon
+                  className={cn(
+                    "h-5 w-5 flex-shrink-0",
+                    isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                  )}
+                />
+                {!collapsed && <span>{item.name}</span>}
+                {isActive && (
+                  <div className="ml-auto h-1.5 w-1.5 rounded-full bg-primary" />
+                )}
+              </Link>
+            );
+          })}
+        </nav>
+      )}
+
+      {/* Main Navigation */}
+      <nav className="flex-1 space-y-1 p-3 overflow-y-auto">
+        {!collapsed && isSuperAdmin && (
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-2">
+            Tenant
+          </p>
+        )}
         {navigation.map((item) => {
           const isActive = location.pathname === item.href;
           return (
@@ -97,10 +146,30 @@ export function Sidebar() {
       {/* Tenant selector */}
       {!collapsed && (
         <div className="border-t border-sidebar-border p-3">
-          <div className="rounded-lg bg-sidebar-accent p-3">
-            <p className="text-xs text-muted-foreground">Current Tenant</p>
-            <p className="text-sm font-medium text-foreground">Acme Corporation</p>
-            <p className="text-xs text-primary">12 endpoints</p>
+          <div className={cn(
+            "rounded-lg p-3",
+            isImpersonating ? "bg-amber-500/10 border border-amber-500/30" : "bg-sidebar-accent"
+          )}>
+            <p className="text-xs text-muted-foreground">
+              {isImpersonating ? "Viewing Tenant" : "Current Tenant"}
+            </p>
+            {isLoading ? (
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            ) : (
+              <>
+                <p className={cn(
+                  "text-sm font-medium",
+                  isImpersonating ? "text-amber-600 dark:text-amber-400" : "text-foreground"
+                )}>
+                  {currentOrganization?.name || "No Organization"}
+                </p>
+                {isImpersonating && (
+                  <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
+                    Super Admin Mode
+                  </p>
+                )}
+              </>
+            )}
           </div>
         </div>
       )}

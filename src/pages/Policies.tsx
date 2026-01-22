@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Plus, FileText, Shield, AlertTriangle, CheckCircle, Loader2 } from "lucide-react";
@@ -8,55 +8,18 @@ import { StatCard } from "@/components/ui/stat-card";
 import { DefenderPolicy } from "@/lib/defender-settings";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 import { useCreatePolicy, usePolicies, useUpdatePolicy } from "@/hooks/usePolicies";
 
 const Policies = () => {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingPolicy, setEditingPolicy] = useState<DefenderPolicy | undefined>();
-  const [orgId, setOrgId] = useState<string | null>(null);
-  const [orgLoading, setOrgLoading] = useState(true);
-  const [orgError, setOrgError] = useState<string | null>(null);
   const { toast } = useToast();
   const { user, isLoading: authLoading } = useAuth();
+  const { currentOrganization, isLoading: tenantLoading } = useTenant();
   const { data: policies = [], isLoading: policiesLoading, error: policiesError } = usePolicies();
   const createPolicy = useCreatePolicy();
   const updatePolicy = useUpdatePolicy();
-
-  useEffect(() => {
-    const loadOrg = async () => {
-      try {
-        setOrgError(null);
-        setOrgLoading(true);
-        if (!user) {
-          setOrgId(null);
-          return;
-        }
-
-        const { data: membership, error } = await supabase
-          .from("organization_memberships")
-          .select("organization_id")
-          .eq("user_id", user.id)
-          .limit(1)
-          .single();
-
-        if (error || !membership) {
-          setOrgError("No organization found for your account.");
-          setOrgId(null);
-          return;
-        }
-
-        setOrgId(membership.organization_id);
-      } catch (e) {
-        setOrgError("Failed to load organization.");
-        setOrgId(null);
-      } finally {
-        setOrgLoading(false);
-      }
-    };
-
-    loadOrg();
-  }, [user]);
 
   const sanitizePolicyPatch = useMemo(() => {
     return (policyData: Partial<DefenderPolicy>) => {
@@ -77,7 +40,7 @@ const Policies = () => {
   };
 
   const handleSave = async (policyData: Partial<DefenderPolicy>) => {
-    if (!user || !orgId) {
+    if (!user || !currentOrganization) {
       toast({
         title: "Can't save policy",
         description: "Missing user session or organization.",
@@ -96,7 +59,7 @@ const Policies = () => {
           description: `${policyData.name} has been saved.`,
         });
       } else {
-        await createPolicy.mutateAsync({ orgId, userId: user.id, policy: clean });
+        await createPolicy.mutateAsync({ orgId: currentOrganization.id, userId: user.id, policy: clean });
         toast({
           title: "Policy created",
           description: `${policyData.name} has been created.`,
@@ -137,15 +100,15 @@ const Policies = () => {
   return (
     <MainLayout>
       <div className="space-y-6">
-        {(authLoading || orgLoading || policiesLoading) && (
+        {(authLoading || tenantLoading || policiesLoading) && (
           <div className="flex items-center justify-center py-10">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         )}
 
-        {(orgError || policiesError) && (
+        {policiesError && (
           <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
-            {orgError || "Failed to load policies."}
+            Failed to load policies.
           </div>
         )}
 
@@ -157,7 +120,7 @@ const Policies = () => {
               Configure and deploy Defender settings across your endpoints
             </p>
           </div>
-          <Button onClick={handleCreate} disabled={!orgId}>
+          <Button onClick={handleCreate} disabled={!currentOrganization}>
             <Plus className="mr-2 h-4 w-4" />
             Create Policy
           </Button>
