@@ -167,6 +167,237 @@ export type Database = {
           },
         ]
       }
+      endpoint_logs: {
+        Row: {
+          created_at: string
+          details: Json | null
+          endpoint_id: string
+          id: string
+          log_type: string
+          message: string
+        }
+        Insert: {
+          created_at?: string
+          details?: Json | null
+          endpoint_id: string
+          id?: string
+          log_type: string
+          message: string
+        }
+        Update: {
+          created_at?: string
+          details?: Json | null
+          endpoint_id?: string
+          id?: string
+          log_type?: string
+          message?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "endpoint_logs_endpoint_id_fkey"
+            columns: ["endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "endpoints"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      endpoint_status: {
+        Row: {
+          am_running_mode: string | null
+          antispyware_enabled: boolean | null
+          antispyware_signature_age: number | null
+          antivirus_enabled: boolean | null
+          antivirus_signature_age: number | null
+          antivirus_signature_version: string | null
+          behavior_monitor_enabled: boolean | null
+          collected_at: string
+          computer_state: number | null
+          endpoint_id: string
+          full_scan_age: number | null
+          full_scan_end_time: string | null
+          id: string
+          ioav_protection_enabled: boolean | null
+          nis_enabled: boolean | null
+          nis_signature_version: string | null
+          on_access_protection_enabled: boolean | null
+          quick_scan_age: number | null
+          quick_scan_end_time: string | null
+          raw_status: Json | null
+          realtime_protection_enabled: boolean | null
+          tamper_protection_source: string | null
+        }
+        Insert: {
+          am_running_mode?: string | null
+          antispyware_enabled?: boolean | null
+          antispyware_signature_age?: number | null
+          antivirus_enabled?: boolean | null
+          antivirus_signature_age?: number | null
+          antivirus_signature_version?: string | null
+          behavior_monitor_enabled?: boolean | null
+          collected_at?: string
+          computer_state?: number | null
+          endpoint_id: string
+          full_scan_age?: number | null
+          full_scan_end_time?: string | null
+          id?: string
+          ioav_protection_enabled?: boolean | null
+          nis_enabled?: boolean | null
+          nis_signature_version?: string | null
+          on_access_protection_enabled?: boolean | null
+          quick_scan_age?: number | null
+          quick_scan_end_time?: string | null
+          raw_status?: Json | null
+          realtime_protection_enabled?: boolean | null
+          tamper_protection_source?: string | null
+        }
+        Update: {
+          am_running_mode?: string | null
+          antispyware_enabled?: boolean | null
+          antispyware_signature_age?: number | null
+          antivirus_enabled?: boolean | null
+          antivirus_signature_age?: number | null
+          antivirus_signature_version?: string | null
+          behavior_monitor_enabled?: boolean | null
+          collected_at?: string
+          computer_state?: number | null
+          endpoint_id?: string
+          full_scan_age?: number | null
+          full_scan_end_time?: string | null
+          id?: string
+          ioav_protection_enabled?: boolean | null
+          nis_enabled?: boolean | null
+          nis_signature_version?: string | null
+          on_access_protection_enabled?: boolean | null
+          quick_scan_age?: number | null
+          quick_scan_end_time?: string | null
+          raw_status?: Json | null
+          realtime_protection_enabled?: boolean | null
+          tamper_protection_source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "endpoint_status_endpoint_id_fkey"
+            columns: ["endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "endpoints"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      endpoint_threats: {
+        Row: {
+          category: string | null
+          created_at: string
+          endpoint_id: string
+          id: string
+          initial_detection_time: string | null
+          last_threat_status_change_time: string | null
+          raw_data: Json | null
+          resources: Json | null
+          severity: string
+          status: string
+          threat_id: string
+          threat_name: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          endpoint_id: string
+          id?: string
+          initial_detection_time?: string | null
+          last_threat_status_change_time?: string | null
+          raw_data?: Json | null
+          resources?: Json | null
+          severity: string
+          status: string
+          threat_id: string
+          threat_name: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          endpoint_id?: string
+          id?: string
+          initial_detection_time?: string | null
+          last_threat_status_change_time?: string | null
+          raw_data?: Json | null
+          resources?: Json | null
+          severity?: string
+          status?: string
+          threat_id?: string
+          threat_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "endpoint_threats_endpoint_id_fkey"
+            columns: ["endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "endpoints"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      endpoints: {
+        Row: {
+          agent_token: string
+          created_at: string
+          defender_version: string | null
+          hostname: string
+          id: string
+          is_online: boolean
+          last_seen_at: string | null
+          organization_id: string
+          os_build: string | null
+          os_version: string | null
+          policy_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          agent_token: string
+          created_at?: string
+          defender_version?: string | null
+          hostname: string
+          id?: string
+          is_online?: boolean
+          last_seen_at?: string | null
+          organization_id: string
+          os_build?: string | null
+          os_version?: string | null
+          policy_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          agent_token?: string
+          created_at?: string
+          defender_version?: string | null
+          hostname?: string
+          id?: string
+          is_online?: boolean
+          last_seen_at?: string | null
+          organization_id?: string
+          os_build?: string | null
+          os_version?: string | null
+          policy_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "endpoints_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "endpoints_policy_id_fkey"
+            columns: ["policy_id"]
+            isOneToOne: false
+            referencedRelation: "defender_policies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_memberships: {
         Row: {
           created_at: string
