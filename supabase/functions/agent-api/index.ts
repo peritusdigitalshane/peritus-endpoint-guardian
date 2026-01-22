@@ -158,6 +158,11 @@ Deno.serve(async (req) => {
       return await handleGetRuleSets(req);
     }
 
+    // Route: GET /uac-policy - Get assigned UAC policy
+    if (path === "/uac-policy" && req.method === "GET") {
+      return await handleGetUacPolicy(req);
+    }
+
     return new Response(JSON.stringify({ error: "Not found" }), {
       status: 404,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -322,7 +327,7 @@ async function handleHeartbeat(req: Request) {
     })
     .eq("id", endpoint.id);
 
-  // Insert status record
+  // Insert status record with UAC data
   const statusData = {
     endpoint_id: endpoint.id,
     realtime_protection_enabled: body.realtime_protection_enabled,
@@ -344,6 +349,14 @@ async function handleHeartbeat(req: Request) {
     computer_state: toInt32OrNull(body.computer_state),
     am_running_mode: body.am_running_mode,
     raw_status: body.raw_status,
+    // UAC status fields
+    uac_enabled: body.uac_enabled ?? null,
+    uac_consent_prompt_admin: toInt32OrNull(body.uac_consent_prompt_admin),
+    uac_consent_prompt_user: toInt32OrNull(body.uac_consent_prompt_user),
+    uac_prompt_on_secure_desktop: body.uac_prompt_on_secure_desktop ?? null,
+    uac_detect_installations: body.uac_detect_installations ?? null,
+    uac_validate_admin_signatures: body.uac_validate_admin_signatures ?? null,
+    uac_filter_administrator_token: body.uac_filter_administrator_token ?? null,
   };
 
   const { error: statusError } = await supabase.from("endpoint_status").insert(statusData);
@@ -964,6 +977,91 @@ async function handleGetRuleSets(req: Request) {
       })) || [],
       inherited_assignments: groupAssignments,
     }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+
+// GET /uac-policy - Get assigned UAC policy for an endpoint
+async function handleGetUacPolicy(req: Request) {
+  const endpoint = await validateAgentToken(req);
+
+  // Check if endpoint has a direct UAC policy assignment
+  if (endpoint.uac_policy_id) {
+    const { data: policy, error } = await supabase
+      .from("uac_policies")
+      .select("*")
+      .eq("id", endpoint.uac_policy_id)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Error fetching UAC policy:", error);
+    }
+
+    if (policy) {
+      return new Response(
+        JSON.stringify({
+          has_policy: true,
+          policy: {
+            id: policy.id,
+            name: policy.name,
+            enable_lua: policy.enable_lua,
+            consent_prompt_admin: policy.consent_prompt_admin,
+            consent_prompt_user: policy.consent_prompt_user,
+            prompt_on_secure_desktop: policy.prompt_on_secure_desktop,
+            detect_installations: policy.detect_installations,
+            validate_admin_signatures: policy.validate_admin_signatures,
+            filter_administrator_token: policy.filter_administrator_token,
+          },
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+  }
+
+  // Check if endpoint is in a group with a UAC policy
+  const { data: groupMemberships } = await supabase
+    .from("endpoint_group_memberships")
+    .select(`
+      group_id,
+      endpoint_groups(uac_policy_id)
+    `)
+    .eq("endpoint_id", endpoint.id);
+
+  for (const membership of groupMemberships || []) {
+    const group = membership.endpoint_groups as unknown as { uac_policy_id: string | null } | null;
+    if (group?.uac_policy_id) {
+      const { data: policy } = await supabase
+        .from("uac_policies")
+        .select("*")
+        .eq("id", group.uac_policy_id)
+        .maybeSingle();
+
+      if (policy) {
+        return new Response(
+          JSON.stringify({
+            has_policy: true,
+            source: "group",
+            policy: {
+              id: policy.id,
+              name: policy.name,
+              enable_lua: policy.enable_lua,
+              consent_prompt_admin: policy.consent_prompt_admin,
+              consent_prompt_user: policy.consent_prompt_user,
+              prompt_on_secure_desktop: policy.prompt_on_secure_desktop,
+              detect_installations: policy.detect_installations,
+              validate_admin_signatures: policy.validate_admin_signatures,
+              filter_administrator_token: policy.filter_administrator_token,
+            },
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+  }
+
+  // No UAC policy assigned
+  return new Response(
+    JSON.stringify({ has_policy: false }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
 }
