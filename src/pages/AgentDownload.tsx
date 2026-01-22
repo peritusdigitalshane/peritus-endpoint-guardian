@@ -24,8 +24,14 @@ const generatePowershellScript = (orgId: string, apiBaseUrl: string) => {
     How often the agent sends status updates (default: 30 seconds)
 .PARAMETER Uninstall
     Remove the scheduled task and agent configuration
+.PARAMETER ForceFullLogSync
+    Ignore the last log collection time and collect all events from the past 60 minutes.
+    Use this to force a full resync of event logs.
+.EXAMPLE
+    .\\PeritusSecureAgent.ps1 -ForceFullLogSync
+    Forces collection of all Defender events from the past hour, ignoring last sync time.
 .NOTES
-    Version: 2.1.0
+    Version: 2.2.0
     Requires: Windows 10/11, PowerShell 5.1+, Administrator privileges
 #>
 
@@ -33,13 +39,17 @@ param(
     [string]$OrganizationToken = "${orgId}",
     [int]$HeartbeatIntervalSeconds = 30,
     [switch]$Uninstall,
-    [switch]$ForcePolicy
+    [switch]$ForcePolicy,
+    [switch]$ForceFullLogSync
 )
 
 $ErrorActionPreference = "Stop"
 $ApiBaseUrl = "${apiBaseUrl}"
 $TaskName = "PeritusSecureAgent"
 $ServiceName = "Peritus Secure Agent"
+
+# Store ForceFullLogSync in script scope so functions can access it
+$script:ForceFullLogSync = $ForceFullLogSync.IsPresent
 
 # Agent configuration storage
 $ConfigPath = "$env:ProgramData\\PeritusSecure"
@@ -80,6 +90,13 @@ function Install-AgentTask {
     if (-not (Test-Path $ConfigPath)) {
         New-Item -ItemType Directory -Path $ConfigPath -Force | Out-Null
         Write-Log "Created configuration directory: $ConfigPath"
+    }
+    
+    # Clear last log time file on fresh install to ensure full log sync
+    $lastLogTimeFile = "$ConfigPath\\last_log_time.txt"
+    if (Test-Path $lastLogTimeFile) {
+        Remove-Item $lastLogTimeFile -Force -ErrorAction SilentlyContinue
+        Write-Log "Cleared last log sync time for fresh log collection"
     }
     
     $ScriptContent | Set-Content -Path $ScriptPath -Force
@@ -288,14 +305,23 @@ $RelevantEventIds = @{
 }
 
 function Get-RelevantDefenderLogs {
-    param([int]$MaxAgeMinutes = 60)
+    param(
+        [int]$MaxAgeMinutes = 60,
+        [switch]$IgnoreLastLogTime
+    )
     
     $logs = @()
     $startTime = (Get-Date).AddMinutes(-$MaxAgeMinutes)
     $lastLogTimeFile = "$ConfigPath\\last_log_time.txt"
     
-    # Use last collection time if available (but cap at MaxAgeMinutes)
-    if (Test-Path $lastLogTimeFile) {
+    # If ForceFullLogSync is set, delete the last log time file
+    if ($IgnoreLastLogTime -or $script:ForceFullLogSync) {
+        Write-Log "Force full log sync - ignoring last log time and collecting all events from past $MaxAgeMinutes minutes"
+        if (Test-Path $lastLogTimeFile) {
+            Remove-Item $lastLogTimeFile -Force -ErrorAction SilentlyContinue
+        }
+    } elseif (Test-Path $lastLogTimeFile) {
+        # Use last collection time if available (but cap at MaxAgeMinutes)
         $lastLogTime = Get-Content $lastLogTimeFile -ErrorAction SilentlyContinue
         if ($lastLogTime) {
             try {
@@ -303,9 +329,12 @@ function Get-RelevantDefenderLogs {
                 # Only use last log time if it's within the max age window
                 if ($parsedTime -gt $startTime) {
                     $startTime = $parsedTime
+                    Write-Log "Using last log collection time: $lastLogTime"
+                } else {
+                    Write-Log "Last log time is older than $MaxAgeMinutes minutes, using full window"
                 }
             } catch { 
-                Write-Log "Could not parse last log time, using default window" -Level "WARN"
+                Write-Log "Could not parse last log time '$lastLogTime', using default window" -Level "WARN"
             }
         }
     }
