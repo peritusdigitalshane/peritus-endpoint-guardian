@@ -407,6 +407,48 @@ export type Database = {
           },
         ]
       }
+      endpoint_rule_set_assignments: {
+        Row: {
+          assigned_at: string
+          assigned_by: string | null
+          endpoint_id: string
+          id: string
+          priority: number
+          rule_set_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          assigned_by?: string | null
+          endpoint_id: string
+          id?: string
+          priority?: number
+          rule_set_id: string
+        }
+        Update: {
+          assigned_at?: string
+          assigned_by?: string | null
+          endpoint_id?: string
+          id?: string
+          priority?: number
+          rule_set_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "endpoint_rule_set_assignments_endpoint_id_fkey"
+            columns: ["endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "endpoints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "endpoint_rule_set_assignments_rule_set_id_fkey"
+            columns: ["rule_set_id"]
+            isOneToOne: false
+            referencedRelation: "wdac_rule_sets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       endpoint_status: {
         Row: {
           am_running_mode: string | null
@@ -659,6 +701,48 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_rule_set_assignments: {
+        Row: {
+          assigned_at: string
+          assigned_by: string | null
+          group_id: string
+          id: string
+          priority: number
+          rule_set_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          assigned_by?: string | null
+          group_id: string
+          id?: string
+          priority?: number
+          rule_set_id: string
+        }
+        Update: {
+          assigned_at?: string
+          assigned_by?: string | null
+          group_id?: string
+          id?: string
+          priority?: number
+          rule_set_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_rule_set_assignments_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "endpoint_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_rule_set_assignments_rule_set_id_fkey"
+            columns: ["rule_set_id"]
+            isOneToOne: false
+            referencedRelation: "wdac_rule_sets"
             referencedColumns: ["id"]
           },
         ]
@@ -925,6 +1009,94 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "wdac_policies_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wdac_rule_set_rules: {
+        Row: {
+          action: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          file_version_min: string | null
+          id: string
+          product_name: string | null
+          publisher_name: string | null
+          rule_set_id: string
+          rule_type: string
+          value: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          file_version_min?: string | null
+          id?: string
+          product_name?: string | null
+          publisher_name?: string | null
+          rule_set_id: string
+          rule_type: string
+          value: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          file_version_min?: string | null
+          id?: string
+          product_name?: string | null
+          publisher_name?: string | null
+          rule_set_id?: string
+          rule_type?: string
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wdac_rule_set_rules_rule_set_id_fkey"
+            columns: ["rule_set_id"]
+            isOneToOne: false
+            referencedRelation: "wdac_rule_sets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wdac_rule_sets: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          name: string
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wdac_rule_sets_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
