@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useWdacDiscoveredApps, useWdacMutations, useWdacPolicies, WdacDiscoveredApp } from "@/hooks/useWdac";
+import { useRuleSets, useRuleSetMutations } from "@/hooks/useRuleSets";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +18,7 @@ import {
   XCircle, 
   Camera,
   Filter,
-  AppWindow
+  Layers
 } from "lucide-react";
 import { format } from "date-fns";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -29,15 +30,19 @@ interface DiscoveredAppsProps {
 export function DiscoveredApps({ selectedPolicyId }: DiscoveredAppsProps) {
   const { data: apps, isLoading } = useWdacDiscoveredApps();
   const { data: policies } = useWdacPolicies();
+  const { data: ruleSets } = useRuleSets();
   const { createRule, createBaseline } = useWdacMutations();
+  const { addRulesBulk } = useRuleSetMutations();
   
   const [search, setSearch] = useState("");
   const [selectedApps, setSelectedApps] = useState<Set<string>>(new Set());
   const [showRuleDialog, setShowRuleDialog] = useState(false);
   const [showBaselineDialog, setShowBaselineDialog] = useState(false);
+  const [showRuleSetDialog, setShowRuleSetDialog] = useState(false);
   const [ruleAction, setRuleAction] = useState<"allow" | "block">("allow");
   const [ruleType, setRuleType] = useState<"publisher" | "path" | "hash" | "file_name">("publisher");
   const [baselineName, setBaselineName] = useState("");
+  const [selectedRuleSetId, setSelectedRuleSetId] = useState<string>("");
 
   const filteredApps = useMemo(() => {
     if (!apps) return [];
@@ -110,6 +115,48 @@ export function DiscoveredApps({ selectedPolicyId }: DiscoveredAppsProps) {
     setSelectedApps(new Set());
   };
 
+  const handleAddToRuleSet = () => {
+    if (!selectedRuleSetId) return;
+    
+    const selectedAppsList = filteredApps.filter((a) => selectedApps.has(a.id));
+    const rules = selectedAppsList.map((app) => {
+      let value = "";
+      switch (ruleType) {
+        case "publisher":
+          value = app.publisher || app.file_name;
+          break;
+        case "path":
+          value = app.file_path;
+          break;
+        case "hash":
+          value = app.file_hash || "";
+          break;
+        case "file_name":
+          value = app.file_name;
+          break;
+      }
+      
+      return {
+        rule_set_id: selectedRuleSetId,
+        rule_type: ruleType,
+        action: ruleAction,
+        value,
+        publisher_name: app.publisher || null,
+        product_name: app.product_name || null,
+        file_version_min: null,
+        description: `From discovered app: ${app.file_name}`,
+      };
+    }).filter(r => r.value);
+    
+    if (rules.length > 0) {
+      addRulesBulk.mutate(rules);
+    }
+    
+    setShowRuleSetDialog(false);
+    setSelectedApps(new Set());
+    setSelectedRuleSetId("");
+  };
+
   const handleCreateBaseline = () => {
     if (!selectedPolicyId || !baselineName) return;
     
@@ -148,39 +195,53 @@ export function DiscoveredApps({ selectedPolicyId }: DiscoveredAppsProps) {
         <div>
           <h2 className="text-lg font-semibold">Discovered Applications</h2>
           <p className="text-sm text-muted-foreground">
-            Applications detected across your endpoints. Select apps to create allow/block rules.
+            Applications detected across your endpoints. Select apps to add to rule sets.
           </p>
         </div>
         <div className="flex gap-2">
-          {selectedApps.size > 0 && selectedPolicyId && (
+          {selectedApps.size > 0 && (
             <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowBaselineDialog(true)}
-              >
-                <Camera className="h-4 w-4 mr-2" />
-                Create Baseline ({selectedApps.size})
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => setShowRuleDialog(true)}
-              >
-                <Filter className="h-4 w-4 mr-2" />
-                Create Rules ({selectedApps.size})
-              </Button>
+              {ruleSets && ruleSets.length > 0 && (
+                <Button
+                  size="sm"
+                  onClick={() => setShowRuleSetDialog(true)}
+                >
+                  <Layers className="h-4 w-4 mr-2" />
+                  Add to Rule Set ({selectedApps.size})
+                </Button>
+              )}
+              {selectedPolicyId && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowBaselineDialog(true)}
+                  >
+                    <Camera className="h-4 w-4 mr-2" />
+                    Baseline ({selectedApps.size})
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowRuleDialog(true)}
+                  >
+                    <Filter className="h-4 w-4 mr-2" />
+                    Legacy Rules ({selectedApps.size})
+                  </Button>
+                </>
+              )}
             </>
           )}
         </div>
       </div>
 
-      {/* Warning if no policy selected */}
-      {!selectedPolicyId && (
+      {/* No policy warning - only for legacy features */}
+      {!selectedPolicyId && !ruleSets?.length && (
         <Card className="border-amber-500/30 bg-amber-500/5">
           <CardContent className="flex items-center gap-3 py-4">
-            <AppWindow className="h-5 w-5 text-amber-500" />
+            <Layers className="h-5 w-5 text-amber-500" />
             <p className="text-sm text-amber-600 dark:text-amber-400">
-              Select a policy from the Policies tab to create rules for discovered applications.
+              Create a Rule Set first to add rules from discovered applications.
             </p>
           </CardContent>
         </Card>
@@ -372,6 +433,92 @@ export function DiscoveredApps({ selectedPolicyId }: DiscoveredAppsProps) {
             >
               {createBaseline.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Create Baseline
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add to Rule Set Dialog */}
+      <Dialog open={showRuleSetDialog} onOpenChange={setShowRuleSetDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add to Rule Set</DialogTitle>
+            <DialogDescription>
+              Add {selectedApps.size} selected application(s) as rules to an existing rule set.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Rule Set</Label>
+              <Select value={selectedRuleSetId} onValueChange={setSelectedRuleSetId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a rule set..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {ruleSets?.map((rs) => (
+                    <SelectItem key={rs.id} value={rs.id}>
+                      <div className="flex items-center gap-2">
+                        <Layers className="h-4 w-4" />
+                        <span>{rs.name}</span>
+                        <Badge variant="secondary" className="ml-2 text-xs">
+                          {rs.rule_count || 0} rules
+                        </Badge>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Action</Label>
+              <Select value={ruleAction} onValueChange={(v: "allow" | "block") => setRuleAction(v)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="allow">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                      <span>Allow</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="block">
+                    <div className="flex items-center gap-2">
+                      <XCircle className="h-4 w-4 text-red-500" />
+                      <span>Block</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Rule Type</Label>
+              <Select value={ruleType} onValueChange={(v: "publisher" | "path" | "hash" | "file_name") => setRuleType(v)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="publisher">Publisher (Recommended)</SelectItem>
+                  <SelectItem value="path">File Path</SelectItem>
+                  <SelectItem value="hash">File Hash</SelectItem>
+                  <SelectItem value="file_name">File Name</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Publisher rules are most flexible. Hash rules are most specific but break on updates.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRuleSetDialog(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleAddToRuleSet} 
+              disabled={!selectedRuleSetId || addRulesBulk.isPending}
+            >
+              {addRulesBulk.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Add {selectedApps.size} Rule(s)
             </Button>
           </DialogFooter>
         </DialogContent>
