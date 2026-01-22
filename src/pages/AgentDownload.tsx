@@ -31,7 +31,7 @@ const generatePowershellScript = (orgId: string, apiBaseUrl: string) => {
     .\\PeritusSecureAgent.ps1 -ForceFullLogSync
     Forces collection of all Defender events from the past hour, ignoring last sync time.
 .NOTES
-    Version: 2.3.0
+    Version: 2.3.1
     Requires: Windows 10/11, PowerShell 5.1+, Administrator privileges
 #>
 
@@ -350,7 +350,8 @@ function Get-RelevantDefenderLogs {
     $nowUtc = (Get-Date).ToUniversalTime()
     $startTimeUtc = $nowUtc.AddMinutes(-$MaxAgeMinutes)
     $lastLogTimeFile = "$ConfigPath\\last_log_time.txt"
-    $maxSeenEventTime = $null
+    $maxSeenEventTimeUtc = $null
+    $cursorWasUsed = $false
     
     $forceSync = ($IgnoreLastLogTime -or $script:ForceFullLogSync)
 
@@ -365,11 +366,17 @@ function Get-RelevantDefenderLogs {
         $lastLogTime = Get-Content $lastLogTimeFile -ErrorAction SilentlyContinue
         if ($lastLogTime) {
             try {
-                # Parse and convert to UTC for consistent comparison
-                $parsedTimeUtc = [DateTime]::Parse($lastLogTime).ToUniversalTime().AddSeconds(1)
+                # Parse as DateTimeOffset (preserves any included offset) and convert to UTC
+                $parsedTimeUtc = ([DateTimeOffset]::Parse($lastLogTime)).UtcDateTime.AddSeconds(1)
+
+                # Sanity: if the cursor looks "in the future" relative to this machine, ignore it.
+                if ($parsedTimeUtc -gt $nowUtc.AddMinutes(5)) {
+                    Write-Log "Last log time appears to be in the future ($lastLogTime). Ignoring cursor and using full window." -Level "WARN"
+                }
                 # Only use last log time if it's within the max age window
-                if ($parsedTimeUtc -gt $startTimeUtc) {
+                elseif ($parsedTimeUtc -gt $startTimeUtc) {
                     $startTimeUtc = $parsedTimeUtc
+                    $cursorWasUsed = $true
                     Write-Log "Using last log collection time: $lastLogTime (UTC: $($startTimeUtc.ToString('o')))"
                 } else {
                     Write-Log "Last log time is older than $MaxAgeMinutes minutes, using full window"
@@ -406,9 +413,10 @@ function Get-RelevantDefenderLogs {
             if ($events) {
                 Write-Log "  Found $($events.Count) events in $logName"
                 foreach ($event in $events) {
-                    $eventTimeIso = $event.TimeCreated.ToString("o")
-                    if (-not $maxSeenEventTime -or ([DateTime]::Parse($eventTimeIso) -gt [DateTime]::Parse($maxSeenEventTime))) {
-                        $maxSeenEventTime = $eventTimeIso
+                    $eventTimeUtc = $event.TimeCreated.ToUniversalTime()
+                    $eventTimeIsoUtc = $eventTimeUtc.ToString("o")
+                    if (-not $maxSeenEventTimeUtc -or ($eventTimeUtc -gt $maxSeenEventTimeUtc)) {
+                        $maxSeenEventTimeUtc = $eventTimeUtc
                     }
 
                     $logs += @{
@@ -416,7 +424,8 @@ function Get-RelevantDefenderLogs {
                         event_source = $logName
                         level = switch ($event.Level) { 1 { "Critical" } 2 { "Error" } 3 { "Warning" } 4 { "Information" } default { "Unknown" } }
                         message = $event.Message
-                        event_time = $eventTimeIso
+                        # Always transmit UTC timestamps to avoid offset parsing differences across machines.
+                        event_time = $eventTimeIsoUtc
                         details = @{
                             provider = $event.ProviderName
                             task = $event.TaskDisplayName
@@ -434,6 +443,58 @@ function Get-RelevantDefenderLogs {
             Write-Log "Could not read events from $($logName): $_" -Level "WARN"
         }
     }
+
+    # Recovery: if we used a cursor and got zero events, re-scan the full window once.
+    # This heals from previously-bad cursor values that could have jumped past real events.
+    if ((-not $forceSync) -and $cursorWasUsed -and ($logs.Count -eq 0)) {
+        Write-Log "No events found since cursor; attempting recovery scan using full $MaxAgeMinutes-minute window" -Level "WARN"
+
+        $startTimeUtc = $nowUtc.AddMinutes(-$MaxAgeMinutes)
+        $startTimeLocal = $startTimeUtc.ToLocalTime()
+        $maxSeenEventTimeUtc = $null
+        $logs = @()
+
+        foreach ($logName in $RelevantEventIds.Keys) {
+            $eventIds = $RelevantEventIds[$logName]
+            try {
+                Write-Log "  Recovery query $logName for events: $($eventIds -join ', ')"
+                $events = @(Get-WinEvent -FilterHashtable @{
+                    LogName = $logName
+                    ID = $eventIds
+                    StartTime = $startTimeLocal
+                } -ErrorAction SilentlyContinue)
+
+                if ($events) {
+                    Write-Log "  Recovery found $($events.Count) events in $logName"
+                    foreach ($event in $events) {
+                        $eventTimeUtc = $event.TimeCreated.ToUniversalTime()
+                        $eventTimeIsoUtc = $eventTimeUtc.ToString("o")
+                        if (-not $maxSeenEventTimeUtc -or ($eventTimeUtc -gt $maxSeenEventTimeUtc)) {
+                            $maxSeenEventTimeUtc = $eventTimeUtc
+                        }
+
+                        $logs += @{
+                            event_id = $event.Id
+                            event_source = $logName
+                            level = switch ($event.Level) { 1 { "Critical" } 2 { "Error" } 3 { "Warning" } 4 { "Information" } default { "Unknown" } }
+                            message = $event.Message
+                            event_time = $eventTimeIsoUtc
+                            details = @{
+                                provider = $event.ProviderName
+                                task = $event.TaskDisplayName
+                                keywords = $event.KeywordsDisplayNames -join ", "
+                                computer = $event.MachineName
+                                user = $event.UserId
+                                record_id = $event.RecordId
+                            }
+                        }
+                    }
+                }
+            } catch {
+                Write-Log "Could not read events from $($logName) during recovery: $_" -Level "WARN"
+            }
+        }
+    }
     
     Write-Log "Total events collected: $($logs.Count)"
 
@@ -441,8 +502,8 @@ function Get-RelevantDefenderLogs {
     # IMPORTANT: We only advance last_log_time after a successful POST to the API.
     return [pscustomobject]@{
         logs = $logs
-        max_event_time = $maxSeenEventTime
-        fallback_time = (Get-Date).ToString("o")
+        max_event_time = if ($maxSeenEventTimeUtc) { $maxSeenEventTimeUtc.ToString("o") } else { $null }
+        fallback_time = (Get-Date).ToUniversalTime().ToString("o")
     }
 }
 
@@ -812,7 +873,7 @@ function Apply-Policy {
 # ==================== MAIN EXECUTION ====================
 
 Write-Log "=========================================="
-Write-Log "Peritus Secure Agent v2.3.0"
+Write-Log "Peritus Secure Agent v2.3.1"
 Write-Log "=========================================="
 
 if ($Uninstall) { Uninstall-Agent }
