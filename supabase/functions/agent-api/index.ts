@@ -81,6 +81,11 @@ Deno.serve(async (req) => {
       return await handleGetWdacPolicy(req);
     }
 
+    // Route: GET /rule-sets - Get all rule sets and rules for this endpoint (new system)
+    if (path === "/rule-sets" && req.method === "GET") {
+      return await handleGetRuleSets(req);
+    }
+
     return new Response(JSON.stringify({ error: "Not found" }), {
       status: 404,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -513,36 +518,221 @@ async function handleGetPolicy(req: Request) {
   );
 }
 
-// GET /wdac-policy - Get assigned WDAC policy with rules
+// GET /wdac-policy - Get assigned WDAC policy with rules (legacy + rule sets)
 async function handleGetWdacPolicy(req: Request) {
   const endpoint = await validateAgentToken(req);
+  
+  // Collect all rules from various sources
+  const allRules: Array<{
+    id: string;
+    rule_type: string;
+    action: string;
+    value: string;
+    publisher_name?: string;
+    product_name?: string;
+    file_version_min?: string;
+    description?: string;
+    source: string;
+    source_id: string;
+  }> = [];
 
-  if (!endpoint.wdac_policy_id) {
-    return new Response(
-      JSON.stringify({ success: true, wdac_policy: null, rules: [], message: "No WDAC policy assigned" }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+  // 1. Legacy WDAC policy rules (if assigned)
+  let legacyPolicy = null;
+  if (endpoint.wdac_policy_id) {
+    const { data: policy } = await supabase
+      .from("wdac_policies")
+      .select("*")
+      .eq("id", endpoint.wdac_policy_id)
+      .single();
+    
+    legacyPolicy = policy;
+
+    const { data: legacyRules } = await supabase
+      .from("wdac_rules")
+      .select("*")
+      .eq("policy_id", endpoint.wdac_policy_id);
+
+    if (legacyRules) {
+      for (const rule of legacyRules) {
+        allRules.push({
+          id: rule.id,
+          rule_type: rule.rule_type,
+          action: rule.action,
+          value: rule.value,
+          publisher_name: rule.publisher_name,
+          product_name: rule.product_name,
+          file_version_min: rule.file_version_min,
+          description: rule.description,
+          source: "wdac_policy",
+          source_id: endpoint.wdac_policy_id,
+        });
+      }
+    }
   }
 
-  // Fetch the WDAC policy
-  const { data: policy, error: policyError } = await supabase
-    .from("wdac_policies")
-    .select("*")
-    .eq("id", endpoint.wdac_policy_id)
-    .single();
+  // 2. Rules from directly assigned rule sets
+  const { data: directAssignments } = await supabase
+    .from("endpoint_rule_set_assignments")
+    .select("rule_set_id, priority")
+    .eq("endpoint_id", endpoint.id);
 
-  if (policyError) throw policyError;
+  const directRuleSetIds = directAssignments?.map(a => a.rule_set_id) || [];
 
-  // Fetch associated rules
-  const { data: rules, error: rulesError } = await supabase
-    .from("wdac_rules")
-    .select("*")
-    .eq("policy_id", endpoint.wdac_policy_id);
+  // 3. Rules from group-inherited rule sets
+  const { data: groupMemberships } = await supabase
+    .from("endpoint_group_memberships")
+    .select("group_id")
+    .eq("endpoint_id", endpoint.id);
 
-  if (rulesError) throw rulesError;
+  const groupIds = groupMemberships?.map(m => m.group_id) || [];
+  
+  let groupRuleSetIds: string[] = [];
+  if (groupIds.length > 0) {
+    const { data: groupAssignments } = await supabase
+      .from("group_rule_set_assignments")
+      .select("rule_set_id, priority")
+      .in("group_id", groupIds);
+    
+    groupRuleSetIds = groupAssignments?.map(a => a.rule_set_id) || [];
+  }
+
+  // Combine all rule set IDs (dedupe)
+  const allRuleSetIds = [...new Set([...directRuleSetIds, ...groupRuleSetIds])];
+
+  // Fetch rules from all rule sets
+  if (allRuleSetIds.length > 0) {
+    const { data: ruleSetRules } = await supabase
+      .from("wdac_rule_set_rules")
+      .select("*, wdac_rule_sets!inner(name)")
+      .in("rule_set_id", allRuleSetIds);
+
+    if (ruleSetRules) {
+      for (const rule of ruleSetRules) {
+        allRules.push({
+          id: rule.id,
+          rule_type: rule.rule_type,
+          action: rule.action,
+          value: rule.value,
+          publisher_name: rule.publisher_name,
+          product_name: rule.product_name,
+          file_version_min: rule.file_version_min,
+          description: rule.description,
+          source: directRuleSetIds.includes(rule.rule_set_id) ? "endpoint_rule_set" : "group_rule_set",
+          source_id: rule.rule_set_id,
+        });
+      }
+    }
+  }
+
+  // Generate a hash of all rule IDs for change detection
+  const ruleIds = allRules.map(r => r.id).sort().join(",");
+  const rulesHash = await generateHash(ruleIds);
 
   return new Response(
-    JSON.stringify({ success: true, wdac_policy: policy, rules: rules || [] }),
+    JSON.stringify({
+      success: true,
+      wdac_policy: legacyPolicy,
+      rules: allRules,
+      rules_hash: rulesHash,
+      rules_count: allRules.length,
+      sources: {
+        legacy_policy: legacyPolicy ? 1 : 0,
+        direct_rule_sets: directRuleSetIds.length,
+        group_rule_sets: groupRuleSetIds.length,
+      },
+    }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
+}
+
+// GET /rule-sets - Get detailed rule set information for this endpoint
+async function handleGetRuleSets(req: Request) {
+  const endpoint = await validateAgentToken(req);
+
+  // Get direct assignments
+  const { data: directAssignments } = await supabase
+    .from("endpoint_rule_set_assignments")
+    .select(`
+      rule_set_id,
+      priority,
+      wdac_rule_sets (
+        id,
+        name,
+        description,
+        updated_at
+      )
+    `)
+    .eq("endpoint_id", endpoint.id)
+    .order("priority", { ascending: false });
+
+  // Get group memberships
+  const { data: groupMemberships } = await supabase
+    .from("endpoint_group_memberships")
+    .select("group_id, endpoint_groups(id, name)")
+    .eq("endpoint_id", endpoint.id);
+
+  const groupIds = groupMemberships?.map(m => m.group_id) || [];
+
+  // Get group rule set assignments
+  let groupAssignments: Array<{
+    group_id: string;
+    group_name: string;
+    rule_set_id: string;
+    rule_set_name: string;
+    priority: number;
+  }> = [];
+
+  if (groupIds.length > 0) {
+    const { data: gAssignments } = await supabase
+      .from("group_rule_set_assignments")
+      .select(`
+        group_id,
+        rule_set_id,
+        priority,
+        endpoint_groups (name),
+        wdac_rule_sets (id, name)
+      `)
+      .in("group_id", groupIds)
+      .order("priority", { ascending: false });
+
+    if (gAssignments) {
+      groupAssignments = gAssignments.map(a => {
+        const endpointGroup = a.endpoint_groups as unknown as { name: string } | null;
+        const ruleSet = a.wdac_rule_sets as unknown as { id: string; name: string } | null;
+        return {
+          group_id: a.group_id,
+          group_name: endpointGroup?.name || "",
+          rule_set_id: a.rule_set_id,
+          rule_set_name: ruleSet?.name || "",
+          priority: a.priority,
+        };
+      });
+    }
+  }
+
+  return new Response(
+    JSON.stringify({
+      success: true,
+      direct_assignments: directAssignments?.map(a => ({
+        rule_set_id: a.rule_set_id,
+        priority: a.priority,
+        rule_set: a.wdac_rule_sets,
+      })) || [],
+      group_memberships: groupMemberships?.map(m => ({
+        group_id: m.group_id,
+        group: m.endpoint_groups,
+      })) || [],
+      inherited_assignments: groupAssignments,
+    }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+
+// Helper to generate a simple hash for change detection
+async function generateHash(input: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(input);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.slice(0, 8).map(b => b.toString(16).padStart(2, "0")).join("");
 }
