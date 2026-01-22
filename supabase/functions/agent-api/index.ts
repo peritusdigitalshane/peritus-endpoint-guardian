@@ -322,22 +322,31 @@ async function handleLogs(req: Request) {
     );
   }
 
-  // Insert logs in batch
+  // Insert logs in batch - map to actual table schema
   const logsToInsert = logs.map((log: {
     event_id: number;
     event_source: string;
     level: string;
     message: string;
     event_time: string;
-    details?: Record<string, unknown>;
+    details?: {
+      provider?: string;
+      task?: string;
+      keywords?: string;
+      computer?: string;
+      user?: string;
+      record_id?: number;
+    };
   }) => ({
     endpoint_id: endpoint.id,
     event_id: log.event_id,
-    event_source: log.event_source,
+    log_source: log.event_source,
     level: log.level,
     message: log.message,
     event_time: log.event_time,
-    details: log.details || null,
+    provider_name: log.details?.provider || null,
+    task_category: log.details?.task || null,
+    raw_data: log.details || null,
   }));
 
   const { error: insertError } = await supabase
