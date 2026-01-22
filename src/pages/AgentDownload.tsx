@@ -32,7 +32,8 @@ const generatePowershellScript = (orgId: string, apiBaseUrl: string) => {
 param(
     [string]$OrganizationToken = "${orgId}",
     [int]$HeartbeatIntervalMinutes = 5,
-    [switch]$Uninstall
+    [switch]$Uninstall,
+    [switch]$ForcePolicy
 )
 
 $ErrorActionPreference = "Stop"
@@ -402,26 +403,23 @@ function Convert-AsrAction {
     switch ($Action.ToLower()) { "disabled" { return 0 } "enabled" { return 1 } "audit" { return 2 } "warn" { return 6 } default { return 1 } }
 }
 
-function Get-PolicyHash {
-    param($Policy)
-    $policyJson = $Policy | ConvertTo-Json -Depth 10 -Compress
-    $bytes = [System.Text.Encoding]::UTF8.GetBytes($policyJson)
-    $sha256 = [System.Security.Cryptography.SHA256]::Create()
-    $hash = $sha256.ComputeHash($bytes)
-    return [BitConverter]::ToString($hash) -replace '-', ''
-}
 
 function Apply-Policy {
-    param($Policy)
+    param($Policy, [switch]$Force)
     
     if (-not $Policy) { Write-Log "No policy to apply"; return $false }
     
-    # Check if policy has changed
-    $newHash = Get-PolicyHash -Policy $Policy
-    $oldHash = ""
-    if (Test-Path $PolicyHashFile) { $oldHash = Get-Content $PolicyHashFile -ErrorAction SilentlyContinue }
+    # Check if policy has changed (compare using updated_at timestamp from policy)
+    $policyVersion = $Policy.updated_at
+    $oldVersion = ""
+    if (Test-Path $PolicyHashFile) { $oldVersion = Get-Content $PolicyHashFile -ErrorAction SilentlyContinue }
     
-    if ($newHash -eq $oldHash) { Write-Log "Policy unchanged, skipping application"; return $false }
+    if (-not $Force -and $policyVersion -eq $oldVersion) { 
+        Write-Log "Policy unchanged (version: $policyVersion), skipping application"
+        return $false 
+    }
+    
+    if ($Force) { Write-Log "Force flag set - applying policy regardless of version" }
     
     Write-Log "=========================================="
     Write-Log "Applying Policy: $($Policy.name)"
@@ -559,8 +557,8 @@ function Apply-Policy {
             Write-Log "ASR rules configured: $($asrIds.Count) rules"
         }
         
-        # Save policy hash
-        $newHash | Set-Content -Path $PolicyHashFile -Force
+        # Save policy version (updated_at timestamp)
+        $policyVersion | Set-Content -Path $PolicyHashFile -Force
         
         Write-Log "=========================================="
         Write-Log "Policy applied successfully!"
@@ -620,8 +618,8 @@ Send-DefenderLogs -AgentToken $agentToken
 # Fetch and apply policy
 $policy = Get-AssignedPolicy -AgentToken $agentToken
 if ($policy) {
-    Write-Log "Policy assigned: $($policy.name)"
-    $applied = Apply-Policy -Policy $policy
+    Write-Log "Policy assigned: $($policy.name) (updated: $($policy.updated_at))"
+    $applied = Apply-Policy -Policy $policy -Force:$ForcePolicy
     if ($applied) { Write-Log "Policy enforcement complete" }
 } else {
     Write-Log "No policy assigned to this endpoint"
