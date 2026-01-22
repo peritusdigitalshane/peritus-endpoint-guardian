@@ -13,6 +13,7 @@ import Threats from "./pages/Threats";
 import Policies from "./pages/Policies";
 import AgentDownload from "./pages/AgentDownload";
 import EventLogs from "./pages/EventLogs";
+import Activity from "./pages/Activity";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -72,6 +73,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <EventLogs />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/activity"
+              element={
+                <ProtectedRoute>
+                  <Activity />
                 </ProtectedRoute>
               }
             />
