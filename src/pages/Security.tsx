@@ -65,7 +65,7 @@ export default function Security() {
           </TabsContent>
 
           <TabsContent value="rules">
-            <WdacRules selectedPolicyId={selectedPolicyId} />
+            <WdacRules selectedPolicyId={selectedPolicyId} onSelectPolicy={setSelectedPolicyId} />
           </TabsContent>
         </Tabs>
       </div>

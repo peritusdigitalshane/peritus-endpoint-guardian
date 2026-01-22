@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useWdacRules, useWdacMutations, useWdacBaselines, WdacRule } from "@/hooks/useWdac";
+import { useWdacRules, useWdacMutations, useWdacBaselines, useWdacPolicies, WdacRule } from "@/hooks/useWdac";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +19,8 @@ import {
   ListChecks,
   Camera,
   FileText,
-  AppWindow
+  AppWindow,
+  Shield
 } from "lucide-react";
 import { format } from "date-fns";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -27,9 +28,11 @@ import { cn } from "@/lib/utils";
 
 interface WdacRulesProps {
   selectedPolicyId: string | null;
+  onSelectPolicy?: (id: string | null) => void;
 }
 
-export function WdacRules({ selectedPolicyId }: WdacRulesProps) {
+export function WdacRules({ selectedPolicyId, onSelectPolicy }: WdacRulesProps) {
+  const { data: policies } = useWdacPolicies();
   const { data: rules, isLoading: rulesLoading } = useWdacRules(selectedPolicyId);
   const { data: baselines, isLoading: baselinesLoading } = useWdacBaselines(selectedPolicyId);
   const { createRule, deleteRule } = useWdacMutations();
@@ -43,6 +46,8 @@ export function WdacRules({ selectedPolicyId }: WdacRulesProps) {
     product_name: "",
     description: "",
   });
+
+  const selectedPolicy = policies?.find(p => p.id === selectedPolicyId);
 
   const handleCreateRule = () => {
     if (!selectedPolicyId || !formData.value) return;
@@ -82,15 +87,47 @@ export function WdacRules({ selectedPolicyId }: WdacRulesProps) {
 
   if (!selectedPolicyId) {
     return (
-      <Card className="border-amber-500/30 bg-amber-500/5">
-        <CardContent className="flex flex-col items-center justify-center py-12">
-          <AppWindow className="h-12 w-12 text-amber-500/50 mb-4" />
-          <h3 className="font-medium text-foreground mb-1">No Policy Selected</h3>
-          <p className="text-sm text-muted-foreground text-center max-w-md">
-            Select a policy from the Policies tab to view and manage its rules.
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-lg font-semibold">Policy Rules & Baselines</h2>
+          <p className="text-sm text-muted-foreground">
+            Select a policy to manage its rules and baselines.
           </p>
-        </CardContent>
-      </Card>
+        </div>
+        
+        {/* Policy Selector */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Select a Policy</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!policies?.length ? (
+              <p className="text-sm text-muted-foreground">
+                No policies found. Create a policy in the Policies tab first.
+              </p>
+            ) : (
+              <Select onValueChange={(id) => onSelectPolicy?.(id)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a policy..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {policies.map((policy) => (
+                    <SelectItem key={policy.id} value={policy.id}>
+                      <div className="flex items-center gap-2">
+                        <Shield className="h-4 w-4" />
+                        <span>{policy.name}</span>
+                        <Badge variant="secondary" className="ml-2 text-xs">
+                          {policy.mode === "enforced" ? "Enforced" : "Audit"}
+                        </Badge>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
@@ -109,12 +146,24 @@ export function WdacRules({ selectedPolicyId }: WdacRulesProps) {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header with Policy Info */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Policy Rules & Baselines</h2>
+          <div className="flex items-center gap-3 mb-1">
+            <h2 className="text-lg font-semibold">Policy Rules & Baselines</h2>
+            <Badge variant="outline" className="font-normal">
+              <Shield className="h-3 w-3 mr-1" />
+              {selectedPolicy?.name || "Unknown Policy"}
+            </Badge>
+          </div>
           <p className="text-sm text-muted-foreground">
-            Manage allow/block rules and view baseline snapshots for the selected policy.
+            Manage allow/block rules and view baseline snapshots.{" "}
+            <button 
+              className="text-primary hover:underline"
+              onClick={() => onSelectPolicy?.(null)}
+            >
+              Change policy
+            </button>
           </p>
         </div>
         <Button onClick={() => setShowAddRule(true)}>
