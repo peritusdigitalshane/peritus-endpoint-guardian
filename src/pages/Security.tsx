@@ -4,7 +4,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WdacPolicies } from "@/components/security/WdacPolicies";
 import { DiscoveredApps } from "@/components/security/DiscoveredApps";
 import { WdacRules } from "@/components/security/WdacRules";
-import { Shield, Eye, AppWindow, ListChecks } from "lucide-react";
+import { EndpointWdacList } from "@/components/security/EndpointWdacList";
+import { Shield, Eye, AppWindow, ListChecks, Monitor } from "lucide-react";
 
 export default function Security() {
   const [selectedPolicyId, setSelectedPolicyId] = useState<string | null>(null);
@@ -28,21 +29,29 @@ export default function Security() {
         </div>
 
         {/* Main Content */}
-        <Tabs defaultValue="policies" className="space-y-6">
-          <TabsList className="grid w-full max-w-md grid-cols-3">
+        <Tabs defaultValue="endpoints" className="space-y-6">
+          <TabsList className="grid w-full max-w-lg grid-cols-4">
+            <TabsTrigger value="endpoints" className="flex items-center gap-2">
+              <Monitor className="h-4 w-4" />
+              Endpoints
+            </TabsTrigger>
             <TabsTrigger value="policies" className="flex items-center gap-2">
               <ListChecks className="h-4 w-4" />
               Policies
             </TabsTrigger>
             <TabsTrigger value="apps" className="flex items-center gap-2">
               <AppWindow className="h-4 w-4" />
-              Discovered Apps
+              All Apps
             </TabsTrigger>
             <TabsTrigger value="rules" className="flex items-center gap-2">
               <Eye className="h-4 w-4" />
               Rules
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="endpoints">
+            <EndpointWdacList />
+          </TabsContent>
 
           <TabsContent value="policies">
             <WdacPolicies 
