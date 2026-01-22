@@ -383,7 +383,7 @@ async function handleThreats(req: Request) {
     // Check if threat already exists
     const { data: existing } = await supabase
       .from("endpoint_threats")
-      .select("id, manual_resolution_active")
+      .select("id, manual_resolution_active, manual_resolved_at")
       .eq("endpoint_id", endpoint.id)
       .eq("threat_id", threat.threat_id)
       .maybeSingle();
@@ -399,23 +399,44 @@ async function handleThreats(req: Request) {
     ].includes(incomingStatusLc);
 
     if (existing) {
-      // Update existing threat
-      await supabase
-        .from("endpoint_threats")
-        .update({
-          status: threat.status,
-          last_threat_status_change_time: threat.last_threat_status_change_time,
-          raw_data: threat.raw_data,
-          // If a threat comes back (new activity), clear any manual "resolved" override.
-          ...(existing.manual_resolution_active && incomingIndicatesNewActivity
-            ? {
-                manual_resolution_active: false,
-                manual_resolved_at: null,
-                manual_resolved_by: null,
-              }
-            : {}),
-        })
-        .eq("id", existing.id);
+      const incomingTimeStr =
+        threat.last_threat_status_change_time || threat.initial_detection_time || null;
+      const incomingTime = incomingTimeStr ? new Date(incomingTimeStr) : null;
+      const manualResolvedAt = existing.manual_resolved_at ? new Date(existing.manual_resolved_at) : null;
+
+      const shouldClearManualResolution =
+        !!existing.manual_resolution_active &&
+        incomingIndicatesNewActivity &&
+        !!incomingTime &&
+        (!manualResolvedAt || incomingTime > manualResolvedAt);
+
+      // If the threat is manually resolved, don't let repeated delivery of the same/older agent state
+      // overwrite it. Only un-resolve when we see activity AFTER manual_resolved_at.
+      if (existing.manual_resolution_active && !shouldClearManualResolution) {
+        await supabase
+          .from("endpoint_threats")
+          .update({
+            // Keep status=Resolved; but allow raw_data to refresh.
+            raw_data: threat.raw_data,
+          })
+          .eq("id", existing.id);
+      } else {
+        await supabase
+          .from("endpoint_threats")
+          .update({
+            status: threat.status,
+            last_threat_status_change_time: threat.last_threat_status_change_time,
+            raw_data: threat.raw_data,
+            ...(shouldClearManualResolution
+              ? {
+                  manual_resolution_active: false,
+                  manual_resolved_at: null,
+                  manual_resolved_by: null,
+                }
+              : {}),
+          })
+          .eq("id", existing.id);
+      }
     } else {
       // Insert new threat
       await supabase.from("endpoint_threats").insert({
@@ -560,12 +581,38 @@ async function handleLogs(req: Request) {
     for (const threat of candidateThreats) {
       const { data: existing } = await supabase
         .from("endpoint_threats")
-        .select("id, manual_resolution_active")
+        .select("id, manual_resolution_active, manual_resolved_at")
         .eq("endpoint_id", endpoint.id)
         .eq("threat_id", threat.threat_id)
         .maybeSingle();
 
       if (existing?.id) {
+        const incomingTime = threat.last_threat_status_change_time
+          ? new Date(threat.last_threat_status_change_time)
+          : threat.initial_detection_time
+            ? new Date(threat.initial_detection_time)
+            : null;
+        const manualResolvedAt = existing.manual_resolved_at ? new Date(existing.manual_resolved_at) : null;
+        const shouldClearManualResolution =
+          !!existing.manual_resolution_active &&
+          !!incomingTime &&
+          (!manualResolvedAt || incomingTime > manualResolvedAt);
+
+        if (existing.manual_resolution_active && !shouldClearManualResolution) {
+          // Keep status=Resolved; just refresh metadata.
+          await supabase
+            .from("endpoint_threats")
+            .update({
+              threat_name: threat.threat_name,
+              severity: threat.severity,
+              category: threat.category,
+              resources: threat.resources as any,
+              raw_data: threat.raw_data as any,
+            })
+            .eq("id", existing.id);
+          continue;
+        }
+
         await supabase
           .from("endpoint_threats")
           .update({
@@ -576,8 +623,8 @@ async function handleLogs(req: Request) {
             last_threat_status_change_time: threat.last_threat_status_change_time,
             resources: threat.resources as any,
             raw_data: threat.raw_data as any,
-            // Any new Defender threat event clears manual resolution override.
-            ...(existing.manual_resolution_active
+            // Any new Defender threat event AFTER manual_resolved_at clears manual resolution override.
+            ...(shouldClearManualResolution
               ? {
                   manual_resolution_active: false,
                   manual_resolved_at: null,
