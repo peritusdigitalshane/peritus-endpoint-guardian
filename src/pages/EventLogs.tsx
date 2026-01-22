@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { useQueryClient } from "@tanstack/react-query";
-import { EventLogDetailSheet } from "@/components/logs/EventLogDetailSheet";
+import { EventLogDetailSheet } from "@/components/EventLogDetailSheet";
 
 const getLevelIcon = (level: string) => {
   switch (level.toLowerCase()) {
