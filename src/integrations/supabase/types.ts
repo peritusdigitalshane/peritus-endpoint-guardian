@@ -323,6 +323,7 @@ export type Database = {
           id: string
           name: string
           organization_id: string
+          uac_policy_id: string | null
           updated_at: string
           wdac_policy_id: string | null
         }
@@ -334,6 +335,7 @@ export type Database = {
           id?: string
           name: string
           organization_id: string
+          uac_policy_id?: string | null
           updated_at?: string
           wdac_policy_id?: string | null
         }
@@ -345,6 +347,7 @@ export type Database = {
           id?: string
           name?: string
           organization_id?: string
+          uac_policy_id?: string | null
           updated_at?: string
           wdac_policy_id?: string | null
         }
@@ -361,6 +364,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "endpoint_groups_uac_policy_id_fkey"
+            columns: ["uac_policy_id"]
+            isOneToOne: false
+            referencedRelation: "uac_policies"
             referencedColumns: ["id"]
           },
           {
@@ -473,6 +483,13 @@ export type Database = {
           raw_status: Json | null
           realtime_protection_enabled: boolean | null
           tamper_protection_source: string | null
+          uac_consent_prompt_admin: number | null
+          uac_consent_prompt_user: number | null
+          uac_detect_installations: boolean | null
+          uac_enabled: boolean | null
+          uac_filter_administrator_token: boolean | null
+          uac_prompt_on_secure_desktop: boolean | null
+          uac_validate_admin_signatures: boolean | null
         }
         Insert: {
           am_running_mode?: string | null
@@ -497,6 +514,13 @@ export type Database = {
           raw_status?: Json | null
           realtime_protection_enabled?: boolean | null
           tamper_protection_source?: string | null
+          uac_consent_prompt_admin?: number | null
+          uac_consent_prompt_user?: number | null
+          uac_detect_installations?: boolean | null
+          uac_enabled?: boolean | null
+          uac_filter_administrator_token?: boolean | null
+          uac_prompt_on_secure_desktop?: boolean | null
+          uac_validate_admin_signatures?: boolean | null
         }
         Update: {
           am_running_mode?: string | null
@@ -521,6 +545,13 @@ export type Database = {
           raw_status?: Json | null
           realtime_protection_enabled?: boolean | null
           tamper_protection_source?: string | null
+          uac_consent_prompt_admin?: number | null
+          uac_consent_prompt_user?: number | null
+          uac_detect_installations?: boolean | null
+          uac_enabled?: boolean | null
+          uac_filter_administrator_token?: boolean | null
+          uac_prompt_on_secure_desktop?: boolean | null
+          uac_validate_admin_signatures?: boolean | null
         }
         Relationships: [
           {
@@ -607,6 +638,7 @@ export type Database = {
           os_build: string | null
           os_version: string | null
           policy_id: string | null
+          uac_policy_id: string | null
           updated_at: string
           wdac_policy_id: string | null
         }
@@ -622,6 +654,7 @@ export type Database = {
           os_build?: string | null
           os_version?: string | null
           policy_id?: string | null
+          uac_policy_id?: string | null
           updated_at?: string
           wdac_policy_id?: string | null
         }
@@ -637,6 +670,7 @@ export type Database = {
           os_build?: string | null
           os_version?: string | null
           policy_id?: string | null
+          uac_policy_id?: string | null
           updated_at?: string
           wdac_policy_id?: string | null
         }
@@ -653,6 +687,13 @@ export type Database = {
             columns: ["policy_id"]
             isOneToOne: false
             referencedRelation: "defender_policies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "endpoints_uac_policy_id_fkey"
+            columns: ["uac_policy_id"]
+            isOneToOne: false
+            referencedRelation: "uac_policies"
             referencedColumns: ["id"]
           },
           {
@@ -876,6 +917,68 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      uac_policies: {
+        Row: {
+          consent_prompt_admin: number
+          consent_prompt_user: number
+          created_at: string
+          created_by: string | null
+          description: string | null
+          detect_installations: boolean
+          enable_lua: boolean
+          filter_administrator_token: boolean
+          id: string
+          is_default: boolean
+          name: string
+          organization_id: string
+          prompt_on_secure_desktop: boolean
+          updated_at: string
+          validate_admin_signatures: boolean
+        }
+        Insert: {
+          consent_prompt_admin?: number
+          consent_prompt_user?: number
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          detect_installations?: boolean
+          enable_lua?: boolean
+          filter_administrator_token?: boolean
+          id?: string
+          is_default?: boolean
+          name: string
+          organization_id: string
+          prompt_on_secure_desktop?: boolean
+          updated_at?: string
+          validate_admin_signatures?: boolean
+        }
+        Update: {
+          consent_prompt_admin?: number
+          consent_prompt_user?: number
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          detect_installations?: boolean
+          enable_lua?: boolean
+          filter_administrator_token?: boolean
+          id?: string
+          is_default?: boolean
+          name?: string
+          organization_id?: string
+          prompt_on_secure_desktop?: boolean
+          updated_at?: string
+          validate_admin_signatures?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "uac_policies_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       wdac_baselines: {
         Row: {
