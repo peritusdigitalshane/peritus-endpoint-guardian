@@ -9,6 +9,7 @@ export interface OrganizationMember {
   user_id: string;
   role: OrgRole;
   created_at: string;
+  is_super_admin: boolean;
   profile: {
     id: string;
     email: string;
@@ -44,6 +45,14 @@ export function useOrganizationMembers() {
 
       if (profilesError) throw profilesError;
 
+      // Fetch super admin status for all users
+      const { data: superAdmins } = await supabase
+        .from("super_admins")
+        .select("user_id")
+        .in("user_id", userIds);
+
+      const superAdminSet = new Set((superAdmins || []).map((sa) => sa.user_id));
+
       // Map profiles by id for quick lookup
       const profileMap = new Map(
         (profiles || []).map((p) => [p.id, p])
@@ -54,6 +63,7 @@ export function useOrganizationMembers() {
         user_id: item.user_id,
         role: item.role as OrgRole,
         created_at: item.created_at,
+        is_super_admin: superAdminSet.has(item.user_id),
         profile: profileMap.get(item.user_id) || null,
       })) as OrganizationMember[];
     },
@@ -153,6 +163,41 @@ export function useAddMember() {
       if (insertError) throw insertError;
 
       return { userId: profile.id, email: profile.email };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["organization-members"] });
+    },
+  });
+}
+
+export function useGrantSuperAdmin() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ userId }: { userId: string }) => {
+      const { error } = await supabase
+        .from("super_admins")
+        .insert({ user_id: userId });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["organization-members"] });
+    },
+  });
+}
+
+export function useRevokeSuperAdmin() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ userId }: { userId: string }) => {
+      const { error } = await supabase
+        .from("super_admins")
+        .delete()
+        .eq("user_id", userId);
+
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["organization-members"] });
