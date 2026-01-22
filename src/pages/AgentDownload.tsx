@@ -31,8 +31,9 @@ const generatePowershellScript = (orgId: string, apiBaseUrl: string) => {
     .\\PeritusSecureAgent.ps1 -ForceFullLogSync
     Forces collection of all Defender events from the past hour, ignoring last sync time.
 .NOTES
-    Version: 2.3.1
+    Version: 2.4.0
     Requires: Windows 10/11, PowerShell 5.1+, Administrator privileges
+    Changes in 2.4.0: Added UAC status collection and policy enforcement
 #>
 
 param(
@@ -155,6 +156,31 @@ function Get-SystemInfo {
     }
 }
 
+function Get-UacStatus {
+    try {
+        $uacPath = "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System"
+        if (-not (Test-Path $uacPath)) {
+            Write-Log "UAC registry path not found" -Level "WARN"
+            return @{}
+        }
+        
+        $reg = Get-ItemProperty -Path $uacPath -ErrorAction SilentlyContinue
+        
+        return @{
+            uac_enabled = if ($null -ne $reg.EnableLUA) { $reg.EnableLUA -eq 1 } else { $null }
+            uac_consent_prompt_admin = $reg.ConsentPromptBehaviorAdmin
+            uac_consent_prompt_user = $reg.ConsentPromptBehaviorUser
+            uac_prompt_on_secure_desktop = if ($null -ne $reg.PromptOnSecureDesktop) { $reg.PromptOnSecureDesktop -eq 1 } else { $null }
+            uac_detect_installations = if ($null -ne $reg.EnableInstallerDetection) { $reg.EnableInstallerDetection -eq 1 } else { $null }
+            uac_validate_admin_signatures = if ($null -ne $reg.ValidateAdminCodeSignatures) { $reg.ValidateAdminCodeSignatures -eq 1 } else { $null }
+            uac_filter_administrator_token = if ($null -ne $reg.FilterAdministratorToken) { $reg.FilterAdministratorToken -eq 1 } else { $null }
+        }
+    } catch {
+        Write-Log "Error getting UAC status: $_" -Level "ERROR"
+        return @{}
+    }
+}
+
 function Get-DefenderStatus {
     try {
         $status = Get-MpComputerStatus
@@ -169,7 +195,10 @@ function Get-DefenderStatus {
             return [int][math]::Truncate($n)
         }
 
-        return @{
+        # Get UAC status and merge with Defender status
+        $uacStatus = Get-UacStatus
+
+        $result = @{
             realtime_protection_enabled = $status.RealTimeProtectionEnabled
             antivirus_enabled = $status.AntivirusEnabled
             antispyware_enabled = $status.AntispywareEnabled
@@ -191,6 +220,13 @@ function Get-DefenderStatus {
             defender_version = $status.AMProductVersion
             raw_status = $status | ConvertTo-Json -Depth 3 | ConvertFrom-Json
         }
+
+        # Merge UAC status into result
+        foreach ($key in $uacStatus.Keys) {
+            $result[$key] = $uacStatus[$key]
+        }
+
+        return $result
     } catch {
         Write-Log "Error getting Defender status: $_" -Level "ERROR"
         return $null
@@ -566,6 +602,111 @@ function Get-WdacPolicy {
     } catch {
         Write-Log "Could not fetch WDAC policy: $_" -Level "WARN"
         return $null
+    }
+}
+
+function Get-UacPolicy {
+    param([string]$AgentToken)
+    try {
+        $headers = @{ "Content-Type" = "application/json"; "x-agent-token" = $AgentToken }
+        $response = Invoke-RestMethod -Uri "$ApiBaseUrl/uac-policy" -Method GET -Headers $headers
+        return $response
+    } catch {
+        Write-Log "Could not fetch UAC policy: $_" -Level "WARN"
+        return $null
+    }
+}
+
+function Apply-UacPolicy {
+    param([object]$Policy, [switch]$Force)
+    
+    if (-not $Policy) { return $false }
+    
+    $uacPath = "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System"
+    $policyHashFile = "$ConfigPath\\uac_policy_hash.txt"
+    
+    # Generate a simple hash of the policy to detect changes
+    $policyJson = $Policy | ConvertTo-Json -Depth 5 -Compress
+    $policyHash = [System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes($policyJson))).Replace("-", "").Substring(0, 16)
+    
+    # Check if policy has changed
+    if (-not $Force -and (Test-Path $policyHashFile)) {
+        $lastHash = Get-Content $policyHashFile -ErrorAction SilentlyContinue
+        if ($lastHash -eq $policyHash) {
+            Write-Log "UAC policy unchanged, skipping enforcement"
+            return $false
+        }
+    }
+    
+    Write-Log "Applying UAC policy: $($Policy.name)"
+    $changesApplied = $false
+    
+    try {
+        # EnableLUA
+        if ($null -ne $Policy.enable_lua) {
+            $value = if ($Policy.enable_lua) { 1 } else { 0 }
+            Set-ItemProperty -Path $uacPath -Name "EnableLUA" -Value $value -Type DWord -Force
+            Write-Log "  EnableLUA = $value"
+            $changesApplied = $true
+        }
+        
+        # ConsentPromptBehaviorAdmin (0-5)
+        if ($null -ne $Policy.consent_prompt_admin) {
+            Set-ItemProperty -Path $uacPath -Name "ConsentPromptBehaviorAdmin" -Value $Policy.consent_prompt_admin -Type DWord -Force
+            Write-Log "  ConsentPromptBehaviorAdmin = $($Policy.consent_prompt_admin)"
+            $changesApplied = $true
+        }
+        
+        # ConsentPromptBehaviorUser (0-3)
+        if ($null -ne $Policy.consent_prompt_user) {
+            Set-ItemProperty -Path $uacPath -Name "ConsentPromptBehaviorUser" -Value $Policy.consent_prompt_user -Type DWord -Force
+            Write-Log "  ConsentPromptBehaviorUser = $($Policy.consent_prompt_user)"
+            $changesApplied = $true
+        }
+        
+        # PromptOnSecureDesktop
+        if ($null -ne $Policy.prompt_on_secure_desktop) {
+            $value = if ($Policy.prompt_on_secure_desktop) { 1 } else { 0 }
+            Set-ItemProperty -Path $uacPath -Name "PromptOnSecureDesktop" -Value $value -Type DWord -Force
+            Write-Log "  PromptOnSecureDesktop = $value"
+            $changesApplied = $true
+        }
+        
+        # EnableInstallerDetection
+        if ($null -ne $Policy.detect_installations) {
+            $value = if ($Policy.detect_installations) { 1 } else { 0 }
+            Set-ItemProperty -Path $uacPath -Name "EnableInstallerDetection" -Value $value -Type DWord -Force
+            Write-Log "  EnableInstallerDetection = $value"
+            $changesApplied = $true
+        }
+        
+        # ValidateAdminCodeSignatures
+        if ($null -ne $Policy.validate_admin_signatures) {
+            $value = if ($Policy.validate_admin_signatures) { 1 } else { 0 }
+            Set-ItemProperty -Path $uacPath -Name "ValidateAdminCodeSignatures" -Value $value -Type DWord -Force
+            Write-Log "  ValidateAdminCodeSignatures = $value"
+            $changesApplied = $true
+        }
+        
+        # FilterAdministratorToken
+        if ($null -ne $Policy.filter_administrator_token) {
+            $value = if ($Policy.filter_administrator_token) { 1 } else { 0 }
+            Set-ItemProperty -Path $uacPath -Name "FilterAdministratorToken" -Value $value -Type DWord -Force
+            Write-Log "  FilterAdministratorToken = $value"
+            $changesApplied = $true
+        }
+        
+        if ($changesApplied) {
+            # Save policy hash
+            $policyHash | Set-Content -Path $policyHashFile -Force
+            Write-Log "UAC policy applied successfully"
+            Write-Log "NOTE: Some UAC changes may require a system restart to take full effect" -Level "WARN"
+        }
+        
+        return $changesApplied
+    } catch {
+        Write-Log "Error applying UAC policy: $_" -Level "ERROR"
+        return $false
     }
 }
 
@@ -952,6 +1093,16 @@ if ($wdacResponse -and $wdacResponse.wdac_policy) {
     Write-Log "  Rules count: $($wdacResponse.rules.Count)"
 } else {
     Write-Log "No WDAC policy assigned to this endpoint"
+}
+
+# Fetch and apply UAC policy
+$uacResponse = Get-UacPolicy -AgentToken $agentToken
+if ($uacResponse -and $uacResponse.has_policy -and $uacResponse.policy) {
+    Write-Log "UAC Policy assigned: $($uacResponse.policy.name)"
+    $uacApplied = Apply-UacPolicy -Policy $uacResponse.policy -Force:$ForcePolicy
+    if ($uacApplied) { Write-Log "UAC policy enforcement complete" }
+} else {
+    Write-Log "No UAC policy assigned to this endpoint"
 }
 
 Write-Log "Agent run complete."
