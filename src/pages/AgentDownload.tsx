@@ -119,6 +119,17 @@ function Get-SystemInfo {
 function Get-DefenderStatus {
     try {
         $status = Get-MpComputerStatus
+
+        function Convert-Int32Safe {
+            param($Value)
+            if ($null -eq $Value) { return $null }
+            try { $n = [double]$Value } catch { return $null }
+            # Some Defender fields return UINT32 max as "unknown"
+            if ($n -eq 4294967295 -or $n -eq -1) { return $null }
+            if ($n -gt 2147483647 -or $n -lt -2147483648) { return $null }
+            return [int][math]::Truncate($n)
+        }
+
         return @{
             realtime_protection_enabled = $status.RealTimeProtectionEnabled
             antivirus_enabled = $status.AntivirusEnabled
@@ -126,17 +137,17 @@ function Get-DefenderStatus {
             behavior_monitor_enabled = $status.BehaviorMonitorEnabled
             ioav_protection_enabled = $status.IoavProtectionEnabled
             on_access_protection_enabled = $status.OnAccessProtectionEnabled
-            full_scan_age = $status.FullScanAge
-            quick_scan_age = $status.QuickScanAge
+            full_scan_age = Convert-Int32Safe $status.FullScanAge
+            quick_scan_age = Convert-Int32Safe $status.QuickScanAge
             full_scan_end_time = if ($status.FullScanEndTime) { $status.FullScanEndTime.ToString("o") } else { $null }
             quick_scan_end_time = if ($status.QuickScanEndTime) { $status.QuickScanEndTime.ToString("o") } else { $null }
-            antivirus_signature_age = $status.AntivirusSignatureAge
-            antispyware_signature_age = $status.AntispywareSignatureAge
+            antivirus_signature_age = Convert-Int32Safe $status.AntivirusSignatureAge
+            antispyware_signature_age = Convert-Int32Safe $status.AntispywareSignatureAge
             antivirus_signature_version = $status.AntivirusSignatureVersion
             nis_signature_version = $status.NISSignatureVersion
             nis_enabled = $status.NISEnabled
             tamper_protection_source = $status.TamperProtectionSource
-            computer_state = $status.ComputerState
+            computer_state = Convert-Int32Safe $status.ComputerState
             am_running_mode = $status.AMRunningMode
             defender_version = $status.AMProductVersion
             raw_status = $status | ConvertTo-Json -Depth 3 | ConvertFrom-Json
