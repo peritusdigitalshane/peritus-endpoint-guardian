@@ -1206,42 +1206,53 @@ function Apply-Policy {
 
 # ==================== TRAY MODE FUNCTIONS ====================
 
-# Embedded Peritus icon as base64 ICO (16x16 and 32x32)
-$script:TrayIconBase64 = @"
-AAABAAIAEBAAAAEAIABoBAAAJgAAACAgAAABACAAqBAAAI4EAAAoAAAAEAAAACAAAAABACAAAAAAAAAEAAAAAAAA
-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAeXl5AAAAAACAgICAgICAAICAgP+AgID/gICA/4CAgICA
-gIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAgIAAgICA/4CAgP+AgID/gICA/4CAgP+AgID/gICA/4CA
-gP+AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAACAgIAAgICA/4CAgP+AgID/gICA/4CAgP+AgID/gICA/4CAgP+AgID/
-gICA/4CAgAAAAAAAAAAAAAAAAACAgIAAgICA/4CAgP+AgID/gICA/4CAgP+AgID/gICA/4CAgP+AgID/gICA/4CA
-gP+AgIAAAAAAAAAAAACAgIAAgICA/4CAgP+AgID/gICA/zMz//8zM///MzP//4CAgP+AgID/gICA/4CAgP+AgID/
-gICAAAAAAAB5eXkAgICA/4CAgP+AgID/MzP//zMz//8zM///MzP//zMz//+AgID/gICA/4CAgP+AgID/gICA/4CA
-gAAAAACAgID/gICA/4CAgP8zM///MzP//zMz//8zM///MzP//zMz//+AgID/gICA/4CAgP+AgID/gICA/4CAgICA
-gID/gICA/4CAgP8zM///MzP//zMz//8zM///MzP//zMz//8zM///gICA/4CAgP+AgID/gICA/4CAgP+AgICAgICA
-/4CAgP+AgID/MzP//zMz//8zM///MzP//zMz//8zM///MzP//4CAgP+AgID/gICA/4CAgP+AgID/gICAgICA/4CA
-gP+AgID/gICA/zMz//8zM///MzP//zMz//8zM///gICA/4CAgP+AgID/gICA/4CAgP+AgIAAAAAAAICA/4CAgP+A
-gID/gICA/4CAgP8zM///MzP//zMz//+AgID/gICA/4CAgP+AgID/gICA/4CAgAAAAAAAAAAAAICA/4CAgP+AgID/
-gICA/4CAgP+AgID/gICA/4CAgP+AgID/gICA/4CAgP+AgIAAAAAAAAAAAAAAAAAAAACAgID/gICA/4CAgP+AgID/
-gICA/4CAgP+AgID/gICA/4CAgP+AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAICAgP+AgID/gICA/4CAgP+AgID/gICA
-/4CAgP+AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAgID/gICA/4CAgP+AgID/gICAAICAgAAAAAAAAAAA
-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKAAA
-ACAAAABAAAAAAQAgAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACc
-nJwAnJyc/5ycnP+cnJz/nJyc/5ycnP+cnJz/nJycAJycnACcnJwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
-"@
-
 function Get-TrayIcon {
+    Add-Type -AssemblyName System.Drawing
+    
     try {
-        # Try to load from file first
+        # Try to load from saved icon file first
         if (Test-Path $TrayIconFile) {
-            return New-Object System.Drawing.Icon($TrayIconFile)
+            $icon = New-Object System.Drawing.Icon($TrayIconFile)
+            if ($icon) { return $icon }
         }
-        
-        # Decode and save the embedded icon
-        $iconBytes = [Convert]::FromBase64String($script:TrayIconBase64)
-        [System.IO.File]::WriteAllBytes($TrayIconFile, $iconBytes)
-        return New-Object System.Drawing.Icon($TrayIconFile)
-    } catch {
+    } catch { }
+    
+    try {
+        # Try Windows Security shield icon (index 77 in shell32.dll)
+        $shell32 = "$env:SystemRoot\\System32\\shell32.dll"
+        Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public class IconExtractor {
+    [DllImport("shell32.dll", CharSet = CharSet.Auto)]
+    public static extern IntPtr ExtractIcon(IntPtr hInst, string lpszExeFileName, int nIconIndex);
+}
+"@
+        $iconHandle = [IconExtractor]::ExtractIcon([IntPtr]::Zero, $shell32, 77)
+        if ($iconHandle -ne [IntPtr]::Zero) {
+            return [System.Drawing.Icon]::FromHandle($iconHandle)
+        }
+    } catch { }
+    
+    try {
         # Fallback to PowerShell icon
-        return [System.Drawing.Icon]::ExtractAssociatedIcon((Get-Process -Id $PID).Path)
+        $psPath = (Get-Process -Id $PID).Path
+        if ($psPath) {
+            return [System.Drawing.Icon]::ExtractAssociatedIcon($psPath)
+        }
+    } catch { }
+    
+    # Final fallback - create a simple colored icon
+    try {
+        $bmp = New-Object System.Drawing.Bitmap(16, 16)
+        $g = [System.Drawing.Graphics]::FromImage($bmp)
+        $g.FillEllipse([System.Drawing.Brushes]::DodgerBlue, 0, 0, 15, 15)
+        $g.DrawEllipse([System.Drawing.Pens]::White, 1, 1, 13, 13)
+        $g.Dispose()
+        $iconHandle = $bmp.GetHicon()
+        return [System.Drawing.Icon]::FromHandle($iconHandle)
+    } catch {
+        return $null
     }
 }
 
@@ -1405,15 +1416,31 @@ function Show-StatusForm {
 function Start-TrayApplication {
     param([string]$AgentToken)
     
-    Add-Type -AssemblyName System.Windows.Forms
-    Add-Type -AssemblyName System.Drawing
+    try {
+        Add-Type -AssemblyName System.Windows.Forms
+        Add-Type -AssemblyName System.Drawing
+    } catch {
+        Write-Log "Failed to load Windows Forms assemblies: $_" -Level "ERROR"
+        return
+    }
     
     Write-Log "Starting Tray Application..."
     
     $script:trayIcon = New-Object System.Windows.Forms.NotifyIcon
-    $script:trayIcon.Icon = Get-TrayIcon
+    
+    # Get icon with error handling
+    $icon = Get-TrayIcon
+    if ($icon) {
+        $script:trayIcon.Icon = $icon
+        Write-Log "Tray icon loaded successfully"
+    } else {
+        Write-Log "Warning: Could not load tray icon" -Level "WARN"
+    }
+    
     $script:trayIcon.Text = "Peritus Secure - Protected"
     $script:trayIcon.Visible = $true
+    
+    Write-Log "Tray icon visible: $($script:trayIcon.Visible)"
     
     # Create context menu
     $contextMenu = New-Object System.Windows.Forms.ContextMenuStrip
