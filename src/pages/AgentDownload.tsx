@@ -287,26 +287,35 @@ $RelevantEventIds = @{
 }
 
 function Get-RelevantDefenderLogs {
-    param([int]$MaxAgeMinutes = 10)
+    param([int]$MaxAgeMinutes = 60)
     
     $logs = @()
     $startTime = (Get-Date).AddMinutes(-$MaxAgeMinutes)
     $lastLogTimeFile = "$ConfigPath\\last_log_time.txt"
     
-    # Use last collection time if available
+    # Use last collection time if available (but cap at MaxAgeMinutes)
     if (Test-Path $lastLogTimeFile) {
         $lastLogTime = Get-Content $lastLogTimeFile -ErrorAction SilentlyContinue
         if ($lastLogTime) {
             try {
-                $startTime = [DateTime]::Parse($lastLogTime).AddSeconds(1)
-            } catch { }
+                $parsedTime = [DateTime]::Parse($lastLogTime).AddSeconds(1)
+                # Only use last log time if it's within the max age window
+                if ($parsedTime -gt $startTime) {
+                    $startTime = $parsedTime
+                }
+            } catch { 
+                Write-Log "Could not parse last log time, using default window" -Level "WARN"
+            }
         }
     }
+    
+    Write-Log "Collecting Defender events since: $($startTime.ToString('o'))"
     
     foreach ($logName in $RelevantEventIds.Keys) {
         $eventIds = $RelevantEventIds[$logName]
         
         try {
+            Write-Log "  Querying $logName for events: $($eventIds -join ', ')"
             $events = Get-WinEvent -FilterHashtable @{
                 LogName = $logName
                 ID = $eventIds
@@ -314,6 +323,7 @@ function Get-RelevantDefenderLogs {
             } -ErrorAction SilentlyContinue
             
             if ($events) {
+                Write-Log "  Found $($events.Count) events in $logName"
                 foreach ($event in $events) {
                     $logs += @{
                         event_id = $event.Id
@@ -331,9 +341,10 @@ function Get-RelevantDefenderLogs {
                         }
                     }
                 }
+            } else {
+                Write-Log "  No matching events in $logName"
             }
         } catch {
-            # Log might not exist or be inaccessible
             Write-Log "Could not read events from $($logName): $_" -Level "WARN"
         }
     }
@@ -341,6 +352,7 @@ function Get-RelevantDefenderLogs {
     # Save collection time
     (Get-Date).ToString("o") | Set-Content -Path $lastLogTimeFile -Force -ErrorAction SilentlyContinue
     
+    Write-Log "Total events collected: $($logs.Count)"
     return $logs
 }
 
