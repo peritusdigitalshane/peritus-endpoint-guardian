@@ -8,47 +8,116 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Download, Copy, CheckCircle, Shield, Terminal, Clock, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-const AgentDownload = () => {
-  const [orgId, setOrgId] = useState("your-organization-id");
-  const [copied, setCopied] = useState(false);
-  const { toast } = useToast();
-
-  // TODO: Fetch actual org ID from user's organization membership
-  useEffect(() => {
-    // This would be replaced with actual org fetch
-    setOrgId("demo-org-id");
-  }, []);
-
-  const apiBaseUrl = "https://njdcyjxgtckgtzgzoctw.supabase.co/functions/v1/agent-api";
-
-  const powershellScript = `#Requires -RunAsAdministrator
+const generatePowershellScript = (orgId: string, apiBaseUrl: string) => {
+  return `#Requires -RunAsAdministrator
 <#
 .SYNOPSIS
     Peritus Secure Agent - Windows Defender Management
 .DESCRIPTION
     This agent collects Windows Defender status and sends it to the Peritus Secure platform.
     It also applies security policies configured in the platform.
+.PARAMETER OrganizationToken
+    Your organization's unique token for agent registration
+.PARAMETER HeartbeatIntervalMinutes
+    How often the agent sends status updates (default: 5 minutes)
+.PARAMETER Uninstall
+    Remove the scheduled task and agent configuration
 .NOTES
-    Version: 1.0.0
+    Version: 1.1.0
     Requires: Windows 10/11, PowerShell 5.1+, Administrator privileges
 #>
 
 param(
     [string]$OrganizationToken = "${orgId}",
-    [int]$HeartbeatIntervalMinutes = 5
+    [int]$HeartbeatIntervalMinutes = 5,
+    [switch]$Uninstall
 )
 
 $ErrorActionPreference = "Stop"
 $ApiBaseUrl = "${apiBaseUrl}"
+$TaskName = "PeritusSecureAgent"
+$ServiceName = "Peritus Secure Agent"
 
 # Agent configuration storage
 $ConfigPath = "$env:ProgramData\\PeritusSecure"
 $ConfigFile = "$ConfigPath\\agent.json"
+$ScriptPath = "$ConfigPath\\PeritusSecureAgent.ps1"
+$LogFile = "$ConfigPath\\agent.log"
 
 function Write-Log {
     param([string]$Message, [string]$Level = "INFO")
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    Write-Host "[$timestamp] [$Level] $Message"
+    $logMessage = "[$timestamp] [$Level] $Message"
+    Write-Host $logMessage
+    
+    # Also write to log file
+    if (Test-Path $ConfigPath) {
+        Add-Content -Path $LogFile -Value $logMessage -ErrorAction SilentlyContinue
+    }
+}
+
+function Uninstall-Agent {
+    Write-Log "Uninstalling Peritus Secure Agent..."
+    
+    # Remove scheduled task
+    $existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    if ($existingTask) {
+        Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
+        Write-Log "Scheduled task removed"
+    }
+    
+    # Remove configuration
+    if (Test-Path $ConfigPath) {
+        Remove-Item -Path $ConfigPath -Recurse -Force
+        Write-Log "Configuration removed"
+    }
+    
+    Write-Log "Agent uninstalled successfully"
+    exit 0
+}
+
+function Install-AgentTask {
+    param([string]$ScriptContent)
+    
+    # Create config directory
+    if (-not (Test-Path $ConfigPath)) {
+        New-Item -ItemType Directory -Path $ConfigPath -Force | Out-Null
+        Write-Log "Created configuration directory: $ConfigPath"
+    }
+    
+    # Save script to permanent location
+    $ScriptContent | Set-Content -Path $ScriptPath -Force
+    Write-Log "Agent script saved to: $ScriptPath"
+    
+    # Check if task already exists
+    $existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    if ($existingTask) {
+        Write-Log "Scheduled task already exists, updating..."
+        Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
+    }
+    
+    # Create scheduled task action - run hidden
+    $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -File \`"$ScriptPath\`""
+    
+    # Create triggers: at startup and every X minutes
+    $triggerStartup = New-ScheduledTaskTrigger -AtStartup
+    $triggerRepeat = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes $HeartbeatIntervalMinutes) -RepetitionDuration (New-TimeSpan -Days 9999)
+    
+    # Create principal (run as SYSTEM with highest privileges)
+    $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+    
+    # Create settings
+    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
+    
+    # Register the task
+    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggerStartup,$triggerRepeat -Principal $principal -Settings $settings -Description "Peritus Secure Agent - Windows Defender Management" | Out-Null
+    
+    Write-Log "Scheduled task '$TaskName' created successfully"
+    Write-Log "  - Runs at system startup"
+    Write-Log "  - Repeats every $HeartbeatIntervalMinutes minutes"
+    Write-Log "  - Runs as SYSTEM account"
+    
+    return $true
 }
 
 function Get-SystemInfo {
@@ -189,6 +258,7 @@ function Register-Agent {
         @{
             endpoint_id = $response.endpoint_id
             agent_token = $response.agent_token
+            organization_token = $OrganizationToken
             registered_at = (Get-Date).ToString("o")
         } | ConvertTo-Json | Set-Content -Path $ConfigFile
         
@@ -243,16 +313,25 @@ function Get-AssignedPolicy {
     }
 }
 
-# Main execution
+# ==================== MAIN EXECUTION ====================
+
 Write-Log "=========================================="
-Write-Log "Peritus Secure Agent Starting"
+Write-Log "Peritus Secure Agent v1.1.0"
 Write-Log "=========================================="
+
+# Handle uninstall
+if ($Uninstall) {
+    Uninstall-Agent
+}
 
 # Check for existing configuration
 $agentToken = $null
+$isFirstRun = $true
+
 if (Test-Path $ConfigFile) {
     $config = Get-Content $ConfigFile | ConvertFrom-Json
     $agentToken = $config.agent_token
+    $isFirstRun = $false
     Write-Log "Found existing agent configuration"
 }
 
@@ -261,7 +340,31 @@ if (-not $agentToken) {
     $agentToken = Register-Agent -OrganizationToken $OrganizationToken
 }
 
-# Initial heartbeat and threat report
+# Install scheduled task on first run
+if ($isFirstRun) {
+    Write-Log ""
+    Write-Log "First run detected - installing as scheduled task..."
+    
+    # Read current script content
+    $scriptContent = Get-Content -Path $MyInvocation.MyCommand.Path -Raw
+    Install-AgentTask -ScriptContent $scriptContent
+    
+    Write-Log ""
+    Write-Log "=========================================="
+    Write-Log "INSTALLATION COMPLETE!"
+    Write-Log "=========================================="
+    Write-Log ""
+    Write-Log "The agent is now installed and will:"
+    Write-Log "  - Start automatically when Windows boots"
+    Write-Log "  - Send status updates every $HeartbeatIntervalMinutes minutes"
+    Write-Log "  - Run silently in the background"
+    Write-Log ""
+    Write-Log "To uninstall, run:"
+    Write-Log "  powershell -File \`"$ScriptPath\`" -Uninstall"
+    Write-Log ""
+}
+
+# Send heartbeat and threat report
 Send-Heartbeat -AgentToken $agentToken
 Send-Threats -AgentToken $agentToken
 
@@ -273,20 +376,23 @@ if ($policy) {
     Write-Log "No policy assigned to this endpoint"
 }
 
-Write-Log "Agent setup complete! Heartbeat will run every $HeartbeatIntervalMinutes minutes."
-Write-Log "To run as a scheduled task, use the following command:"
-Write-Log "  schtasks /create /tn 'Peritus Secure Agent' /tr 'powershell.exe -ExecutionPolicy Bypass -File $PSCommandPath' /sc minute /mo $HeartbeatIntervalMinutes /ru SYSTEM"
-
-# Keep running if in interactive mode
-if ($Host.Name -eq "ConsoleHost") {
-    Write-Log "Running in continuous mode. Press Ctrl+C to stop."
-    while ($true) {
-        Start-Sleep -Seconds ($HeartbeatIntervalMinutes * 60)
-        Send-Heartbeat -AgentToken $agentToken
-        Send-Threats -AgentToken $agentToken
-    }
-}
+Write-Log "Agent run complete."
 `;
+};
+
+const AgentDownload = () => {
+  const [orgId, setOrgId] = useState("your-organization-id");
+  const [copied, setCopied] = useState(false);
+  const { toast } = useToast();
+
+  // TODO: Fetch actual org ID from user's organization membership
+  useEffect(() => {
+    // This would be replaced with actual org fetch
+    setOrgId("demo-org-id");
+  }, []);
+
+  const apiBaseUrl = "https://njdcyjxgtckgtzgzoctw.supabase.co/functions/v1/agent-api";
+  const powershellScript = generatePowershellScript(orgId, apiBaseUrl);
 
   const handleCopy = async () => {
     try {
@@ -402,9 +508,9 @@ if ($Host.Name -eq "ConsoleHost") {
                   </Button>
                 </div>
                 <div className="rounded-lg bg-secondary/50 p-4">
-                  <p className="text-sm font-medium mb-2">Run the script:</p>
+                  <p className="text-sm font-medium mb-2">Run the script as Administrator:</p>
                   <code className="text-xs text-muted-foreground">
-                    powershell.exe -ExecutionPolicy Bypass -File .\\PeritusSecureAgent.ps1
+                    powershell.exe -ExecutionPolicy Bypass -File .\PeritusSecureAgent.ps1
                   </code>
                 </div>
               </TabsContent>
@@ -433,7 +539,7 @@ if ($Host.Name -eq "ConsoleHost") {
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <Zap className="h-5 w-5 text-primary" />
-              What Happens Next
+              What Happens When You Run It
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -454,9 +560,9 @@ if ($Host.Name -eq "ConsoleHost") {
                   2
                 </div>
                 <div>
-                  <p className="font-medium">Status Collection</p>
+                  <p className="font-medium">Scheduled Task Created</p>
                   <p className="text-sm text-muted-foreground">
-                    Windows Defender status, signatures, and settings are collected
+                    A Windows scheduled task is automatically created to run every 5 minutes
                   </p>
                 </div>
               </div>
@@ -465,9 +571,9 @@ if ($Host.Name -eq "ConsoleHost") {
                   3
                 </div>
                 <div>
-                  <p className="font-medium">Threat Reporting</p>
+                  <p className="font-medium">Runs Silently in Background</p>
                   <p className="text-sm text-muted-foreground">
-                    Any detected threats are reported to the platform
+                    No window stays open - the agent runs as a background service
                   </p>
                 </div>
               </div>
@@ -478,7 +584,7 @@ if ($Host.Name -eq "ConsoleHost") {
                 <div>
                   <p className="font-medium">Continuous Monitoring</p>
                   <p className="text-sm text-muted-foreground">
-                    Heartbeat updates are sent every 5 minutes (configurable)
+                    Defender status and threats are reported automatically, even after reboots
                   </p>
                 </div>
               </div>
@@ -486,23 +592,33 @@ if ($Host.Name -eq "ConsoleHost") {
           </CardContent>
         </Card>
 
-        {/* Scheduled Task */}
-        <Card className="border-border/40 bg-muted/30">
+        {/* Uninstall Instructions */}
+        <Card className="border-border/40">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <Clock className="h-5 w-5 text-primary" />
-              Run as Scheduled Task (Recommended)
+              Agent Management
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground mb-3">
-              For persistent monitoring, create a scheduled task to run the agent:
-            </p>
-            <pre className="rounded-lg bg-secondary p-4 text-xs overflow-x-auto">
-              <code>
-{`schtasks /create /tn "Peritus Secure Agent" /tr "powershell.exe -ExecutionPolicy Bypass -File C:\\PeritusSecure\\PeritusSecureAgent.ps1" /sc minute /mo 5 /ru SYSTEM`}
+          <CardContent className="space-y-4">
+            <div>
+              <p className="text-sm font-medium mb-2">View agent logs:</p>
+              <code className="text-xs bg-secondary/50 p-2 rounded block">
+                Get-Content "$env:ProgramData\PeritusSecure\agent.log" -Tail 50
               </code>
-            </pre>
+            </div>
+            <div>
+              <p className="text-sm font-medium mb-2">Uninstall agent:</p>
+              <code className="text-xs bg-secondary/50 p-2 rounded block">
+                powershell -File "$env:ProgramData\PeritusSecure\PeritusSecureAgent.ps1" -Uninstall
+              </code>
+            </div>
+            <div>
+              <p className="text-sm font-medium mb-2">Check scheduled task status:</p>
+              <code className="text-xs bg-secondary/50 p-2 rounded block">
+                Get-ScheduledTask -TaskName "PeritusSecureAgent"
+              </code>
+            </div>
           </CardContent>
         </Card>
       </div>
