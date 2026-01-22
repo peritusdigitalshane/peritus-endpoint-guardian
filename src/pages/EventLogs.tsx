@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { useEventLogs } from "@/hooks/useEventLogs";
+import { useEventLogs, EndpointEventLog } from "@/hooks/useEventLogs";
 import { formatDistanceToNow, format } from "date-fns";
 import { 
   FileText, 
@@ -10,7 +10,8 @@ import {
   Shield,
   Loader2,
   RefreshCw,
-  Filter
+  Filter,
+  ChevronRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { useQueryClient } from "@tanstack/react-query";
+import { EventLogDetailSheet } from "@/components/logs/EventLogDetailSheet";
 
 const getLevelIcon = (level: string) => {
   switch (level.toLowerCase()) {
@@ -75,6 +77,7 @@ const EventLogs = () => {
   const [levelFilter, setLevelFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedLog, setSelectedLog] = useState<EndpointEventLog | null>(null);
   const queryClient = useQueryClient();
 
   const handleRefresh = () => {
@@ -260,7 +263,11 @@ const EventLogs = () => {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {filteredLogs?.map((log) => (
-                    <tr key={log.id} className="group transition-colors hover:bg-secondary/30">
+                    <tr 
+                      key={log.id} 
+                      className="group transition-colors hover:bg-secondary/30 cursor-pointer"
+                      onClick={() => setSelectedLog(log)}
+                    >
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="text-sm text-foreground">
                           {format(new Date(log.event_time), "MMM d, HH:mm:ss")}
@@ -293,10 +300,13 @@ const EventLogs = () => {
                         </Badge>
                       </td>
                       <td className="px-4 py-3 max-w-md">
-                        <p className="text-sm text-foreground truncate" title={log.message}>
-                          {log.message?.slice(0, 100) || "No message"}
-                          {log.message && log.message.length > 100 && "..."}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm text-foreground truncate flex-1" title={log.message}>
+                            {log.message?.slice(0, 80) || "No message"}
+                            {log.message && log.message.length > 80 && "..."}
+                          </p>
+                          <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -305,6 +315,12 @@ const EventLogs = () => {
             </div>
           )}
         </div>
+
+        <EventLogDetailSheet 
+          log={selectedLog} 
+          open={!!selectedLog} 
+          onOpenChange={(open) => !open && setSelectedLog(null)} 
+        />
       </div>
     </MainLayout>
   );
