@@ -314,8 +314,10 @@ function Get-RelevantDefenderLogs {
     $startTime = (Get-Date).AddMinutes(-$MaxAgeMinutes)
     $lastLogTimeFile = "$ConfigPath\\last_log_time.txt"
     
+    $forceSync = ($IgnoreLastLogTime -or $script:ForceFullLogSync)
+
     # If ForceFullLogSync is set, delete the last log time file
-    if ($IgnoreLastLogTime -or $script:ForceFullLogSync) {
+    if ($forceSync) {
         Write-Log "Force full log sync - ignoring last log time and collecting all events from past $MaxAgeMinutes minutes"
         if (Test-Path $lastLogTimeFile) {
             Remove-Item $lastLogTimeFile -Force -ErrorAction SilentlyContinue
@@ -345,12 +347,20 @@ function Get-RelevantDefenderLogs {
         $eventIds = $RelevantEventIds[$logName]
         
         try {
-            Write-Log "  Querying $logName for events: $($eventIds -join ', ')"
-            $events = Get-WinEvent -FilterHashtable @{
-                LogName = $logName
-                ID = $eventIds
-                StartTime = $startTime
-            } -ErrorAction SilentlyContinue
+            if ($forceSync) {
+                Write-Log "  Querying $logName (force mode: no Event ID filter, max 250 events)"
+                $events = @(Get-WinEvent -FilterHashtable @{
+                    LogName = $logName
+                    StartTime = $startTime
+                } -ErrorAction SilentlyContinue | Select-Object -First 250)
+            } else {
+                Write-Log "  Querying $logName for events: $($eventIds -join ', ')"
+                $events = @(Get-WinEvent -FilterHashtable @{
+                    LogName = $logName
+                    ID = $eventIds
+                    StartTime = $startTime
+                } -ErrorAction SilentlyContinue)
+            }
             
             if ($events) {
                 Write-Log "  Found $($events.Count) events in $logName"
@@ -740,7 +750,7 @@ function Apply-Policy {
 # ==================== MAIN EXECUTION ====================
 
 Write-Log "=========================================="
-Write-Log "Peritus Secure Agent v2.0.0"
+Write-Log "Peritus Secure Agent v2.2.0"
 Write-Log "=========================================="
 
 if ($Uninstall) { Uninstall-Agent }
@@ -753,6 +763,19 @@ if (Test-Path $ConfigFile) {
     $agentToken = $config.agent_token
     $isFirstRun = $false
     Write-Log "Found existing agent configuration"
+}
+
+# If the user runs a freshly-downloaded script (not the installed one), upgrade the installed agent script + task.
+# This fixes "I downloaded a new version but C:\ProgramData still runs the old one".
+if (-not $isFirstRun -and $MyInvocation.MyCommand.Path -and ($MyInvocation.MyCommand.Path -ne $ScriptPath)) {
+    try {
+        Write-Log "Installer script detected at '$($MyInvocation.MyCommand.Path)'. Updating installed agent at '$ScriptPath'..."
+        $scriptContent = Get-Content -Path $MyInvocation.MyCommand.Path -Raw
+        Install-AgentTask -ScriptContent $scriptContent
+        Write-Log "Installed agent updated successfully"
+    } catch {
+        Write-Log "Failed to update installed agent: $_" -Level "WARN"
+    }
 }
 
 if (-not $agentToken) { $agentToken = Register-Agent -OrganizationToken $OrganizationToken }
