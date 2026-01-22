@@ -1206,16 +1206,66 @@ function Apply-Policy {
 
 # ==================== TRAY MODE FUNCTIONS ====================
 
+function Download-TrayIcon {
+    # Download the Peritus icon from the server and save as ICO
+    $iconUrl = "${apiBaseUrl}".Replace("/functions/v1/agent-api", "") + "/peritus-icon.png"
+    # Use the published app URL for the icon
+    $iconUrl = "https://id-preview--587aeb0c-5923-4707-8f47-ecfcbb3274e6.lovable.app/peritus-icon.png"
+    
+    try {
+        Add-Type -AssemblyName System.Drawing
+        
+        # Download PNG
+        $webClient = New-Object System.Net.WebClient
+        $pngPath = "$ConfigPath\\peritus-icon.png"
+        $webClient.DownloadFile($iconUrl, $pngPath)
+        Write-Log "Downloaded icon from: $iconUrl"
+        
+        # Convert PNG to ICO
+        if (Test-Path $pngPath) {
+            $bitmap = New-Object System.Drawing.Bitmap($pngPath)
+            # Resize to 32x32 for tray icon
+            $resized = New-Object System.Drawing.Bitmap($bitmap, 32, 32)
+            $iconHandle = $resized.GetHicon()
+            $icon = [System.Drawing.Icon]::FromHandle($iconHandle)
+            
+            # Save as ICO file
+            $fileStream = [System.IO.File]::Create($TrayIconFile)
+            $icon.Save($fileStream)
+            $fileStream.Close()
+            
+            $bitmap.Dispose()
+            $resized.Dispose()
+            
+            Write-Log "Icon saved to: $TrayIconFile"
+            return $true
+        }
+    } catch {
+        Write-Log "Failed to download icon: $_" -Level "WARN"
+    }
+    return $false
+}
+
 function Get-TrayIcon {
     Add-Type -AssemblyName System.Drawing
+    
+    # Try to download if not exists
+    if (-not (Test-Path $TrayIconFile)) {
+        Download-TrayIcon | Out-Null
+    }
     
     try {
         # Try to load from saved icon file first
         if (Test-Path $TrayIconFile) {
             $icon = New-Object System.Drawing.Icon($TrayIconFile)
-            if ($icon) { return $icon }
+            if ($icon) { 
+                Write-Log "Loaded icon from: $TrayIconFile"
+                return $icon 
+            }
         }
-    } catch { }
+    } catch {
+        Write-Log "Failed to load saved icon: $_" -Level "WARN"
+    }
     
     try {
         # Try Windows Security shield icon (index 77 in shell32.dll)
@@ -1227,9 +1277,10 @@ public class IconExtractor {
     [DllImport("shell32.dll", CharSet = CharSet.Auto)]
     public static extern IntPtr ExtractIcon(IntPtr hInst, string lpszExeFileName, int nIconIndex);
 }
-"@
+"@ -ErrorAction SilentlyContinue
         $iconHandle = [IconExtractor]::ExtractIcon([IntPtr]::Zero, $shell32, 77)
         if ($iconHandle -ne [IntPtr]::Zero) {
+            Write-Log "Using Windows Security shield icon"
             return [System.Drawing.Icon]::FromHandle($iconHandle)
         }
     } catch { }
@@ -1238,20 +1289,25 @@ public class IconExtractor {
         # Fallback to PowerShell icon
         $psPath = (Get-Process -Id $PID).Path
         if ($psPath) {
+            Write-Log "Using PowerShell icon as fallback"
             return [System.Drawing.Icon]::ExtractAssociatedIcon($psPath)
         }
     } catch { }
     
     # Final fallback - create a simple colored icon
     try {
-        $bmp = New-Object System.Drawing.Bitmap(16, 16)
+        Write-Log "Creating fallback blue circle icon"
+        $bmp = New-Object System.Drawing.Bitmap(32, 32)
         $g = [System.Drawing.Graphics]::FromImage($bmp)
-        $g.FillEllipse([System.Drawing.Brushes]::DodgerBlue, 0, 0, 15, 15)
-        $g.DrawEllipse([System.Drawing.Pens]::White, 1, 1, 13, 13)
+        $g.Clear([System.Drawing.Color]::Transparent)
+        $brush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(0, 122, 204))
+        $g.FillEllipse($brush, 2, 2, 28, 28)
+        $g.DrawEllipse([System.Drawing.Pens]::White, 4, 4, 24, 24)
         $g.Dispose()
         $iconHandle = $bmp.GetHicon()
         return [System.Drawing.Icon]::FromHandle($iconHandle)
     } catch {
+        Write-Log "All icon methods failed: $_" -Level "ERROR"
         return $null
     }
 }
