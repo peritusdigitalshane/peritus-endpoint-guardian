@@ -1,6 +1,10 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Shield, Zap, Building2, Lock, CheckCircle2, ArrowRight, Globe, Server, Activity } from "lucide-react";
+import { 
+  Shield, Zap, Building2, Lock, CheckCircle2, ArrowRight, Globe, Server, Activity,
+  ShieldCheck, Scan, Cloud, Bug, FileSearch, HardDrive, FileWarning, FolderLock,
+  Network, ShieldAlert, Mail, Archive, Code, FileCode, Usb, Key, Terminal, Layers
+} from "lucide-react";
 
 const Landing = () => {
   return (
@@ -16,6 +20,7 @@ const Landing = () => {
           </div>
           <div className="hidden md:flex items-center gap-8">
             <a href="#features" className="text-muted-foreground hover:text-foreground transition-colors">Features</a>
+            <a href="#protection" className="text-muted-foreground hover:text-foreground transition-colors">Protection</a>
             <a href="#benefits" className="text-muted-foreground hover:text-foreground transition-colors">Benefits</a>
             <a href="#pricing" className="text-muted-foreground hover:text-foreground transition-colors">Pricing</a>
           </div>
@@ -145,8 +150,194 @@ const Landing = () => {
         </div>
       </section>
 
+      {/* Protection Features Section */}
+      <section id="protection" className="py-24 px-6 bg-muted/30">
+        <div className="container mx-auto">
+          <div className="text-center mb-16">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-status-healthy/10 text-status-healthy text-sm font-medium mb-4">
+              <ShieldCheck className="h-4 w-4" />
+              Comprehensive Protection
+            </div>
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+              Every Layer of Defense, Managed
+            </h2>
+            <p className="text-muted-foreground max-w-2xl mx-auto">
+              Configure and enforce all Microsoft Defender protection features from a single policy. 
+              Real-time protection, cloud intelligence, and attack surface reduction.
+            </p>
+          </div>
+
+          {/* Basic Protection */}
+          <div className="mb-16">
+            <h3 className="text-xl font-semibold mb-6 flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-primary" />
+              Core Protection
+            </h3>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <ProtectionItem
+                icon={<Scan className="h-4 w-4" />}
+                title="Real-time Monitoring"
+                description="Continuous protection against malware"
+              />
+              <ProtectionItem
+                icon={<Cloud className="h-4 w-4" />}
+                title="Cloud-Delivered Protection"
+                description="Microsoft cloud enhanced detection"
+              />
+              <ProtectionItem
+                icon={<Bug className="h-4 w-4" />}
+                title="Behavior Monitoring"
+                description="Monitor process behavior for threats"
+              />
+              <ProtectionItem
+                icon={<FileSearch className="h-4 w-4" />}
+                title="IOAV Protection"
+                description="Scan files downloaded from the internet"
+              />
+              <ProtectionItem
+                icon={<Code className="h-4 w-4" />}
+                title="Script Scanning"
+                description="Scan PowerShell and other scripts"
+              />
+              <ProtectionItem
+                icon={<HardDrive className="h-4 w-4" />}
+                title="Removable Drive Scanning"
+                description="Scan USB drives and external media"
+              />
+              <ProtectionItem
+                icon={<Zap className="h-4 w-4" />}
+                title="Block at First Seen"
+                description="Block new threats immediately"
+              />
+              <ProtectionItem
+                icon={<FileWarning className="h-4 w-4" />}
+                title="PUA Protection"
+                description="Block potentially unwanted applications"
+              />
+              <ProtectionItem
+                icon={<Archive className="h-4 w-4" />}
+                title="Archive Scanning"
+                description="Scan inside ZIP and other archives"
+              />
+              <ProtectionItem
+                icon={<Mail className="h-4 w-4" />}
+                title="Email Scanning"
+                description="Scan email attachments"
+              />
+              <ProtectionItem
+                icon={<ShieldCheck className="h-4 w-4" />}
+                title="Signature Verification"
+                description="Verify definitions before scanning"
+              />
+            </div>
+          </div>
+
+          {/* Advanced Protection */}
+          <div className="mb-16">
+            <h3 className="text-xl font-semibold mb-6 flex items-center gap-2">
+              <Layers className="h-5 w-5 text-primary" />
+              Advanced Protection
+            </h3>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <ProtectionItem
+                icon={<FolderLock className="h-4 w-4" />}
+                title="Controlled Folder Access"
+                description="Protect folders from ransomware encryption"
+                variant="highlight"
+              />
+              <ProtectionItem
+                icon={<Network className="h-4 w-4" />}
+                title="Network Protection"
+                description="Block connections to malicious domains"
+                variant="highlight"
+              />
+              <ProtectionItem
+                icon={<ShieldAlert className="h-4 w-4" />}
+                title="Exploit Protection"
+                description="Apply process mitigation settings"
+                variant="highlight"
+              />
+            </div>
+          </div>
+
+          {/* ASR Rules */}
+          <div>
+            <h3 className="text-xl font-semibold mb-6 flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-primary" />
+              Attack Surface Reduction (16 Rules)
+            </h3>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <AsrRuleItem
+                title="Block Vulnerable Drivers"
+                description="Prevent exploited signed drivers"
+              />
+              <AsrRuleItem
+                title="Block Email Executables"
+                description="Block executables from email"
+              />
+              <AsrRuleItem
+                title="Block Office Child Processes"
+                description="Prevent Office spawning processes"
+              />
+              <AsrRuleItem
+                title="Block Office Executables"
+                description="Block Office creating executables"
+              />
+              <AsrRuleItem
+                title="Block Code Injection"
+                description="Prevent Office code injection"
+              />
+              <AsrRuleItem
+                title="Block JS/VBS Executables"
+                description="Block script-launched executables"
+              />
+              <AsrRuleItem
+                title="Block Obfuscated Scripts"
+                description="Detect and block obfuscated code"
+              />
+              <AsrRuleItem
+                title="Block Office Macro Win32"
+                description="Block VBA macro Win32 API calls"
+              />
+              <AsrRuleItem
+                title="Block Untrusted Executables"
+                description="Block unknown executables"
+              />
+              <AsrRuleItem
+                title="Ransomware Protection"
+                description="Advanced ransomware defense"
+              />
+              <AsrRuleItem
+                title="Block Credential Stealing"
+                description="Protect LSASS from attacks"
+              />
+              <AsrRuleItem
+                title="Block PSExec & WMI"
+                description="Block remote execution tools"
+              />
+              <AsrRuleItem
+                title="Block USB Untrusted"
+                description="Block untrusted USB executables"
+              />
+              <AsrRuleItem
+                title="Block Outlook Child Processes"
+                description="Prevent Outlook spawning processes"
+              />
+              <AsrRuleItem
+                title="Block Adobe Child Processes"
+                description="Prevent Adobe Reader spawning"
+              />
+              <AsrRuleItem
+                title="Block WMI Persistence"
+                description="Block WMI event persistence"
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Benefits Section */}
-      <section id="benefits" className="py-24 px-6 bg-muted/30">
+      <section id="benefits" className="py-24 px-6">
         <div className="container mx-auto">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             <div>
@@ -163,6 +354,8 @@ const Landing = () => {
                 <BenefitItem>Secure outbound-only agent connections</BenefitItem>
                 <BenefitItem>Deploy across multiple tenants instantly</BenefitItem>
                 <BenefitItem>Automated threat remediation workflows</BenefitItem>
+                <BenefitItem>All 16 ASR rules configurable per policy</BenefitItem>
+                <BenefitItem>WDAC application control with Rule Sets</BenefitItem>
               </ul>
             </div>
             <div className="relative">
@@ -175,7 +368,7 @@ const Landing = () => {
       </section>
 
       {/* CTA Section */}
-      <section className="py-24 px-6">
+      <section className="py-24 px-6 bg-muted/30">
         <div className="container mx-auto text-center">
           <h2 className="text-3xl md:text-4xl font-bold mb-4">
             Ready to Secure Your Endpoints?
@@ -219,6 +412,46 @@ const FeatureCard = ({ icon, title, description }: { icon: React.ReactNode; titl
     </div>
     <h3 className="text-lg font-semibold mb-2">{title}</h3>
     <p className="text-muted-foreground text-sm">{description}</p>
+  </div>
+);
+
+const ProtectionItem = ({ 
+  icon, 
+  title, 
+  description, 
+  variant = "default" 
+}: { 
+  icon: React.ReactNode; 
+  title: string; 
+  description: string;
+  variant?: "default" | "highlight";
+}) => (
+  <div className={`p-4 rounded-lg border ${
+    variant === "highlight" 
+      ? "border-primary/40 bg-primary/5" 
+      : "border-border/40 bg-card"
+  } flex items-start gap-3`}>
+    <div className={`h-8 w-8 rounded-md flex items-center justify-center flex-shrink-0 ${
+      variant === "highlight" 
+        ? "bg-primary/20 text-primary" 
+        : "bg-muted text-muted-foreground"
+    }`}>
+      {icon}
+    </div>
+    <div className="min-w-0">
+      <h4 className="font-medium text-sm">{title}</h4>
+      <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+    </div>
+  </div>
+);
+
+const AsrRuleItem = ({ title, description }: { title: string; description: string }) => (
+  <div className="p-3 rounded-lg border border-status-warning/30 bg-status-warning/5 flex items-start gap-2">
+    <ShieldAlert className="h-4 w-4 text-status-warning flex-shrink-0 mt-0.5" />
+    <div className="min-w-0">
+      <h4 className="font-medium text-sm">{title}</h4>
+      <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+    </div>
   </div>
 );
 
