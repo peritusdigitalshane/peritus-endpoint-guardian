@@ -11,6 +11,78 @@ const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
+type ParsedThreatFromEventLog = {
+  threat_id: string;
+  threat_name: string;
+  severity: string;
+  category: string | null;
+  status: string;
+  initial_detection_time: string | null;
+  last_threat_status_change_time: string | null;
+  resources: unknown | null;
+  raw_data: unknown;
+};
+
+function parseDefenderThreatFromEventMessage(params: {
+  event_id: number;
+  event_time: string;
+  message: string;
+  raw_data: unknown;
+}): ParsedThreatFromEventLog | null {
+  const { event_id, event_time, message, raw_data } = params;
+  const msg = String(message || "");
+  if (!msg) return null;
+
+  // These event IDs commonly carry threat detection/action details.
+  // (1116/1117 are frequently seen for EICAR.)
+  const isThreatLikeEvent = [1005, 1006, 1007, 1008, 1009, 1116, 1117, 1118, 1119].includes(event_id);
+  if (!isThreatLikeEvent) return null;
+
+  // Extract fields from the message body (best-effort; Defender formats vary by build).
+  const threatName = (msg.match(/^\s*Name:\s*(.+)$/mi)?.[1] ||
+    msg.match(/&name=([^&\s]+)/i)?.[1] ||
+    "Unknown").trim();
+
+  const threatId = (
+    msg.match(/threatid=(\d+)/i)?.[1] ||
+    msg.match(/^\s*ID:\s*(\d+)\s*$/mi)?.[1] ||
+    null
+  );
+
+  if (!threatId) return null;
+
+  const severity = (msg.match(/^\s*Severity:\s*(.+)$/mi)?.[1] || "Unknown").trim();
+  const category = (msg.match(/^\s*Category:\s*(.+)$/mi)?.[1] || "").trim() || null;
+  const path = (msg.match(/^\s*Path:\s*(.+)$/mi)?.[1] || "").trim();
+
+  // Derive a normalized status. (Threats UI treats Blocked/Removed/Resolved as healthy.)
+  let status = "Active";
+  if (event_id === 1009) status = "Quarantined";
+  if ([1006, 1117].includes(event_id)) status = "Blocked";
+  if ([1007, 1118, 1119].includes(event_id)) status = "Active";
+  if (/quarantin/i.test(msg)) status = "Quarantined";
+  if (/removed/i.test(msg)) status = "Removed";
+  if (/blocked/i.test(msg) || /has taken action/i.test(msg)) status = "Blocked";
+
+  return {
+    threat_id: String(threatId),
+    threat_name: threatName,
+    severity,
+    category,
+    status,
+    initial_detection_time: event_time || null,
+    last_threat_status_change_time: event_time || null,
+    resources: path ? [path] : null,
+    raw_data: {
+      source: "defender_event_log",
+      event_id,
+      event_time,
+      message,
+      raw_data,
+    },
+  };
+}
+
 // Coerce agent numeric fields to Postgres int4 safely.
 // Some Windows APIs use UINT32 max (4294967295) as a sentinel for "unknown".
 function toInt32OrNull(value: unknown): number | null {
@@ -447,6 +519,61 @@ async function handleLogs(req: Request) {
       JSON.stringify({ success: false, error: "Failed to store logs" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+  }
+
+  // Best-effort: derive endpoint_threats rows from Defender Operational threat events.
+  // This provides reliable Threats UI even when Get-MpThreatDetection returns empty.
+  try {
+    const candidateThreats: ParsedThreatFromEventLog[] = logsToInsert
+      .map((l: any) => {
+        const eventId = typeof l?.event_id === "number" ? l.event_id : Number(l?.event_id);
+        return parseDefenderThreatFromEventMessage({
+          event_id: eventId,
+          event_time: l?.event_time,
+          message: l?.message,
+          raw_data: l?.raw_data,
+        });
+      })
+      .filter(Boolean) as ParsedThreatFromEventLog[];
+
+    for (const threat of candidateThreats) {
+      const { data: existing } = await supabase
+        .from("endpoint_threats")
+        .select("id")
+        .eq("endpoint_id", endpoint.id)
+        .eq("threat_id", threat.threat_id)
+        .maybeSingle();
+
+      if (existing?.id) {
+        await supabase
+          .from("endpoint_threats")
+          .update({
+            threat_name: threat.threat_name,
+            severity: threat.severity,
+            category: threat.category,
+            status: threat.status,
+            last_threat_status_change_time: threat.last_threat_status_change_time,
+            resources: threat.resources as any,
+            raw_data: threat.raw_data as any,
+          })
+          .eq("id", existing.id);
+      } else {
+        await supabase.from("endpoint_threats").insert({
+          endpoint_id: endpoint.id,
+          threat_id: threat.threat_id,
+          threat_name: threat.threat_name,
+          severity: threat.severity || "Unknown",
+          category: threat.category,
+          status: threat.status || "Active",
+          initial_detection_time: threat.initial_detection_time,
+          last_threat_status_change_time: threat.last_threat_status_change_time,
+          resources: threat.resources as any,
+          raw_data: threat.raw_data as any,
+        });
+      }
+    }
+  } catch (e) {
+    console.warn("Threat derivation from logs failed (non-fatal):", e);
   }
 
   return new Response(
