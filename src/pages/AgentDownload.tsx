@@ -395,20 +395,22 @@ function Get-RelevantDefenderLogs {
         $eventIds = $RelevantEventIds[$logName]
         
         try {
-            if ($forceSync) {
-                Write-Log "  Querying $logName (force mode: no Event ID filter, max 250 events)"
-                $events = @(Get-WinEvent -FilterHashtable @{
-                    LogName = $logName
-                    StartTime = $startTimeLocal
-                } -ErrorAction SilentlyContinue | Select-Object -First 250)
-            } else {
-                Write-Log "  Querying $logName for events: $($eventIds -join ', ')"
-                $events = @(Get-WinEvent -FilterHashtable @{
-                    LogName = $logName
-                    ID = $eventIds
-                    StartTime = $startTimeLocal
-                } -ErrorAction SilentlyContinue)
-            }
+            # IMPORTANT:
+            # Some Windows builds return "No events were found" when using a large ID list in the FilterHashtable,
+            # even if matching events exist. To make collection reliable, we query by StartTime only and then
+            # filter by ID in PowerShell.
+            #
+            # In forceSync mode we keep a hard cap to avoid huge payloads.
+            $maxEvents = if ($forceSync) { 250 } else { 1000 }
+            Write-Log "  Querying $logName since $($startTimeLocal.ToString('o')) (maxEvents=$maxEvents; filtering IDs in PowerShell)"
+
+            $eventsAll = @(Get-WinEvent -FilterHashtable @{
+                LogName = $logName
+                StartTime = $startTimeLocal
+            } -MaxEvents $maxEvents -ErrorAction Stop)
+
+            # Filter locally to the relevant Defender event IDs
+            $events = @($eventsAll | Where-Object { $eventIds -contains $_.Id })
             
             if ($events) {
                 Write-Log "  Found $($events.Count) events in $logName"
@@ -440,7 +442,8 @@ function Get-RelevantDefenderLogs {
                 Write-Log "  No matching events in $logName"
             }
         } catch {
-            Write-Log "Could not read events from $($logName): $_" -Level "WARN"
+            # Log the real exception (Stop) so failures don't masquerade as "no events".
+            Write-Log "Could not read events from $($logName): $($_.Exception.Message)" -Level "WARN"
         }
     }
 
@@ -457,12 +460,15 @@ function Get-RelevantDefenderLogs {
         foreach ($logName in $RelevantEventIds.Keys) {
             $eventIds = $RelevantEventIds[$logName]
             try {
-                Write-Log "  Recovery query $logName for events: $($eventIds -join ', ')"
-                $events = @(Get-WinEvent -FilterHashtable @{
+                $maxEvents = 1000
+                Write-Log "  Recovery query $logName since $($startTimeLocal.ToString('o')) (maxEvents=$maxEvents; filtering IDs in PowerShell)"
+
+                $eventsAll = @(Get-WinEvent -FilterHashtable @{
                     LogName = $logName
-                    ID = $eventIds
                     StartTime = $startTimeLocal
-                } -ErrorAction SilentlyContinue)
+                } -MaxEvents $maxEvents -ErrorAction Stop)
+
+                $events = @($eventsAll | Where-Object { $eventIds -contains $_.Id })
 
                 if ($events) {
                     Write-Log "  Recovery found $($events.Count) events in $logName"
@@ -491,7 +497,7 @@ function Get-RelevantDefenderLogs {
                     }
                 }
             } catch {
-                Write-Log "Could not read events from $($logName) during recovery: $_" -Level "WARN"
+                Write-Log "Could not read events from $($logName) during recovery: $($_.Exception.Message)" -Level "WARN"
             }
         }
     }
