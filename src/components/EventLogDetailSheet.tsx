@@ -1,6 +1,6 @@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
-import { format, formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow } from "date-fns";
 import { AlertCircle, AlertTriangle, Info, FileText, Clock, Monitor, Hash, Tag } from "lucide-react";
 import { EndpointEventLog } from "@/hooks/useEventLogs";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -9,6 +9,7 @@ interface EventLogDetailSheetProps {
   log: EndpointEventLog | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  timezone: string;
 }
 
 const getLevelIcon = (level: string) => {
@@ -56,7 +57,20 @@ const getEventCategory = (eventId: number) => {
   return "Other";
 };
 
-export function EventLogDetailSheet({ log, open, onOpenChange }: EventLogDetailSheetProps) {
+const formatInTimezone = (date: string, timezone: string) => {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(new Date(date));
+};
+
+export function EventLogDetailSheet({ log, open, onOpenChange, timezone }: EventLogDetailSheetProps) {
   if (!log) return null;
 
   return (
@@ -86,7 +100,7 @@ export function EventLogDetailSheet({ log, open, onOpenChange }: EventLogDetailS
                   Event Time
                 </div>
                 <p className="text-sm font-medium">
-                  {format(new Date(log.event_time), "MMM d, yyyy HH:mm:ss")}
+                  {formatInTimezone(log.event_time, timezone)}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {formatDistanceToNow(new Date(log.event_time), { addSuffix: true })}
@@ -165,7 +179,7 @@ export function EventLogDetailSheet({ log, open, onOpenChange }: EventLogDetailS
             {/* Timestamps */}
             <div className="space-y-2 pt-4 border-t border-border">
               <div className="text-xs text-muted-foreground">
-                Recorded at: {format(new Date(log.created_at), "MMM d, yyyy HH:mm:ss")}
+                Recorded at: {formatInTimezone(log.created_at, timezone)}
               </div>
             </div>
           </div>

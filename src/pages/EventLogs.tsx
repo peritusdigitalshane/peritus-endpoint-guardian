@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { useEventLogs, EndpointEventLog } from "@/hooks/useEventLogs";
-import { formatDistanceToNow, format } from "date-fns";
+import { formatDistanceToNow } from "date-fns";
 import { 
   FileText, 
   AlertTriangle, 
@@ -25,6 +25,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { useQueryClient } from "@tanstack/react-query";
 import { EventLogDetailSheet } from "@/components/EventLogDetailSheet";
+import { useTimezone } from "@/hooks/useTimezone";
+import { TimezoneSelector } from "@/components/TimezoneSelector";
 
 const getLevelIcon = (level: string) => {
   switch (level.toLowerCase()) {
@@ -79,6 +81,7 @@ const EventLogs = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedLog, setSelectedLog] = useState<EndpointEventLog | null>(null);
   const queryClient = useQueryClient();
+  const { timezone, setTimezone, formatDatetime } = useTimezone();
 
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: ["event-logs"] });
@@ -115,17 +118,20 @@ const EventLogs = () => {
     <MainLayout>
       <div className="animate-fade-in space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Event Logs</h1>
             <p className="text-sm text-muted-foreground">
               Windows Defender events from your endpoints
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
+          <div className="flex items-center gap-3">
+            <TimezoneSelector value={timezone} onChange={setTimezone} />
+            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+          </div>
         </div>
 
         {/* Filters */}
@@ -270,7 +276,7 @@ const EventLogs = () => {
                     >
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="text-sm text-foreground">
-                          {format(new Date(log.event_time), "MMM d, HH:mm:ss")}
+                          {formatDatetime(log.event_time)}
                         </div>
                         <div className="text-xs text-muted-foreground">
                           {formatDistanceToNow(new Date(log.event_time), { addSuffix: true })}
@@ -319,7 +325,8 @@ const EventLogs = () => {
         <EventLogDetailSheet 
           log={selectedLog} 
           open={!!selectedLog} 
-          onOpenChange={(open) => !open && setSelectedLog(null)} 
+          onOpenChange={(open) => !open && setSelectedLog(null)}
+          timezone={timezone}
         />
       </div>
     </MainLayout>
