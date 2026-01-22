@@ -10,6 +10,7 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Endpoints from "./pages/Endpoints";
 import Threats from "./pages/Threats";
+import Policies from "./pages/Policies";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -45,6 +46,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Threats />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/policies"
+              element={
+                <ProtectedRoute>
+                  <Policies />
                 </ProtectedRoute>
               }
             />

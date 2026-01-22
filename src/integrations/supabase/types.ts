@@ -14,6 +14,159 @@ export type Database = {
   }
   public: {
     Tables: {
+      defender_policies: {
+        Row: {
+          archive_scanning: boolean
+          asr_advanced_ransomware_protection: Database["public"]["Enums"]["asr_action"]
+          asr_block_adobe_child_process: Database["public"]["Enums"]["asr_action"]
+          asr_block_credential_stealing: Database["public"]["Enums"]["asr_action"]
+          asr_block_email_executable: Database["public"]["Enums"]["asr_action"]
+          asr_block_js_vbs_executable: Database["public"]["Enums"]["asr_action"]
+          asr_block_obfuscated_scripts: Database["public"]["Enums"]["asr_action"]
+          asr_block_office_child_process: Database["public"]["Enums"]["asr_action"]
+          asr_block_office_code_injection: Database["public"]["Enums"]["asr_action"]
+          asr_block_office_comms_child_process: Database["public"]["Enums"]["asr_action"]
+          asr_block_office_executable_content: Database["public"]["Enums"]["asr_action"]
+          asr_block_office_macro_win32: Database["public"]["Enums"]["asr_action"]
+          asr_block_psexec_wmi: Database["public"]["Enums"]["asr_action"]
+          asr_block_untrusted_executables: Database["public"]["Enums"]["asr_action"]
+          asr_block_usb_untrusted: Database["public"]["Enums"]["asr_action"]
+          asr_block_vulnerable_drivers: Database["public"]["Enums"]["asr_action"]
+          asr_block_wmi_persistence: Database["public"]["Enums"]["asr_action"]
+          behavior_monitoring: boolean
+          block_at_first_seen: boolean
+          check_signatures_before_scan: boolean
+          cloud_block_level: string
+          cloud_delivered_protection: boolean
+          cloud_extended_timeout: number
+          controlled_folder_access: boolean
+          created_at: string
+          created_by: string | null
+          description: string | null
+          email_scanning: boolean
+          exploit_protection_enabled: boolean
+          id: string
+          ioav_protection: boolean
+          is_default: boolean
+          maps_reporting: string
+          name: string
+          network_protection: boolean
+          organization_id: string
+          pua_protection: boolean
+          realtime_monitoring: boolean
+          removable_drive_scanning: boolean
+          sample_submission: string
+          script_scanning: boolean
+          signature_update_interval: number
+          updated_at: string
+        }
+        Insert: {
+          archive_scanning?: boolean
+          asr_advanced_ransomware_protection?: Database["public"]["Enums"]["asr_action"]
+          asr_block_adobe_child_process?: Database["public"]["Enums"]["asr_action"]
+          asr_block_credential_stealing?: Database["public"]["Enums"]["asr_action"]
+          asr_block_email_executable?: Database["public"]["Enums"]["asr_action"]
+          asr_block_js_vbs_executable?: Database["public"]["Enums"]["asr_action"]
+          asr_block_obfuscated_scripts?: Database["public"]["Enums"]["asr_action"]
+          asr_block_office_child_process?: Database["public"]["Enums"]["asr_action"]
+          asr_block_office_code_injection?: Database["public"]["Enums"]["asr_action"]
+          asr_block_office_comms_child_process?: Database["public"]["Enums"]["asr_action"]
+          asr_block_office_executable_content?: Database["public"]["Enums"]["asr_action"]
+          asr_block_office_macro_win32?: Database["public"]["Enums"]["asr_action"]
+          asr_block_psexec_wmi?: Database["public"]["Enums"]["asr_action"]
+          asr_block_untrusted_executables?: Database["public"]["Enums"]["asr_action"]
+          asr_block_usb_untrusted?: Database["public"]["Enums"]["asr_action"]
+          asr_block_vulnerable_drivers?: Database["public"]["Enums"]["asr_action"]
+          asr_block_wmi_persistence?: Database["public"]["Enums"]["asr_action"]
+          behavior_monitoring?: boolean
+          block_at_first_seen?: boolean
+          check_signatures_before_scan?: boolean
+          cloud_block_level?: string
+          cloud_delivered_protection?: boolean
+          cloud_extended_timeout?: number
+          controlled_folder_access?: boolean
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          email_scanning?: boolean
+          exploit_protection_enabled?: boolean
+          id?: string
+          ioav_protection?: boolean
+          is_default?: boolean
+          maps_reporting?: string
+          name: string
+          network_protection?: boolean
+          organization_id: string
+          pua_protection?: boolean
+          realtime_monitoring?: boolean
+          removable_drive_scanning?: boolean
+          sample_submission?: string
+          script_scanning?: boolean
+          signature_update_interval?: number
+          updated_at?: string
+        }
+        Update: {
+          archive_scanning?: boolean
+          asr_advanced_ransomware_protection?: Database["public"]["Enums"]["asr_action"]
+          asr_block_adobe_child_process?: Database["public"]["Enums"]["asr_action"]
+          asr_block_credential_stealing?: Database["public"]["Enums"]["asr_action"]
+          asr_block_email_executable?: Database["public"]["Enums"]["asr_action"]
+          asr_block_js_vbs_executable?: Database["public"]["Enums"]["asr_action"]
+          asr_block_obfuscated_scripts?: Database["public"]["Enums"]["asr_action"]
+          asr_block_office_child_process?: Database["public"]["Enums"]["asr_action"]
+          asr_block_office_code_injection?: Database["public"]["Enums"]["asr_action"]
+          asr_block_office_comms_child_process?: Database["public"]["Enums"]["asr_action"]
+          asr_block_office_executable_content?: Database["public"]["Enums"]["asr_action"]
+          asr_block_office_macro_win32?: Database["public"]["Enums"]["asr_action"]
+          asr_block_psexec_wmi?: Database["public"]["Enums"]["asr_action"]
+          asr_block_untrusted_executables?: Database["public"]["Enums"]["asr_action"]
+          asr_block_usb_untrusted?: Database["public"]["Enums"]["asr_action"]
+          asr_block_vulnerable_drivers?: Database["public"]["Enums"]["asr_action"]
+          asr_block_wmi_persistence?: Database["public"]["Enums"]["asr_action"]
+          behavior_monitoring?: boolean
+          block_at_first_seen?: boolean
+          check_signatures_before_scan?: boolean
+          cloud_block_level?: string
+          cloud_delivered_protection?: boolean
+          cloud_extended_timeout?: number
+          controlled_folder_access?: boolean
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          email_scanning?: boolean
+          exploit_protection_enabled?: boolean
+          id?: string
+          ioav_protection?: boolean
+          is_default?: boolean
+          maps_reporting?: string
+          name?: string
+          network_protection?: boolean
+          organization_id?: string
+          pua_protection?: boolean
+          realtime_monitoring?: boolean
+          removable_drive_scanning?: boolean
+          sample_submission?: string
+          script_scanning?: boolean
+          signature_update_interval?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "defender_policies_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "defender_policies_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_memberships: {
         Row: {
           created_at: string
@@ -152,6 +305,7 @@ export type Database = {
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
+      asr_action: "disabled" | "enabled" | "audit"
       org_role: "owner" | "admin" | "member"
     }
     CompositeTypes: {
@@ -280,6 +434,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      asr_action: ["disabled", "enabled", "audit"],
       org_role: ["owner", "admin", "member"],
     },
   },
