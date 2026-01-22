@@ -1,8 +1,17 @@
-import { Monitor, Shield, Clock, ChevronRight, Loader2 } from "lucide-react";
+import { Monitor, Shield, Clock, ChevronRight, Loader2, FileText } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useEndpoints } from "@/hooks/useDashboardData";
+import { usePolicies, useAssignPolicy } from "@/hooks/usePolicies";
 import { formatDistanceToNow } from "date-fns";
 import { Link } from "react-router-dom";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
 
 const getEndpointStatus = (
   isOnline: boolean,
@@ -38,6 +47,28 @@ const getProtectionStatus = (status: "healthy" | "warning" | "critical") => {
 
 export function EndpointsTable() {
   const { data: endpoints, isLoading, error } = useEndpoints();
+  const { data: policies } = usePolicies();
+  const assignPolicy = useAssignPolicy();
+  const { toast } = useToast();
+
+  const handlePolicyChange = async (endpointId: string, policyId: string) => {
+    try {
+      await assignPolicy.mutateAsync({
+        endpointId,
+        policyId: policyId === "none" ? null : policyId,
+      });
+      toast({
+        title: "Policy assigned",
+        description: "The endpoint will apply the new policy on next sync.",
+      });
+    } catch (err) {
+      toast({
+        title: "Failed to assign policy",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   if (isLoading) {
     return (
@@ -111,6 +142,9 @@ export function EndpointsTable() {
                   Status
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  Policy
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Last Seen
                 </th>
                 <th className="px-4 py-3"></th>
@@ -159,6 +193,32 @@ export function EndpointsTable() {
                         label={statusLabels[status]}
                         pulse={status !== "healthy"}
                       />
+                    </td>
+                    <td className="px-4 py-4">
+                      <Select
+                        value={endpoint.policy_id || "none"}
+                        onValueChange={(value) => handlePolicyChange(endpoint.id, value)}
+                        disabled={assignPolicy.isPending}
+                      >
+                        <SelectTrigger className="w-[160px] h-8 text-xs">
+                          <SelectValue placeholder="No policy">
+                            <span className="flex items-center gap-1.5">
+                              <FileText className="h-3 w-3" />
+                              {endpoint.defender_policies?.name || "No policy"}
+                            </span>
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">
+                            <span className="text-muted-foreground">No policy</span>
+                          </SelectItem>
+                          {policies?.map((policy) => (
+                            <SelectItem key={policy.id} value={policy.id}>
+                              {policy.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </td>
                     <td className="px-4 py-4">
                       <span className="flex items-center gap-1 text-sm text-muted-foreground">
