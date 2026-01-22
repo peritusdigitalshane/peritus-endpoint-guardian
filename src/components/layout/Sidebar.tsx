@@ -12,6 +12,7 @@ import {
   Download,
   ScrollText,
   Building2,
+  ShieldCheck,
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
@@ -23,6 +24,7 @@ const navigation = [
   { name: "Threats", href: "/threats", icon: AlertTriangle },
   { name: "Event Logs", href: "/logs", icon: ScrollText },
   { name: "Policies", href: "/policies", icon: FileText },
+  { name: "App Control", href: "/security", icon: ShieldCheck },
   { name: "Deploy Agent", href: "/deploy", icon: Download },
   { name: "Activity", href: "/activity", icon: Activity },
   { name: "Users", href: "/users", icon: Users },
