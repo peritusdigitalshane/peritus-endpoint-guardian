@@ -14,7 +14,7 @@ import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 
 const navigation = [
-  { name: "Dashboard", href: "/", icon: LayoutDashboard },
+  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Endpoints", href: "/endpoints", icon: Monitor },
   { name: "Threats", href: "/threats", icon: AlertTriangle },
   { name: "Policies", href: "/policies", icon: FileText },
@@ -36,7 +36,7 @@ export function Sidebar() {
     >
       {/* Logo */}
       <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-4">
-        <Link to="/" className="flex items-center gap-3">
+        <Link to="/dashboard" className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-primary">
             <Shield className="h-5 w-5 text-primary-foreground" />
           </div>
