@@ -1,0 +1,161 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
+
+export type OrgRole = "owner" | "admin" | "member";
+
+export interface OrganizationMember {
+  id: string;
+  user_id: string;
+  role: OrgRole;
+  created_at: string;
+  profile: {
+    id: string;
+    email: string;
+    display_name: string | null;
+    avatar_url: string | null;
+  } | null;
+}
+
+export function useOrganizationMembers() {
+  const { currentOrganization } = useTenant();
+  const orgId = currentOrganization?.id;
+
+  return useQuery({
+    queryKey: ["organization-members", orgId],
+    enabled: !!orgId,
+    queryFn: async () => {
+      // Fetch memberships
+      const { data: memberships, error: membershipsError } = await supabase
+        .from("organization_memberships")
+        .select("id, user_id, role, created_at")
+        .eq("organization_id", orgId!)
+        .order("created_at", { ascending: true });
+
+      if (membershipsError) throw membershipsError;
+      if (!memberships || memberships.length === 0) return [];
+
+      // Fetch profiles for all user_ids
+      const userIds = memberships.map((m) => m.user_id);
+      const { data: profiles, error: profilesError } = await supabase
+        .from("profiles")
+        .select("id, email, display_name, avatar_url")
+        .in("id", userIds);
+
+      if (profilesError) throw profilesError;
+
+      // Map profiles by id for quick lookup
+      const profileMap = new Map(
+        (profiles || []).map((p) => [p.id, p])
+      );
+
+      return memberships.map((item) => ({
+        id: item.id,
+        user_id: item.user_id,
+        role: item.role as OrgRole,
+        created_at: item.created_at,
+        profile: profileMap.get(item.user_id) || null,
+      })) as OrganizationMember[];
+    },
+  });
+}
+
+export function useUpdateMemberRole() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      membershipId,
+      newRole,
+    }: {
+      membershipId: string;
+      newRole: OrgRole;
+    }) => {
+      const { error } = await supabase
+        .from("organization_memberships")
+        .update({ role: newRole })
+        .eq("id", membershipId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["organization-members"] });
+    },
+  });
+}
+
+export function useRemoveMember() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ membershipId }: { membershipId: string }) => {
+      const { error } = await supabase
+        .from("organization_memberships")
+        .delete()
+        .eq("id", membershipId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["organization-members"] });
+    },
+  });
+}
+
+export function useAddMember() {
+  const queryClient = useQueryClient();
+  const { currentOrganization } = useTenant();
+
+  return useMutation({
+    mutationFn: async ({
+      email,
+      role,
+    }: {
+      email: string;
+      role: OrgRole;
+    }) => {
+      if (!currentOrganization) throw new Error("No organization selected");
+
+      // First, find the user by email in profiles
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("id, email")
+        .eq("email", email)
+        .maybeSingle();
+
+      if (profileError) throw profileError;
+
+      if (!profile) {
+        throw new Error(`No user found with email: ${email}. The user must sign up first.`);
+      }
+
+      // Check if already a member
+      const { data: existing } = await supabase
+        .from("organization_memberships")
+        .select("id")
+        .eq("organization_id", currentOrganization.id)
+        .eq("user_id", profile.id)
+        .maybeSingle();
+
+      if (existing) {
+        throw new Error("This user is already a member of this organization.");
+      }
+
+      // Add the membership
+      const { error: insertError } = await supabase
+        .from("organization_memberships")
+        .insert({
+          organization_id: currentOrganization.id,
+          user_id: profile.id,
+          role,
+        });
+
+      if (insertError) throw insertError;
+
+      return { userId: profile.id, email: profile.email };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["organization-members"] });
+    },
+  });
+}

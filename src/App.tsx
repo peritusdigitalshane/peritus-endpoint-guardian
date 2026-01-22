@@ -16,6 +16,7 @@ import AgentDownload from "./pages/AgentDownload";
 import EventLogs from "./pages/EventLogs";
 import Activity from "./pages/Activity";
 import Admin from "./pages/Admin";
+import Users from "./pages/Users";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -92,6 +93,14 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <Admin />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/users"
+                element={
+                  <ProtectedRoute>
+                    <Users />
                   </ProtectedRoute>
                 }
               />
