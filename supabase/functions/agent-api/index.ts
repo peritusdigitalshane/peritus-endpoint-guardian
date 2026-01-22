@@ -363,7 +363,25 @@ async function handleLogs(req: Request) {
   const body = await req.json();
   // Be permissive: allow { logs: [...] } or a top-level array.
   const logsRaw = (body && typeof body === "object" && "logs" in body) ? (body as any).logs : body;
-  const logs: any[] = Array.isArray(logsRaw) ? logsRaw : [];
+
+  // Server-side filtering: keep only relevant Defender Operational event IDs.
+  // The agent may send a broader set (or all events in a time window) for reliability.
+  const relevantDefenderOperationalEventIds = new Set<number>([
+    1000, 1001, 1002, 1005, 1006, 1007, 1008, 1009, 1010, 1011, 1013, 1015, 1016,
+    1116, 1117, 1118, 1119,
+    1121, 1122, 1123, 1124, 1125, 1126, 1127, 1128, 1129,
+    2000, 2001, 2002, 2003, 2004, 2005,
+    2010, 2011, 2012,
+    3002,
+    5000, 5001, 5004, 5007, 5008, 5010, 5012,
+  ]);
+
+  const logs: any[] = Array.isArray(logsRaw)
+    ? logsRaw.filter((l: any) => {
+        const n = typeof l?.event_id === "number" ? l.event_id : Number(l?.event_id);
+        return Number.isFinite(n) && relevantDefenderOperationalEventIds.has(n);
+      })
+    : [];
 
   console.log("/logs", {
     endpoint_id: endpoint.id,
