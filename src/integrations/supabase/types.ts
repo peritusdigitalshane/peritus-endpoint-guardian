@@ -463,6 +463,7 @@ export type Database = {
           os_version: string | null
           policy_id: string | null
           updated_at: string
+          wdac_policy_id: string | null
         }
         Insert: {
           agent_token: string
@@ -477,6 +478,7 @@ export type Database = {
           os_version?: string | null
           policy_id?: string | null
           updated_at?: string
+          wdac_policy_id?: string | null
         }
         Update: {
           agent_token?: string
@@ -491,6 +493,7 @@ export type Database = {
           os_version?: string | null
           policy_id?: string | null
           updated_at?: string
+          wdac_policy_id?: string | null
         }
         Relationships: [
           {
@@ -505,6 +508,13 @@ export type Database = {
             columns: ["policy_id"]
             isOneToOne: false
             referencedRelation: "defender_policies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "endpoints_wdac_policy_id_fkey"
+            columns: ["wdac_policy_id"]
+            isOneToOne: false
+            referencedRelation: "wdac_policies"
             referencedColumns: ["id"]
           },
         ]
@@ -679,6 +689,204 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      wdac_baselines: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          name: string
+          policy_id: string
+          snapshot_data: Json
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          policy_id: string
+          snapshot_data?: Json
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          policy_id?: string
+          snapshot_data?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wdac_baselines_policy_id_fkey"
+            columns: ["policy_id"]
+            isOneToOne: false
+            referencedRelation: "wdac_policies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wdac_discovered_apps: {
+        Row: {
+          discovery_source: string
+          endpoint_id: string
+          execution_count: number
+          file_hash: string | null
+          file_name: string
+          file_path: string
+          file_version: string | null
+          first_seen_at: string
+          id: string
+          last_seen_at: string
+          organization_id: string
+          product_name: string | null
+          publisher: string | null
+          raw_data: Json | null
+        }
+        Insert: {
+          discovery_source: string
+          endpoint_id: string
+          execution_count?: number
+          file_hash?: string | null
+          file_name: string
+          file_path: string
+          file_version?: string | null
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          organization_id: string
+          product_name?: string | null
+          publisher?: string | null
+          raw_data?: Json | null
+        }
+        Update: {
+          discovery_source?: string
+          endpoint_id?: string
+          execution_count?: number
+          file_hash?: string | null
+          file_name?: string
+          file_path?: string
+          file_version?: string | null
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          organization_id?: string
+          product_name?: string | null
+          publisher?: string | null
+          raw_data?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wdac_discovered_apps_endpoint_id_fkey"
+            columns: ["endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "endpoints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wdac_discovered_apps_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wdac_policies: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_default: boolean
+          mode: string
+          name: string
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_default?: boolean
+          mode?: string
+          name: string
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_default?: boolean
+          mode?: string
+          name?: string
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wdac_policies_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wdac_rules: {
+        Row: {
+          action: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          file_version_min: string | null
+          id: string
+          policy_id: string
+          product_name: string | null
+          publisher_name: string | null
+          rule_type: string
+          value: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          file_version_min?: string | null
+          id?: string
+          policy_id: string
+          product_name?: string | null
+          publisher_name?: string | null
+          rule_type: string
+          value: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          file_version_min?: string | null
+          id?: string
+          policy_id?: string
+          product_name?: string | null
+          publisher_name?: string | null
+          rule_type?: string
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wdac_rules_policy_id_fkey"
+            columns: ["policy_id"]
+            isOneToOne: false
+            referencedRelation: "wdac_policies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

@@ -12,6 +12,7 @@ import Dashboard from "./pages/Dashboard";
 import Endpoints from "./pages/Endpoints";
 import Threats from "./pages/Threats";
 import Policies from "./pages/Policies";
+import Security from "./pages/Security";
 import AgentDownload from "./pages/AgentDownload";
 import EventLogs from "./pages/EventLogs";
 import Activity from "./pages/Activity";
@@ -61,6 +62,14 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <Policies />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/security"
+                element={
+                  <ProtectedRoute>
+                    <Security />
                   </ProtectedRoute>
                 }
               />
