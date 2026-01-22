@@ -14,7 +14,8 @@ const Dashboard = () => {
     protectedCount, 
     activeThreats, 
     compliancePercentage,
-    securityScore 
+    securityScore,
+    recommendations,
   } = useDashboardStats();
 
   return (
@@ -59,6 +60,7 @@ const Dashboard = () => {
             <SecurityScore 
               score={isLoading ? 0 : securityScore} 
               endpointCount={totalEndpoints}
+              recommendations={recommendations}
             />
           </div>
 
