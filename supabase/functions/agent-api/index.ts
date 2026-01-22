@@ -163,6 +163,11 @@ Deno.serve(async (req) => {
       return await handleGetUacPolicy(req);
     }
 
+    // Route: GET /windows-update-policy - Get assigned Windows Update policy
+    if (path === "/windows-update-policy" && req.method === "GET") {
+      return await handleGetWindowsUpdatePolicy(req);
+    }
+
     return new Response(JSON.stringify({ error: "Not found" }), {
       status: 404,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -327,7 +332,7 @@ async function handleHeartbeat(req: Request) {
     })
     .eq("id", endpoint.id);
 
-  // Insert status record with UAC data
+  // Insert status record with UAC and Windows Update data
   const statusData = {
     endpoint_id: endpoint.id,
     realtime_protection_enabled: body.realtime_protection_enabled,
@@ -357,6 +362,17 @@ async function handleHeartbeat(req: Request) {
     uac_detect_installations: body.uac_detect_installations ?? null,
     uac_validate_admin_signatures: body.uac_validate_admin_signatures ?? null,
     uac_filter_administrator_token: body.uac_filter_administrator_token ?? null,
+    // Windows Update status fields
+    wu_auto_update_mode: toInt32OrNull(body.wu_auto_update_mode),
+    wu_active_hours_start: toInt32OrNull(body.wu_active_hours_start),
+    wu_active_hours_end: toInt32OrNull(body.wu_active_hours_end),
+    wu_feature_update_deferral: toInt32OrNull(body.wu_feature_update_deferral),
+    wu_quality_update_deferral: toInt32OrNull(body.wu_quality_update_deferral),
+    wu_pause_feature_updates: body.wu_pause_feature_updates ?? null,
+    wu_pause_quality_updates: body.wu_pause_quality_updates ?? null,
+    wu_pending_updates_count: toInt32OrNull(body.wu_pending_updates_count),
+    wu_last_install_date: toTimestampOrNull(body.wu_last_install_date),
+    wu_restart_pending: body.wu_restart_pending ?? null,
   };
 
   const { error: statusError } = await supabase.from("endpoint_status").insert(statusData);
@@ -1060,6 +1076,91 @@ async function handleGetUacPolicy(req: Request) {
   }
 
   // No UAC policy assigned
+  return new Response(
+    JSON.stringify({ has_policy: false }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+
+// GET /windows-update-policy - Get assigned Windows Update policy for an endpoint
+async function handleGetWindowsUpdatePolicy(req: Request) {
+  const endpoint = await validateAgentToken(req);
+
+  // Check if endpoint has a direct Windows Update policy assignment
+  if (endpoint.windows_update_policy_id) {
+    const { data: policy, error } = await supabase
+      .from("windows_update_policies")
+      .select("*")
+      .eq("id", endpoint.windows_update_policy_id)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Error fetching Windows Update policy:", error);
+    }
+
+    if (policy) {
+      return new Response(
+        JSON.stringify({
+          has_policy: true,
+          policy: {
+            id: policy.id,
+            name: policy.name,
+            auto_update_mode: policy.auto_update_mode,
+            active_hours_start: policy.active_hours_start,
+            active_hours_end: policy.active_hours_end,
+            feature_update_deferral: policy.feature_update_deferral,
+            quality_update_deferral: policy.quality_update_deferral,
+            pause_feature_updates: policy.pause_feature_updates,
+            pause_quality_updates: policy.pause_quality_updates,
+          },
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+  }
+
+  // Check if endpoint is in a group with a Windows Update policy
+  const { data: groupMemberships } = await supabase
+    .from("endpoint_group_memberships")
+    .select(`
+      group_id,
+      endpoint_groups(windows_update_policy_id)
+    `)
+    .eq("endpoint_id", endpoint.id);
+
+  for (const membership of groupMemberships || []) {
+    const group = membership.endpoint_groups as unknown as { windows_update_policy_id: string | null } | null;
+    if (group?.windows_update_policy_id) {
+      const { data: policy } = await supabase
+        .from("windows_update_policies")
+        .select("*")
+        .eq("id", group.windows_update_policy_id)
+        .maybeSingle();
+
+      if (policy) {
+        return new Response(
+          JSON.stringify({
+            has_policy: true,
+            source: "group",
+            policy: {
+              id: policy.id,
+              name: policy.name,
+              auto_update_mode: policy.auto_update_mode,
+              active_hours_start: policy.active_hours_start,
+              active_hours_end: policy.active_hours_end,
+              feature_update_deferral: policy.feature_update_deferral,
+              quality_update_deferral: policy.quality_update_deferral,
+              pause_feature_updates: policy.pause_feature_updates,
+              pause_quality_updates: policy.pause_quality_updates,
+            },
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+  }
+
+  // No Windows Update policy assigned
   return new Response(
     JSON.stringify({ has_policy: false }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } }

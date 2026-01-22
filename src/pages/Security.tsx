@@ -8,7 +8,9 @@ import { EndpointWdacList } from "@/components/security/EndpointWdacList";
 import { RuleSetsManager } from "@/components/security/RuleSetsManager";
 import { UacPoliciesManager } from "@/components/security/UacPoliciesManager";
 import { EndpointUacList } from "@/components/security/EndpointUacList";
-import { Shield, AppWindow, ListChecks, Monitor, Layers, Camera, ShieldCheck } from "lucide-react";
+import { WindowsUpdatePoliciesManager } from "@/components/security/WindowsUpdatePoliciesManager";
+import { EndpointWindowsUpdateList } from "@/components/security/EndpointWindowsUpdateList";
+import { Shield, AppWindow, ListChecks, Monitor, Layers, Camera, ShieldCheck, RefreshCw } from "lucide-react";
 
 export default function Security() {
   const [selectedPolicyId, setSelectedPolicyId] = useState<string | null>(null);
@@ -26,7 +28,7 @@ export default function Security() {
             <div>
               <h1 className="text-2xl font-bold text-foreground">Security Controls</h1>
               <p className="text-muted-foreground">
-                Manage Application Control (WDAC) and User Account Control (UAC) settings
+                Manage Application Control (WDAC), User Account Control (UAC), and Windows Update settings
               </p>
             </div>
           </div>
@@ -34,7 +36,7 @@ export default function Security() {
 
         {/* Main Content */}
         <Tabs defaultValue="rulesets" className="space-y-6">
-          <TabsList className="grid w-full max-w-3xl grid-cols-7">
+          <TabsList className="flex flex-wrap h-auto gap-1">
             <TabsTrigger value="rulesets" className="flex items-center gap-2">
               <Layers className="h-4 w-4" />
               <span className="hidden sm:inline">Rule Sets</span>
@@ -62,6 +64,14 @@ export default function Security() {
             <TabsTrigger value="uac-status" className="flex items-center gap-2">
               <Monitor className="h-4 w-4" />
               <span className="hidden sm:inline">UAC Status</span>
+            </TabsTrigger>
+            <TabsTrigger value="wu-policies" className="flex items-center gap-2">
+              <RefreshCw className="h-4 w-4" />
+              <span className="hidden sm:inline">Updates</span>
+            </TabsTrigger>
+            <TabsTrigger value="wu-status" className="flex items-center gap-2">
+              <Monitor className="h-4 w-4" />
+              <span className="hidden sm:inline">Update Status</span>
             </TabsTrigger>
           </TabsList>
 
@@ -97,6 +107,14 @@ export default function Security() {
 
           <TabsContent value="uac-status">
             <EndpointUacList />
+          </TabsContent>
+
+          <TabsContent value="wu-policies">
+            <WindowsUpdatePoliciesManager />
+          </TabsContent>
+
+          <TabsContent value="wu-status">
+            <EndpointWindowsUpdateList />
           </TabsContent>
         </Tabs>
       </div>
