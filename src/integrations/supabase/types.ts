@@ -509,6 +509,56 @@ export type Database = {
           },
         ]
       }
+      enrollment_codes: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          is_single_use: boolean
+          max_uses: number | null
+          organization_id: string
+          role: Database["public"]["Enums"]["org_role"]
+          use_count: number
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          is_single_use?: boolean
+          max_uses?: number | null
+          organization_id: string
+          role?: Database["public"]["Enums"]["org_role"]
+          use_count?: number
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          is_single_use?: boolean
+          max_uses?: number | null
+          organization_id?: string
+          role?: Database["public"]["Enums"]["org_role"]
+          use_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enrollment_codes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_memberships: {
         Row: {
           created_at: string
@@ -655,6 +705,20 @@ export type Database = {
           _resource_type: string
         }
         Returns: string
+      }
+      use_enrollment_code: {
+        Args: { _code: string; _user_id: string }
+        Returns: boolean
+      }
+      validate_enrollment_code: {
+        Args: { _code: string }
+        Returns: {
+          error_message: string
+          is_valid: boolean
+          organization_id: string
+          organization_name: string
+          role: Database["public"]["Enums"]["org_role"]
+        }[]
       }
     }
     Enums: {
