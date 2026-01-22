@@ -2,6 +2,7 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { EndpointsTable } from "@/components/dashboard/EndpointsTable";
 import { Button } from "@/components/ui/button";
 import { Plus, Download, RefreshCw } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const Endpoints = () => {
   return (
@@ -18,6 +19,9 @@ const Endpoints = () => {
             <Button variant="outline" size="sm">
               <RefreshCw className="mr-2 h-4 w-4" />
               Sync All
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/policies">Policies</Link>
             </Button>
             <Button variant="outline" size="sm">
               <Download className="mr-2 h-4 w-4" />

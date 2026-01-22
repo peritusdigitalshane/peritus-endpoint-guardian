@@ -1,112 +1,70 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
-import { Plus, FileText, Shield, AlertTriangle, CheckCircle } from "lucide-react";
+import { Plus, FileText, Shield, AlertTriangle, CheckCircle, Loader2 } from "lucide-react";
 import { PolicyCard } from "@/components/policies/PolicyCard";
 import { PolicyEditor } from "@/components/policies/PolicyEditor";
 import { StatCard } from "@/components/ui/stat-card";
 import { DefenderPolicy } from "@/lib/defender-settings";
 import { useToast } from "@/hooks/use-toast";
-
-// Mock data for demonstration
-const mockPolicies: DefenderPolicy[] = [
-  {
-    id: "1",
-    organization_id: "org-1",
-    name: "Standard Workstation",
-    description: "Default policy for workstations based on your hardening script",
-    is_default: true,
-    realtime_monitoring: true,
-    cloud_delivered_protection: true,
-    maps_reporting: "Advanced",
-    sample_submission: "SendAllSamples",
-    check_signatures_before_scan: true,
-    behavior_monitoring: true,
-    ioav_protection: true,
-    script_scanning: true,
-    removable_drive_scanning: true,
-    block_at_first_seen: true,
-    pua_protection: true,
-    signature_update_interval: 8,
-    archive_scanning: true,
-    email_scanning: true,
-    cloud_block_level: "High",
-    cloud_extended_timeout: 50,
-    controlled_folder_access: true,
-    network_protection: true,
-    asr_block_vulnerable_drivers: "enabled",
-    asr_block_email_executable: "enabled",
-    asr_block_office_child_process: "enabled",
-    asr_block_office_executable_content: "enabled",
-    asr_block_office_code_injection: "enabled",
-    asr_block_js_vbs_executable: "enabled",
-    asr_block_obfuscated_scripts: "enabled",
-    asr_block_office_macro_win32: "enabled",
-    asr_block_untrusted_executables: "enabled",
-    asr_advanced_ransomware_protection: "enabled",
-    asr_block_credential_stealing: "audit",
-    asr_block_psexec_wmi: "enabled",
-    asr_block_usb_untrusted: "enabled",
-    asr_block_office_comms_child_process: "audit",
-    asr_block_adobe_child_process: "audit",
-    asr_block_wmi_persistence: "enabled",
-    exploit_protection_enabled: true,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    created_by: null,
-  },
-  {
-    id: "2",
-    organization_id: "org-1",
-    name: "High Security",
-    description: "Maximum protection for sensitive systems",
-    is_default: false,
-    realtime_monitoring: true,
-    cloud_delivered_protection: true,
-    maps_reporting: "Advanced",
-    sample_submission: "SendAllSamples",
-    check_signatures_before_scan: true,
-    behavior_monitoring: true,
-    ioav_protection: true,
-    script_scanning: true,
-    removable_drive_scanning: true,
-    block_at_first_seen: true,
-    pua_protection: true,
-    signature_update_interval: 4,
-    archive_scanning: true,
-    email_scanning: true,
-    cloud_block_level: "ZeroTolerance",
-    cloud_extended_timeout: 50,
-    controlled_folder_access: true,
-    network_protection: true,
-    asr_block_vulnerable_drivers: "enabled",
-    asr_block_email_executable: "enabled",
-    asr_block_office_child_process: "enabled",
-    asr_block_office_executable_content: "enabled",
-    asr_block_office_code_injection: "enabled",
-    asr_block_js_vbs_executable: "enabled",
-    asr_block_obfuscated_scripts: "enabled",
-    asr_block_office_macro_win32: "enabled",
-    asr_block_untrusted_executables: "enabled",
-    asr_advanced_ransomware_protection: "enabled",
-    asr_block_credential_stealing: "enabled",
-    asr_block_psexec_wmi: "enabled",
-    asr_block_usb_untrusted: "enabled",
-    asr_block_office_comms_child_process: "enabled",
-    asr_block_adobe_child_process: "enabled",
-    asr_block_wmi_persistence: "enabled",
-    exploit_protection_enabled: true,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    created_by: null,
-  },
-];
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { useCreatePolicy, usePolicies, useUpdatePolicy } from "@/hooks/usePolicies";
 
 const Policies = () => {
-  const [policies, setPolicies] = useState<DefenderPolicy[]>(mockPolicies);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingPolicy, setEditingPolicy] = useState<DefenderPolicy | undefined>();
+  const [orgId, setOrgId] = useState<string | null>(null);
+  const [orgLoading, setOrgLoading] = useState(true);
+  const [orgError, setOrgError] = useState<string | null>(null);
   const { toast } = useToast();
+  const { user, isLoading: authLoading } = useAuth();
+  const { data: policies = [], isLoading: policiesLoading, error: policiesError } = usePolicies();
+  const createPolicy = useCreatePolicy();
+  const updatePolicy = useUpdatePolicy();
+
+  useEffect(() => {
+    const loadOrg = async () => {
+      try {
+        setOrgError(null);
+        setOrgLoading(true);
+        if (!user) {
+          setOrgId(null);
+          return;
+        }
+
+        const { data: membership, error } = await supabase
+          .from("organization_memberships")
+          .select("organization_id")
+          .eq("user_id", user.id)
+          .limit(1)
+          .single();
+
+        if (error || !membership) {
+          setOrgError("No organization found for your account.");
+          setOrgId(null);
+          return;
+        }
+
+        setOrgId(membership.organization_id);
+      } catch (e) {
+        setOrgError("Failed to load organization.");
+        setOrgId(null);
+      } finally {
+        setOrgLoading(false);
+      }
+    };
+
+    loadOrg();
+  }, [user]);
+
+  const sanitizePolicyPatch = useMemo(() => {
+    return (policyData: Partial<DefenderPolicy>) => {
+      // Never allow client-side updates to move policies between orgs
+      const { id, organization_id, created_at, updated_at, created_by, ...rest } = policyData as any;
+      return rest as Partial<DefenderPolicy>;
+    };
+  }, []);
 
   const handleEdit = (policy: DefenderPolicy) => {
     setEditingPolicy(policy);
@@ -118,33 +76,40 @@ const Policies = () => {
     setEditorOpen(true);
   };
 
-  const handleSave = (policyData: Partial<DefenderPolicy>) => {
-    if (editingPolicy) {
-      // Update existing policy
-      setPolicies(policies.map(p => 
-        p.id === editingPolicy.id ? { ...p, ...policyData } : p
-      ));
+  const handleSave = async (policyData: Partial<DefenderPolicy>) => {
+    if (!user || !orgId) {
       toast({
-        title: "Policy updated",
-        description: `${policyData.name} has been saved.`,
+        title: "Can't save policy",
+        description: "Missing user session or organization.",
+        variant: "destructive",
       });
-    } else {
-      // Create new policy
-      const newPolicy: DefenderPolicy = {
-        ...policyData as DefenderPolicy,
-        id: crypto.randomUUID(),
-        organization_id: "org-1",
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        created_by: null,
-      };
-      setPolicies([...policies, newPolicy]);
+      return;
+    }
+
+    const clean = sanitizePolicyPatch(policyData);
+
+    try {
+      if (editingPolicy) {
+        await updatePolicy.mutateAsync({ id: editingPolicy.id, patch: clean });
+        toast({
+          title: "Policy updated",
+          description: `${policyData.name} has been saved.`,
+        });
+      } else {
+        await createPolicy.mutateAsync({ orgId, userId: user.id, policy: clean });
+        toast({
+          title: "Policy created",
+          description: `${policyData.name} has been created.`,
+        });
+      }
+      setEditorOpen(false);
+    } catch (e) {
       toast({
-        title: "Policy created",
-        description: `${policyData.name} has been created.`,
+        title: "Failed to save policy",
+        description: "Please try again.",
+        variant: "destructive",
       });
     }
-    setEditorOpen(false);
   };
 
   const totalAsrEnabled = policies.reduce((acc, p) => {
@@ -172,6 +137,18 @@ const Policies = () => {
   return (
     <MainLayout>
       <div className="space-y-6">
+        {(authLoading || orgLoading || policiesLoading) && (
+          <div className="flex items-center justify-center py-10">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        )}
+
+        {(orgError || policiesError) && (
+          <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
+            {orgError || "Failed to load policies."}
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -180,7 +157,7 @@ const Policies = () => {
               Configure and deploy Defender settings across your endpoints
             </p>
           </div>
-          <Button onClick={handleCreate}>
+          <Button onClick={handleCreate} disabled={!orgId}>
             <Plus className="mr-2 h-4 w-4" />
             Create Policy
           </Button>
