@@ -253,7 +253,7 @@ function Send-Threats {
 
 # Relevant Windows Defender Event IDs to collect
 $RelevantEventIds = @{
-    # Windows Defender Operational Log
+    # Windows Defender Operational Log (includes ASR/CFA/Network Protection events)
     "Microsoft-Windows-Windows Defender/Operational" = @(
         1000, 1001,  # Scan started/completed
         1002,        # Scan cancelled
@@ -268,6 +268,10 @@ $RelevantEventIds = @{
         1117,        # Threat action successful
         1118,        # Threat action failed
         1119,        # Critical threat action error
+        1121, 1122,  # ASR rule triggered (block/audit)
+        1125, 1126,  # Controlled folder access (block/audit)
+        1127, 1128,  # Network protection events
+        1129,        # ASR warn mode event
         2000, 2001,  # Signature update started/completed
         2002,        # Signature update failed
         2003,        # Engine update started
@@ -279,12 +283,6 @@ $RelevantEventIds = @{
         5004, 5007,  # Configuration changed
         5008,        # Engine state changed
         5010, 5012   # Signature/platform outdated
-    )
-    # Security Log (ASR and Exploit Guard events)
-    "Security" = @(
-        1121, 1122,  # ASR rule triggered (block/audit)
-        1125, 1126,  # Controlled folder access (block/audit)
-        1127, 1128   # Network protection events
     )
 }
 
