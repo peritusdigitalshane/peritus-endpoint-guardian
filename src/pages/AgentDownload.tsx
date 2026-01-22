@@ -20,8 +20,8 @@ const generatePowershellScript = (orgId: string, apiBaseUrl: string) => {
     It also applies security policies configured in the platform.
 .PARAMETER OrganizationToken
     Your organization's unique token for agent registration
-.PARAMETER HeartbeatIntervalMinutes
-    How often the agent sends status updates (default: 5 minutes)
+.PARAMETER HeartbeatIntervalSeconds
+    How often the agent sends status updates (default: 30 seconds)
 .PARAMETER Uninstall
     Remove the scheduled task and agent configuration
 .NOTES
@@ -31,7 +31,7 @@ const generatePowershellScript = (orgId: string, apiBaseUrl: string) => {
 
 param(
     [string]$OrganizationToken = "${orgId}",
-    [int]$HeartbeatIntervalMinutes = 5,
+    [int]$HeartbeatIntervalSeconds = 30,
     [switch]$Uninstall,
     [switch]$ForcePolicy
 )
@@ -93,15 +93,15 @@ function Install-AgentTask {
     
     $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -File \`"$ScriptPath\`""
     $triggerStartup = New-ScheduledTaskTrigger -AtStartup
-    $triggerRepeat = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes $HeartbeatIntervalMinutes) -RepetitionDuration (New-TimeSpan -Days 9999)
+    $triggerRepeat = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Seconds $HeartbeatIntervalSeconds) -RepetitionDuration (New-TimeSpan -Days 9999)
     $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
-    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
+    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Seconds 30)
     
     Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggerStartup,$triggerRepeat -Principal $principal -Settings $settings -Description "Peritus Secure Agent - Windows Defender Management" | Out-Null
     
     Write-Log "Scheduled task '$TaskName' created successfully"
     Write-Log "  - Runs at system startup"
-    Write-Log "  - Repeats every $HeartbeatIntervalMinutes minutes"
+    Write-Log "  - Repeats every $HeartbeatIntervalSeconds seconds"
     Write-Log "  - Runs as SYSTEM account"
     return $true
 }
@@ -727,7 +727,7 @@ if ($isFirstRun) {
     Write-Log ""
     Write-Log "The agent is now installed and will:"
     Write-Log "  - Start automatically when Windows boots"
-    Write-Log "  - Send status updates every $HeartbeatIntervalMinutes minutes"
+    Write-Log "  - Send status updates every $HeartbeatIntervalSeconds seconds"
     Write-Log "  - Apply security policies from the platform"
     Write-Log "  - Run silently in the background"
     Write-Log ""
