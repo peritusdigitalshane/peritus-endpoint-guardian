@@ -31,9 +31,9 @@ const generatePowershellScript = (orgId: string, apiBaseUrl: string) => {
     .\\PeritusSecureAgent.ps1 -ForceFullLogSync
     Forces collection of all Defender events from the past hour, ignoring last sync time.
 .NOTES
-    Version: 2.4.0
+    Version: 2.5.0
     Requires: Windows 10/11, PowerShell 5.1+, Administrator privileges
-    Changes in 2.4.0: Added UAC status collection and policy enforcement
+    Changes in 2.5.0: Added Windows Update status collection and policy enforcement
 #>
 
 param(
@@ -181,6 +181,81 @@ function Get-UacStatus {
     }
 }
 
+function Get-WindowsUpdateStatus {
+    try {
+        Write-Log "Collecting Windows Update status..."
+        $wuPath = "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WindowsUpdate\\Auto Update"
+        $wuPolicies = "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate"
+        $wuAU = "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU"
+        
+        $status = @{
+            wu_auto_update_mode = $null
+            wu_active_hours_start = $null
+            wu_active_hours_end = $null
+            wu_feature_update_deferral = $null
+            wu_quality_update_deferral = $null
+            wu_pause_feature_updates = $null
+            wu_pause_quality_updates = $null
+            wu_pending_updates_count = $null
+            wu_last_install_date = $null
+            wu_restart_pending = $null
+        }
+        
+        # Get Auto Update options from AU policy path
+        if (Test-Path $wuAU) {
+            $au = Get-ItemProperty -Path $wuAU -ErrorAction SilentlyContinue
+            if ($null -ne $au.AUOptions) { $status.wu_auto_update_mode = $au.AUOptions }
+        }
+        
+        # Get Active Hours from WindowsUpdate path
+        if (Test-Path $wuPolicies) {
+            $wu = Get-ItemProperty -Path $wuPolicies -ErrorAction SilentlyContinue
+            if ($null -ne $wu.ActiveHoursStart) { $status.wu_active_hours_start = $wu.ActiveHoursStart }
+            if ($null -ne $wu.ActiveHoursEnd) { $status.wu_active_hours_end = $wu.ActiveHoursEnd }
+            if ($null -ne $wu.DeferFeatureUpdates) { $status.wu_feature_update_deferral = $wu.DeferFeatureUpdatesPeriodInDays }
+            if ($null -ne $wu.DeferQualityUpdates) { $status.wu_quality_update_deferral = $wu.DeferQualityUpdatesPeriodInDays }
+            if ($null -ne $wu.PauseFeatureUpdatesStartTime) { $status.wu_pause_feature_updates = $true }
+            if ($null -ne $wu.PauseQualityUpdatesStartTime) { $status.wu_pause_quality_updates = $true }
+        }
+        
+        # Get pending updates count using COM
+        try {
+            $updateSession = New-Object -ComObject Microsoft.Update.Session
+            $updateSearcher = $updateSession.CreateUpdateSearcher()
+            $searchResult = $updateSearcher.Search("IsInstalled=0 and Type='Software'")
+            $status.wu_pending_updates_count = $searchResult.Updates.Count
+        } catch {
+            Write-Log "Could not query pending updates: $_" -Level "WARN"
+        }
+        
+        # Get last install date from event log
+        try {
+            $lastInstall = Get-WinEvent -FilterHashtable @{LogName='System'; ProviderName='Microsoft-Windows-WindowsUpdateClient'; Id=19} -MaxEvents 1 -ErrorAction SilentlyContinue
+            if ($lastInstall) {
+                $status.wu_last_install_date = $lastInstall.TimeCreated.ToUniversalTime().ToString("o")
+            }
+        } catch {
+            # May not have events
+        }
+        
+        # Check for pending restart
+        $pendingRestart = $false
+        $rebootPaths = @(
+            "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WindowsUpdate\\Auto Update\\RebootRequired",
+            "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Component Based Servicing\\RebootPending"
+        )
+        foreach ($path in $rebootPaths) {
+            if (Test-Path $path) { $pendingRestart = $true; break }
+        }
+        $status.wu_restart_pending = $pendingRestart
+        
+        return $status
+    } catch {
+        Write-Log "Error getting Windows Update status: $_" -Level "ERROR"
+        return @{}
+    }
+}
+
 function Get-DefenderStatus {
     try {
         $status = Get-MpComputerStatus
@@ -197,6 +272,7 @@ function Get-DefenderStatus {
 
         # Get UAC status and merge with Defender status
         $uacStatus = Get-UacStatus
+        $wuStatus = Get-WindowsUpdateStatus
 
         $result = @{
             realtime_protection_enabled = $status.RealTimeProtectionEnabled
@@ -224,6 +300,11 @@ function Get-DefenderStatus {
         # Merge UAC status into result
         foreach ($key in $uacStatus.Keys) {
             $result[$key] = $uacStatus[$key]
+        }
+
+        # Merge Windows Update status into result
+        foreach ($key in $wuStatus.Keys) {
+            $result[$key] = $wuStatus[$key]
         }
 
         return $result
@@ -614,6 +695,93 @@ function Get-UacPolicy {
     } catch {
         Write-Log "Could not fetch UAC policy: $_" -Level "WARN"
         return $null
+    }
+}
+
+function Get-WindowsUpdatePolicy {
+    param([string]$AgentToken)
+    try {
+        $headers = @{ "Content-Type" = "application/json"; "x-agent-token" = $AgentToken }
+        $response = Invoke-RestMethod -Uri "$ApiBaseUrl/windows-update-policy" -Method GET -Headers $headers
+        return $response
+    } catch {
+        Write-Log "Could not fetch Windows Update policy: $_" -Level "WARN"
+        return $null
+    }
+}
+
+function Apply-WindowsUpdatePolicy {
+    param([object]$Policy, [switch]$Force)
+    
+    if (-not $Policy) { return $false }
+    
+    $wuPolicyPath = "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate"
+    $wuAUPath = "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU"
+    $policyHashFile = "$ConfigPath\\wu_policy_hash.txt"
+    
+    $policyJson = $Policy | ConvertTo-Json -Depth 5 -Compress
+    $policyHash = [System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes($policyJson))).Replace("-", "").Substring(0, 16)
+    
+    if (-not $Force -and (Test-Path $policyHashFile)) {
+        $lastHash = Get-Content $policyHashFile -ErrorAction SilentlyContinue
+        if ($lastHash -eq $policyHash) {
+            Write-Log "Windows Update policy unchanged, skipping enforcement"
+            return $false
+        }
+    }
+    
+    Write-Log "Applying Windows Update policy: $($Policy.name)"
+    $changesApplied = $false
+    
+    try {
+        # Ensure paths exist
+        if (-not (Test-Path $wuPolicyPath)) { New-Item -Path $wuPolicyPath -Force | Out-Null }
+        if (-not (Test-Path $wuAUPath)) { New-Item -Path $wuAUPath -Force | Out-Null }
+        
+        # Auto Update Mode
+        if ($null -ne $Policy.auto_update_mode) {
+            Set-ItemProperty -Path $wuAUPath -Name "AUOptions" -Value $Policy.auto_update_mode -Type DWord -Force
+            Write-Log "  AUOptions = $($Policy.auto_update_mode)"
+            $changesApplied = $true
+        }
+        
+        # Active Hours
+        if ($null -ne $Policy.active_hours_start) {
+            Set-ItemProperty -Path $wuPolicyPath -Name "ActiveHoursStart" -Value $Policy.active_hours_start -Type DWord -Force
+            Write-Log "  ActiveHoursStart = $($Policy.active_hours_start)"
+            $changesApplied = $true
+        }
+        if ($null -ne $Policy.active_hours_end) {
+            Set-ItemProperty -Path $wuPolicyPath -Name "ActiveHoursEnd" -Value $Policy.active_hours_end -Type DWord -Force
+            Write-Log "  ActiveHoursEnd = $($Policy.active_hours_end)"
+            $changesApplied = $true
+        }
+        
+        # Feature Update Deferral
+        if ($null -ne $Policy.feature_update_deferral -and $Policy.feature_update_deferral -gt 0) {
+            Set-ItemProperty -Path $wuPolicyPath -Name "DeferFeatureUpdates" -Value 1 -Type DWord -Force
+            Set-ItemProperty -Path $wuPolicyPath -Name "DeferFeatureUpdatesPeriodInDays" -Value $Policy.feature_update_deferral -Type DWord -Force
+            Write-Log "  DeferFeatureUpdatesPeriodInDays = $($Policy.feature_update_deferral)"
+            $changesApplied = $true
+        }
+        
+        # Quality Update Deferral
+        if ($null -ne $Policy.quality_update_deferral -and $Policy.quality_update_deferral -gt 0) {
+            Set-ItemProperty -Path $wuPolicyPath -Name "DeferQualityUpdates" -Value 1 -Type DWord -Force
+            Set-ItemProperty -Path $wuPolicyPath -Name "DeferQualityUpdatesPeriodInDays" -Value $Policy.quality_update_deferral -Type DWord -Force
+            Write-Log "  DeferQualityUpdatesPeriodInDays = $($Policy.quality_update_deferral)"
+            $changesApplied = $true
+        }
+        
+        if ($changesApplied) {
+            $policyHash | Set-Content -Path $policyHashFile -Force
+            Write-Log "Windows Update policy applied successfully"
+        }
+        
+        return $changesApplied
+    } catch {
+        Write-Log "Error applying Windows Update policy: $_" -Level "ERROR"
+        return $false
     }
 }
 
@@ -1103,6 +1271,16 @@ if ($uacResponse -and $uacResponse.has_policy -and $uacResponse.policy) {
     if ($uacApplied) { Write-Log "UAC policy enforcement complete" }
 } else {
     Write-Log "No UAC policy assigned to this endpoint"
+}
+
+# Fetch and apply Windows Update policy
+$wuResponse = Get-WindowsUpdatePolicy -AgentToken $agentToken
+if ($wuResponse -and $wuResponse.has_policy -and $wuResponse.policy) {
+    Write-Log "Windows Update Policy assigned: $($wuResponse.policy.name)"
+    $wuApplied = Apply-WindowsUpdatePolicy -Policy $wuResponse.policy -Force:$ForcePolicy
+    if ($wuApplied) { Write-Log "Windows Update policy enforcement complete" }
+} else {
+    Write-Log "No Windows Update policy assigned to this endpoint"
 }
 
 Write-Log "Agent run complete."

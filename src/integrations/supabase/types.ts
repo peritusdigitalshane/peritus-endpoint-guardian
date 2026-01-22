@@ -326,6 +326,7 @@ export type Database = {
           uac_policy_id: string | null
           updated_at: string
           wdac_policy_id: string | null
+          windows_update_policy_id: string | null
         }
         Insert: {
           created_at?: string
@@ -338,6 +339,7 @@ export type Database = {
           uac_policy_id?: string | null
           updated_at?: string
           wdac_policy_id?: string | null
+          windows_update_policy_id?: string | null
         }
         Update: {
           created_at?: string
@@ -350,6 +352,7 @@ export type Database = {
           uac_policy_id?: string | null
           updated_at?: string
           wdac_policy_id?: string | null
+          windows_update_policy_id?: string | null
         }
         Relationships: [
           {
@@ -378,6 +381,13 @@ export type Database = {
             columns: ["wdac_policy_id"]
             isOneToOne: false
             referencedRelation: "wdac_policies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "endpoint_groups_windows_update_policy_id_fkey"
+            columns: ["windows_update_policy_id"]
+            isOneToOne: false
+            referencedRelation: "windows_update_policies"
             referencedColumns: ["id"]
           },
         ]
@@ -490,6 +500,16 @@ export type Database = {
           uac_filter_administrator_token: boolean | null
           uac_prompt_on_secure_desktop: boolean | null
           uac_validate_admin_signatures: boolean | null
+          wu_active_hours_end: number | null
+          wu_active_hours_start: number | null
+          wu_auto_update_mode: number | null
+          wu_feature_update_deferral: number | null
+          wu_last_install_date: string | null
+          wu_pause_feature_updates: boolean | null
+          wu_pause_quality_updates: boolean | null
+          wu_pending_updates_count: number | null
+          wu_quality_update_deferral: number | null
+          wu_restart_pending: boolean | null
         }
         Insert: {
           am_running_mode?: string | null
@@ -521,6 +541,16 @@ export type Database = {
           uac_filter_administrator_token?: boolean | null
           uac_prompt_on_secure_desktop?: boolean | null
           uac_validate_admin_signatures?: boolean | null
+          wu_active_hours_end?: number | null
+          wu_active_hours_start?: number | null
+          wu_auto_update_mode?: number | null
+          wu_feature_update_deferral?: number | null
+          wu_last_install_date?: string | null
+          wu_pause_feature_updates?: boolean | null
+          wu_pause_quality_updates?: boolean | null
+          wu_pending_updates_count?: number | null
+          wu_quality_update_deferral?: number | null
+          wu_restart_pending?: boolean | null
         }
         Update: {
           am_running_mode?: string | null
@@ -552,6 +582,16 @@ export type Database = {
           uac_filter_administrator_token?: boolean | null
           uac_prompt_on_secure_desktop?: boolean | null
           uac_validate_admin_signatures?: boolean | null
+          wu_active_hours_end?: number | null
+          wu_active_hours_start?: number | null
+          wu_auto_update_mode?: number | null
+          wu_feature_update_deferral?: number | null
+          wu_last_install_date?: string | null
+          wu_pause_feature_updates?: boolean | null
+          wu_pause_quality_updates?: boolean | null
+          wu_pending_updates_count?: number | null
+          wu_quality_update_deferral?: number | null
+          wu_restart_pending?: boolean | null
         }
         Relationships: [
           {
@@ -641,6 +681,7 @@ export type Database = {
           uac_policy_id: string | null
           updated_at: string
           wdac_policy_id: string | null
+          windows_update_policy_id: string | null
         }
         Insert: {
           agent_token: string
@@ -657,6 +698,7 @@ export type Database = {
           uac_policy_id?: string | null
           updated_at?: string
           wdac_policy_id?: string | null
+          windows_update_policy_id?: string | null
         }
         Update: {
           agent_token?: string
@@ -673,6 +715,7 @@ export type Database = {
           uac_policy_id?: string | null
           updated_at?: string
           wdac_policy_id?: string | null
+          windows_update_policy_id?: string | null
         }
         Relationships: [
           {
@@ -701,6 +744,13 @@ export type Database = {
             columns: ["wdac_policy_id"]
             isOneToOne: false
             referencedRelation: "wdac_policies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "endpoints_windows_update_policy_id_fkey"
+            columns: ["windows_update_policy_id"]
+            isOneToOne: false
+            referencedRelation: "windows_update_policies"
             referencedColumns: ["id"]
           },
         ]
@@ -1262,6 +1312,62 @@ export type Database = {
             columns: ["policy_id"]
             isOneToOne: false
             referencedRelation: "wdac_policies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      windows_update_policies: {
+        Row: {
+          active_hours_end: number | null
+          active_hours_start: number | null
+          auto_update_mode: number | null
+          created_at: string
+          description: string | null
+          feature_update_deferral: number | null
+          id: string
+          name: string
+          organization_id: string
+          pause_feature_updates: boolean | null
+          pause_quality_updates: boolean | null
+          quality_update_deferral: number | null
+          updated_at: string
+        }
+        Insert: {
+          active_hours_end?: number | null
+          active_hours_start?: number | null
+          auto_update_mode?: number | null
+          created_at?: string
+          description?: string | null
+          feature_update_deferral?: number | null
+          id?: string
+          name: string
+          organization_id: string
+          pause_feature_updates?: boolean | null
+          pause_quality_updates?: boolean | null
+          quality_update_deferral?: number | null
+          updated_at?: string
+        }
+        Update: {
+          active_hours_end?: number | null
+          active_hours_start?: number | null
+          auto_update_mode?: number | null
+          created_at?: string
+          description?: string | null
+          feature_update_deferral?: number | null
+          id?: string
+          name?: string
+          organization_id?: string
+          pause_feature_updates?: boolean | null
+          pause_quality_updates?: boolean | null
+          quality_update_deferral?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "windows_update_policies_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
