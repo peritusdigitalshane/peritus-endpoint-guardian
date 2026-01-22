@@ -5,8 +5,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Download, Copy, CheckCircle, Shield, Terminal, Clock, Zap } from "lucide-react";
+import { Download, Copy, CheckCircle, Shield, Terminal, Clock, Zap, AlertCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const generatePowershellScript = (orgId: string, apiBaseUrl: string) => {
   return `#Requires -RunAsAdministrator
@@ -381,18 +383,58 @@ Write-Log "Agent run complete."
 };
 
 const AgentDownload = () => {
-  const [orgId, setOrgId] = useState("your-organization-id");
+  const [orgId, setOrgId] = useState<string | null>(null);
+  const [orgName, setOrgName] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();
 
-  // TODO: Fetch actual org ID from user's organization membership
   useEffect(() => {
-    // This would be replaced with actual org fetch
-    setOrgId("demo-org-id");
+    const fetchOrganization = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          setError("You must be logged in to deploy agents.");
+          return;
+        }
+        
+        // Fetch user's organization membership
+        const { data: membership, error: membershipError } = await supabase
+          .from("organization_memberships")
+          .select("organization_id, organizations(id, name)")
+          .eq("user_id", user.id)
+          .limit(1)
+          .single();
+        
+        if (membershipError || !membership) {
+          setError("No organization found. Please contact support.");
+          return;
+        }
+        
+        const org = membership.organizations as { id: string; name: string } | null;
+        if (org) {
+          setOrgId(org.id);
+          setOrgName(org.name);
+        } else {
+          setError("Could not load organization details.");
+        }
+      } catch (err) {
+        console.error("Error fetching organization:", err);
+        setError("Failed to load organization. Please try again.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchOrganization();
   }, []);
 
   const apiBaseUrl = "https://njdcyjxgtckgtzgzoctw.supabase.co/functions/v1/agent-api";
-  const powershellScript = generatePowershellScript(orgId, apiBaseUrl);
+  const powershellScript = orgId ? generatePowershellScript(orgId, apiBaseUrl) : "";
 
   const handleCopy = async () => {
     try {
@@ -428,6 +470,38 @@ const AgentDownload = () => {
     });
   };
 
+  if (isLoading) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </MainLayout>
+    );
+  }
+
+  if (error || !orgId) {
+    return (
+      <MainLayout>
+        <div className="space-y-6 max-w-4xl">
+          <div>
+            <h1 className="text-2xl font-bold">Deploy Agent</h1>
+            <p className="text-muted-foreground">
+              Download and install the Peritus Secure agent on your Windows endpoints
+            </p>
+          </div>
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Unable to Generate Deployment Script</AlertTitle>
+            <AlertDescription>
+              {error || "No organization found. Please ensure you're part of an organization."}
+            </AlertDescription>
+          </Alert>
+        </div>
+      </MainLayout>
+    );
+  }
+
   return (
     <MainLayout>
       <div className="space-y-6 max-w-4xl">
@@ -437,6 +511,11 @@ const AgentDownload = () => {
           <p className="text-muted-foreground">
             Download and install the Peritus Secure agent on your Windows endpoints
           </p>
+          {orgName && (
+            <p className="text-sm text-muted-foreground mt-1">
+              Organization: <span className="font-medium text-foreground">{orgName}</span>
+            </p>
+          )}
         </div>
 
         {/* Requirements */}
