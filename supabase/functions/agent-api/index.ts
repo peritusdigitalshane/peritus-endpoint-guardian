@@ -11,6 +11,31 @@ const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
+// Coerce agent numeric fields to Postgres int4 safely.
+// Some Windows APIs use UINT32 max (4294967295) as a sentinel for "unknown".
+function toInt32OrNull(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  if (!Number.isFinite(n)) return null;
+
+  // Common "unknown" sentinel values
+  if (n === 4294967295 || n === -1) return null;
+
+  // int4 range
+  if (n > 2147483647 || n < -2147483648) return null;
+
+  return Math.trunc(n);
+}
+
+function toTimestampOrNull(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  // Allow ISO strings; DB will validate.
+  return trimmed;
+}
+
 Deno.serve(async (req) => {
   // Handle CORS
   if (req.method === "OPTIONS") {
@@ -219,17 +244,17 @@ async function handleHeartbeat(req: Request) {
     behavior_monitor_enabled: body.behavior_monitor_enabled,
     ioav_protection_enabled: body.ioav_protection_enabled,
     on_access_protection_enabled: body.on_access_protection_enabled,
-    full_scan_age: body.full_scan_age,
-    quick_scan_age: body.quick_scan_age,
-    full_scan_end_time: body.full_scan_end_time,
-    quick_scan_end_time: body.quick_scan_end_time,
-    antivirus_signature_age: body.antivirus_signature_age,
-    antispyware_signature_age: body.antispyware_signature_age,
+    full_scan_age: toInt32OrNull(body.full_scan_age),
+    quick_scan_age: toInt32OrNull(body.quick_scan_age),
+    full_scan_end_time: toTimestampOrNull(body.full_scan_end_time),
+    quick_scan_end_time: toTimestampOrNull(body.quick_scan_end_time),
+    antivirus_signature_age: toInt32OrNull(body.antivirus_signature_age),
+    antispyware_signature_age: toInt32OrNull(body.antispyware_signature_age),
     antivirus_signature_version: body.antivirus_signature_version,
     nis_signature_version: body.nis_signature_version,
     nis_enabled: body.nis_enabled,
     tamper_protection_source: body.tamper_protection_source,
-    computer_state: body.computer_state,
+    computer_state: toInt32OrNull(body.computer_state),
     am_running_mode: body.am_running_mode,
     raw_status: body.raw_status,
   };
@@ -323,7 +348,8 @@ async function handleLogs(req: Request) {
   }
 
   // Insert logs in batch - map to actual table schema
-  const logsToInsert = logs.map((log: {
+  const logsToInsert = logs
+    .map((log: {
     event_id: number;
     event_source: string;
     level: string;
@@ -337,17 +363,30 @@ async function handleLogs(req: Request) {
       user?: string;
       record_id?: number;
     };
-  }) => ({
-    endpoint_id: endpoint.id,
-    event_id: log.event_id,
-    log_source: log.event_source,
-    level: log.level,
-    message: log.message,
-    event_time: log.event_time,
-    provider_name: log.details?.provider || null,
-    task_category: log.details?.task || null,
-    raw_data: log.details || null,
-  }));
+    }) => {
+      const eventId = toInt32OrNull(log.event_id);
+      if (eventId === null) return null;
+
+      return {
+        endpoint_id: endpoint.id,
+        event_id: eventId,
+        log_source: log.event_source,
+        level: log.level,
+        message: log.message,
+        event_time: toTimestampOrNull(log.event_time) ?? new Date().toISOString(),
+        provider_name: log.details?.provider || null,
+        task_category: log.details?.task || null,
+        raw_data: log.details || null,
+      };
+    })
+    .filter(Boolean);
+
+  if (logsToInsert.length === 0) {
+    return new Response(
+      JSON.stringify({ success: true, message: "No valid logs to process" }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
 
   const { error: insertError } = await supabase
     .from("endpoint_event_logs")
