@@ -63,23 +63,28 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
       }
 
       try {
-        // Check if user is super admin
-        const { data: superAdminData } = await supabase
-          .from("super_admins")
-          .select("id")
-          .eq("user_id", user.id)
-          .single();
+        // Check super admin status via SECURITY DEFINER function (avoids RLS edge cases)
+        const { data: isAdminData, error: isAdminError } = await supabase.rpc(
+          "is_super_admin",
+          { _user_id: user.id }
+        );
+        if (isAdminError) throw isAdminError;
 
-        const isAdmin = !!superAdminData;
+        const isAdmin = !!isAdminData;
         setIsSuperAdmin(isAdmin);
 
         // Get user's organization
-        const { data: membershipData } = await supabase
+        const { data: membershipData, error: membershipError } = await supabase
           .from("organization_memberships")
           .select("organization_id")
           .eq("user_id", user.id)
           .limit(1)
-          .single();
+          .maybeSingle();
+
+        if (membershipError) {
+          // Don't block super admin functionality if membership lookup fails
+          console.warn("Failed to load user organization membership:", membershipError);
+        }
 
         if (membershipData) {
           const { data: orgData } = await supabase
@@ -95,10 +100,12 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
 
         // If super admin, fetch all organizations
         if (isAdmin) {
-          const { data: allOrgs } = await supabase
+          const { data: allOrgs, error: orgsError } = await supabase
             .from("organizations")
             .select("id, name, slug")
             .order("name");
+
+          if (orgsError) throw orgsError;
 
           setAllOrganizations(allOrgs || []);
         }
