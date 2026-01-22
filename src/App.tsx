@@ -10,6 +10,7 @@ import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Endpoints from "./pages/Endpoints";
+import Groups from "./pages/Groups";
 import Threats from "./pages/Threats";
 import Policies from "./pages/Policies";
 import Security from "./pages/Security";
@@ -46,6 +47,14 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <Endpoints />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/groups"
+                element={
+                  <ProtectedRoute>
+                    <Groups />
                   </ProtectedRoute>
                 }
               />
