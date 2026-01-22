@@ -31,7 +31,7 @@ const generatePowershellScript = (orgId: string, apiBaseUrl: string) => {
     .\\PeritusSecureAgent.ps1 -ForceFullLogSync
     Forces collection of all Defender events from the past hour, ignoring last sync time.
 .NOTES
-    Version: 2.2.0
+    Version: 2.2.1
     Requires: Windows 10/11, PowerShell 5.1+, Administrator privileges
 #>
 
@@ -125,7 +125,8 @@ function Install-AgentTask {
     $startAt = (Get-Date).AddSeconds(15)
     $triggerRepeat = New-ScheduledTaskTrigger -Once -At $startAt -RepetitionInterval (New-TimeSpan -Seconds $scheduleIntervalSeconds) -RepetitionDuration (New-TimeSpan -Days (365 * 20))
     $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
-    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Seconds 30)
+    # RestartInterval must be >= 1 minute on many Windows builds (PT30S can fail task registration).
+    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
     
     Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggerStartup,$triggerRepeat -Principal $principal -Settings $settings -Description "Peritus Secure Agent - Windows Defender Management" | Out-Null
 
@@ -234,7 +235,19 @@ function Invoke-ApiRequest {
         $response = Invoke-RestMethod -Uri $uri -Method $Method -Headers $headers -Body $jsonBody
         return $response
     } catch {
-        Write-Log "API request failed: $_" -Level "ERROR"
+        # Include response body (if available) to make troubleshooting API errors easier.
+        $details = "$_"
+        try {
+            if ($_.Exception -and $_.Exception.Response) {
+                $stream = $_.Exception.Response.GetResponseStream()
+                if ($stream) {
+                    $reader = New-Object System.IO.StreamReader($stream)
+                    $respText = $reader.ReadToEnd()
+                    if ($respText) { $details = $details + " | Response: " + $respText }
+                }
+            }
+        } catch { }
+        Write-Log "API request failed: $details" -Level "ERROR"
         throw
     }
 }
@@ -283,7 +296,8 @@ function Send-Threats {
     $threats = Get-DefenderThreats
     if ($threats.Count -eq 0) { Write-Log "No threats to report"; return }
     Write-Log "Reporting $($threats.Count) threats..."
-    $body = @{ threats = $threats }
+    # Force JSON array even if PowerShell returns an enumerable/collection type.
+    $body = @{ threats = @($threats) }
     $response = Invoke-ApiRequest -Endpoint "/threats" -Body $body -AgentToken $AgentToken
     Write-Log "Threats reported: $($response.message)"
 }
@@ -771,7 +785,7 @@ function Apply-Policy {
 # ==================== MAIN EXECUTION ====================
 
 Write-Log "=========================================="
-Write-Log "Peritus Secure Agent v2.2.0"
+Write-Log "Peritus Secure Agent v2.2.1"
 Write-Log "=========================================="
 
 if ($Uninstall) { Uninstall-Agent }

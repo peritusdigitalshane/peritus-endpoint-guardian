@@ -290,16 +290,24 @@ async function handleHeartbeat(req: Request) {
 async function handleThreats(req: Request) {
   const endpoint = await validateAgentToken(req);
   const body = await req.json();
-  const { threats } = body;
+  // Be permissive: some clients may accidentally send a single object (not an array)
+  // or send the array as the top-level JSON value.
+  const threatsRaw = (body && typeof body === "object" && "threats" in body) ? (body as any).threats : body;
+  const threats: any[] = Array.isArray(threatsRaw)
+    ? threatsRaw
+    : threatsRaw && typeof threatsRaw === "object"
+      ? [threatsRaw]
+      : [];
 
-  if (!Array.isArray(threats)) {
-    return new Response(JSON.stringify({ error: "Invalid threats format" }), {
-      status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+  if (threats.length === 0) {
+    return new Response(
+      JSON.stringify({ success: true, message: "No threats to process" }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 
   for (const threat of threats) {
+    if (!threat?.threat_id) continue;
     // Check if threat already exists
     const { data: existing } = await supabase
       .from("endpoint_threats")
