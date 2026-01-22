@@ -333,6 +333,68 @@ const Landing = () => {
               />
             </div>
           </div>
+
+          {/* Application Whitelisting / WDAC */}
+          <div className="mt-16">
+            <h3 className="text-xl font-semibold mb-6 flex items-center gap-2">
+              <Lock className="h-5 w-5 text-primary" />
+              Application Whitelisting (WDAC)
+            </h3>
+            <p className="text-muted-foreground mb-6 max-w-3xl">
+              Windows Defender Application Control provides zero-trust application security. Only explicitly allowed 
+              applications can run, blocking malware, ransomware, and unauthorized software before execution.
+            </p>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <ProtectionItem
+                icon={<FileCode className="h-4 w-4" />}
+                title="Publisher Rules"
+                description="Allow apps signed by trusted publishers"
+                variant="highlight"
+              />
+              <ProtectionItem
+                icon={<FolderLock className="h-4 w-4" />}
+                title="Path Rules"
+                description="Allow apps from trusted locations"
+                variant="highlight"
+              />
+              <ProtectionItem
+                icon={<Key className="h-4 w-4" />}
+                title="Hash Rules"
+                description="Allow specific file hashes"
+                variant="highlight"
+              />
+              <ProtectionItem
+                icon={<Layers className="h-4 w-4" />}
+                title="Rule Sets"
+                description="Reusable rule collections"
+                variant="highlight"
+              />
+              <ProtectionItem
+                icon={<FileSearch className="h-4 w-4" />}
+                title="App Discovery"
+                description="Auto-discover running applications"
+                variant="highlight"
+              />
+              <ProtectionItem
+                icon={<ShieldCheck className="h-4 w-4" />}
+                title="Audit Mode"
+                description="Test policies before enforcement"
+                variant="highlight"
+              />
+              <ProtectionItem
+                icon={<Terminal className="h-4 w-4" />}
+                title="Block Mode"
+                description="Enforce strict application control"
+                variant="highlight"
+              />
+              <ProtectionItem
+                icon={<Activity className="h-4 w-4" />}
+                title="Baseline Snapshots"
+                description="Track policy drift over time"
+                variant="highlight"
+              />
+            </div>
+          </div>
         </div>
       </section>
 
