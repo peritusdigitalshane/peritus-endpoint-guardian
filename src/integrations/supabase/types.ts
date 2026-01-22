@@ -278,6 +278,100 @@ export type Database = {
           },
         ]
       }
+      endpoint_group_memberships: {
+        Row: {
+          created_at: string
+          endpoint_id: string
+          group_id: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          endpoint_id: string
+          group_id: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          endpoint_id?: string
+          group_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "endpoint_group_memberships_endpoint_id_fkey"
+            columns: ["endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "endpoints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "endpoint_group_memberships_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "endpoint_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      endpoint_groups: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          defender_policy_id: string | null
+          description: string | null
+          id: string
+          name: string
+          organization_id: string
+          updated_at: string
+          wdac_policy_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          defender_policy_id?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          organization_id: string
+          updated_at?: string
+          wdac_policy_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          defender_policy_id?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          organization_id?: string
+          updated_at?: string
+          wdac_policy_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "endpoint_groups_defender_policy_id_fkey"
+            columns: ["defender_policy_id"]
+            isOneToOne: false
+            referencedRelation: "defender_policies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "endpoint_groups_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "endpoint_groups_wdac_policy_id_fkey"
+            columns: ["wdac_policy_id"]
+            isOneToOne: false
+            referencedRelation: "wdac_policies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       endpoint_logs: {
         Row: {
           created_at: string

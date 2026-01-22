@@ -13,6 +13,7 @@ import {
   ScrollText,
   Building2,
   ShieldCheck,
+  FolderOpen,
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
@@ -21,6 +22,7 @@ import { useTenant } from "@/contexts/TenantContext";
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Endpoints", href: "/endpoints", icon: Monitor },
+  { name: "Groups", href: "/groups", icon: FolderOpen },
   { name: "Threats", href: "/threats", icon: AlertTriangle },
   { name: "Event Logs", href: "/logs", icon: ScrollText },
   { name: "Policies", href: "/policies", icon: FileText },
