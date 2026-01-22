@@ -12,6 +12,7 @@ import Endpoints from "./pages/Endpoints";
 import Threats from "./pages/Threats";
 import Policies from "./pages/Policies";
 import AgentDownload from "./pages/AgentDownload";
+import EventLogs from "./pages/EventLogs";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -63,6 +64,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <AgentDownload />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/logs"
+              element={
+                <ProtectedRoute>
+                  <EventLogs />
                 </ProtectedRoute>
               }
             />

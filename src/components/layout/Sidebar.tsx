@@ -10,6 +10,7 @@ import {
   Activity,
   ChevronLeft,
   Download,
+  ScrollText,
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
@@ -18,6 +19,7 @@ const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Endpoints", href: "/endpoints", icon: Monitor },
   { name: "Threats", href: "/threats", icon: AlertTriangle },
+  { name: "Event Logs", href: "/logs", icon: ScrollText },
   { name: "Policies", href: "/policies", icon: FileText },
   { name: "Deploy Agent", href: "/deploy", icon: Download },
   { name: "Activity", href: "/activity", icon: Activity },
