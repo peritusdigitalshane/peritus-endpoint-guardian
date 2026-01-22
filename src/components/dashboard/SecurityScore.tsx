@@ -2,20 +2,15 @@ import { cn } from "@/lib/utils";
 
 interface SecurityScoreProps {
   score: number;
+  endpointCount: number;
   className?: string;
 }
 
-export function SecurityScore({ score, className }: SecurityScoreProps) {
+export function SecurityScore({ score, endpointCount, className }: SecurityScoreProps) {
   const getScoreColor = (score: number) => {
     if (score >= 80) return "text-status-healthy";
     if (score >= 60) return "text-status-warning";
     return "text-status-critical";
-  };
-
-  const getScoreGradient = (score: number) => {
-    if (score >= 80) return "from-status-healthy to-emerald-400";
-    if (score >= 60) return "from-status-warning to-amber-400";
-    return "from-status-critical to-red-400";
   };
 
   const circumference = 2 * Math.PI * 45;
@@ -86,7 +81,10 @@ export function SecurityScore({ score, className }: SecurityScoreProps) {
           {score >= 80 ? "Excellent" : score >= 60 ? "Good" : "Needs Attention"}
         </p>
         <p className="text-xs text-muted-foreground">
-          Based on 12 active endpoints
+          {endpointCount === 0 
+            ? "No endpoints enrolled" 
+            : `Based on ${endpointCount} active endpoint${endpointCount !== 1 ? 's' : ''}`
+          }
         </p>
       </div>
     </div>
