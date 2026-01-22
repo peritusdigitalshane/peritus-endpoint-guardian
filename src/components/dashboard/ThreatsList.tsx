@@ -1,9 +1,12 @@
 import { AlertTriangle, Clock, Monitor, Loader2, ShieldCheck } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useEndpointThreats } from "@/hooks/useDashboardData";
 import { formatDistanceToNow } from "date-fns";
 import { Link } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 const severityStyles: Record<string, string> = {
   severe: "border-l-status-critical",
@@ -41,11 +44,45 @@ const getStatusDisplay = (status: string): { variant: "healthy" | "warning" | "c
 export function ThreatsList({
   limit = 5,
   showHeaderLink = true,
+  enableResolveActions = false,
 }: {
   limit?: number;
   showHeaderLink?: boolean;
+  enableResolveActions?: boolean;
 }) {
   const { data: threats, isLoading, error } = useEndpointThreats();
+  const { toast } = useToast();
+
+  const resolveThreat = async (threatId: string) => {
+    try {
+      const { data: userRes } = await supabase.auth.getUser();
+      const userId = userRes.user?.id ?? null;
+      const now = new Date().toISOString();
+
+      const { error: updateError } = await supabase
+        .from("endpoint_threats")
+        .update({
+          status: "Resolved",
+          manual_resolution_active: true,
+          manual_resolved_at: now,
+          manual_resolved_by: userId,
+        } as any)
+        .eq("id", threatId);
+
+      if (updateError) throw updateError;
+
+      toast({
+        title: "Threat resolved",
+        description: "Marked as Resolved. If the threat reappears, it will automatically become active again.",
+      });
+    } catch (e: any) {
+      toast({
+        title: "Couldn't resolve threat",
+        description: e?.message ?? "Update failed",
+        variant: "destructive",
+      });
+    }
+  };
 
   if (isLoading) {
     return (
@@ -129,11 +166,22 @@ export function ThreatsList({
                     </span>
                   </div>
                 </div>
-                <StatusBadge
-                  status={statusDisplay.variant}
-                  label={statusDisplay.label}
-                  pulse={statusDisplay.variant === "critical"}
-                />
+                <div className="flex items-center gap-2">
+                  {enableResolveActions && statusDisplay.label !== "Resolved" ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => resolveThreat(threat.id)}
+                    >
+                      Resolve
+                    </Button>
+                  ) : null}
+                  <StatusBadge
+                    status={statusDisplay.variant}
+                    label={statusDisplay.label}
+                    pulse={statusDisplay.variant === "critical"}
+                  />
+                </div>
               </div>
             );
           })}
