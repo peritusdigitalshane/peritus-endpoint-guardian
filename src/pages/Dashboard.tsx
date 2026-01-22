@@ -4,9 +4,19 @@ import { SecurityScore } from "@/components/dashboard/SecurityScore";
 import { ThreatsList } from "@/components/dashboard/ThreatsList";
 import { EndpointsTable } from "@/components/dashboard/EndpointsTable";
 import { ComplianceChart } from "@/components/dashboard/ComplianceChart";
-import { Shield, Monitor, AlertTriangle, CheckCircle } from "lucide-react";
+import { Shield, Monitor, AlertTriangle, CheckCircle, Loader2 } from "lucide-react";
+import { useDashboardStats } from "@/hooks/useDashboardData";
 
 const Dashboard = () => {
+  const { 
+    isLoading,
+    totalEndpoints, 
+    protectedCount, 
+    activeThreats, 
+    compliancePercentage,
+    securityScore 
+  } = useDashboardStats();
+
   return (
     <MainLayout>
       <div className="space-y-6">
@@ -22,27 +32,23 @@ const Dashboard = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
             title="Total Endpoints"
-            value="127"
+            value={isLoading ? "-" : totalEndpoints.toString()}
             icon={Monitor}
-            trend={{ value: 12, isPositive: true }}
           />
           <StatCard
             title="Protected"
-            value="118"
+            value={isLoading ? "-" : protectedCount.toString()}
             icon={Shield}
-            trend={{ value: 5, isPositive: true }}
           />
           <StatCard
             title="Active Threats"
-            value="3"
+            value={isLoading ? "-" : activeThreats.toString()}
             icon={AlertTriangle}
-            trend={{ value: 2, isPositive: false }}
           />
           <StatCard
             title="Compliant"
-            value="94%"
+            value={isLoading ? "-" : `${compliancePercentage}%`}
             icon={CheckCircle}
-            trend={{ value: 3, isPositive: true }}
           />
         </div>
 
@@ -50,7 +56,10 @@ const Dashboard = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Security Score */}
           <div className="lg:col-span-1">
-            <SecurityScore score={87} />
+            <SecurityScore 
+              score={isLoading ? 0 : securityScore} 
+              endpointCount={totalEndpoints}
+            />
           </div>
 
           {/* Compliance Chart */}
