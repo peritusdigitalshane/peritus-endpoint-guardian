@@ -177,10 +177,10 @@ export function useDashboardStats() {
   // Count endpoints with realtime protection enabled
   const protectedCount = statuses?.filter(s => s.realtime_protection_enabled === true).length || 0;
   
-  // Count active threats (not resolved)
+  // Count active threats (not resolved/blocked/removed)
+  const resolvedStatuses = ["resolved", "removed", "blocked"];
   const activeThreats = threats?.filter(t => 
-    t.status.toLowerCase() !== "resolved" && 
-    t.status.toLowerCase() !== "removed"
+    !resolvedStatuses.includes(t.status.toLowerCase())
   ).length || 0;
   
   // Calculate compliance (endpoints with up-to-date signatures - less than 1 day old)
