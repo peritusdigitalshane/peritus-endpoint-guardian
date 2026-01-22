@@ -53,6 +53,7 @@ import {
   User,
   Trash2,
   Loader2,
+  Crown,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
@@ -62,6 +63,8 @@ import {
   useAddMember, 
   useUpdateMemberRole, 
   useRemoveMember,
+  useGrantSuperAdmin,
+  useRevokeSuperAdmin,
   OrgRole 
 } from "@/hooks/useUsers";
 
@@ -72,12 +75,14 @@ const roleConfig: Record<OrgRole, { label: string; icon: React.ElementType; colo
 };
 
 const Users = () => {
-  const { currentOrganization, isImpersonating, isLoading: tenantLoading } = useTenant();
+  const { currentOrganization, isImpersonating, isLoading: tenantLoading, isSuperAdmin } = useTenant();
   const { user } = useAuth();
   const { data: members = [], isLoading } = useOrganizationMembers();
   const addMember = useAddMember();
   const updateRole = useUpdateMemberRole();
   const removeMember = useRemoveMember();
+  const grantSuperAdmin = useGrantSuperAdmin();
+  const revokeSuperAdmin = useRevokeSuperAdmin();
   const { toast } = useToast();
 
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -142,6 +147,30 @@ const Users = () => {
     } catch (error: any) {
       toast({
         title: "Failed to remove member",
+        description: error.message || "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleToggleSuperAdmin = async (userId: string, currentlySuper: boolean, email: string) => {
+    try {
+      if (currentlySuper) {
+        await revokeSuperAdmin.mutateAsync({ userId });
+        toast({
+          title: "Super Admin revoked",
+          description: `${email} is no longer a Super Admin.`,
+        });
+      } else {
+        await grantSuperAdmin.mutateAsync({ userId });
+        toast({
+          title: "Super Admin granted",
+          description: `${email} is now a Super Admin.`,
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Failed to update Super Admin status",
         description: error.message || "Please try again.",
         variant: "destructive",
       });
@@ -261,10 +290,18 @@ const Users = () => {
                       {member.profile?.email || "—"}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className={role.color}>
-                        <RoleIcon className="h-3 w-3 mr-1" />
-                        {role.label}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className={role.color}>
+                          <RoleIcon className="h-3 w-3 mr-1" />
+                          {role.label}
+                        </Badge>
+                        {member.is_super_admin && (
+                          <Badge variant="outline" className="bg-purple-500/10 text-purple-600 border-purple-500/30">
+                            <Crown className="h-3 w-3 mr-1" />
+                            Super Admin
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {new Date(member.created_at).toLocaleDateString()}
@@ -291,6 +328,18 @@ const Users = () => {
                             <User className="h-4 w-4 mr-2" />
                             Make Member
                           </DropdownMenuItem>
+                          {isSuperAdmin && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => handleToggleSuperAdmin(member.user_id, member.is_super_admin, member.profile?.email || "")}
+                                disabled={isCurrentUser}
+                              >
+                                <Crown className="h-4 w-4 mr-2" />
+                                {member.is_super_admin ? "Revoke Super Admin" : "Grant Super Admin"}
+                              </DropdownMenuItem>
+                            </>
+                          )}
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
                             className="text-destructive focus:text-destructive"
