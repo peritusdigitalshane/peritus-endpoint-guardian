@@ -24,16 +24,18 @@ const generatePowershellScript = (orgId: string, apiBaseUrl: string) => {
     How often the agent sends status updates (default: 30 seconds)
 .PARAMETER Uninstall
     Remove the scheduled task and agent configuration
+.PARAMETER TrayMode
+    Run in system tray mode with interactive UI
 .PARAMETER ForceFullLogSync
     Ignore the last log collection time and collect all events from the past 60 minutes.
     Use this to force a full resync of event logs.
 .EXAMPLE
-    .\\PeritusSecureAgent.ps1 -ForceFullLogSync
-    Forces collection of all Defender events from the past hour, ignoring last sync time.
+    .\\PeritusSecureAgent.ps1 -TrayMode
+    Runs the agent with a system tray icon for status visibility.
 .NOTES
-    Version: 2.5.0
+    Version: 2.6.0
     Requires: Windows 10/11, PowerShell 5.1+, Administrator privileges
-    Changes in 2.5.0: Added Windows Update status collection and policy enforcement
+    Changes in 2.6.0: Added system tray icon with status display and policy viewer
 #>
 
 param(
@@ -41,12 +43,14 @@ param(
     [int]$HeartbeatIntervalSeconds = 30,
     [switch]$Uninstall,
     [switch]$ForcePolicy,
-    [switch]$ForceFullLogSync
+    [switch]$ForceFullLogSync,
+    [switch]$TrayMode
 )
 
 $ErrorActionPreference = "Stop"
 $ApiBaseUrl = "${apiBaseUrl}"
 $TaskName = "PeritusSecureAgent"
+$TrayTaskName = "PeritusSecureTray"
 $ServiceName = "Peritus Secure Agent"
 
 # Store ForceFullLogSync in script scope so functions can access it
@@ -58,6 +62,7 @@ $ConfigFile = "$ConfigPath\\agent.json"
 $ScriptPath = "$ConfigPath\\PeritusSecureAgent.ps1"
 $LogFile = "$ConfigPath\\agent.log"
 $PolicyHashFile = "$ConfigPath\\policy_hash.txt"
+$TrayIconFile = "$ConfigPath\\tray_icon.ico"
 
 function Write-Log {
     param([string]$Message, [string]$Level = "INFO")
@@ -72,11 +77,25 @@ function Write-Log {
 
 function Uninstall-Agent {
     Write-Log "Uninstalling Peritus Secure Agent..."
+    
+    # Remove scheduled task
     $existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
     if ($existingTask) {
         Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
         Write-Log "Scheduled task removed"
     }
+    
+    # Remove tray startup registry entry
+    try {
+        Remove-ItemProperty -Path "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" -Name "PeritusSecureTray" -ErrorAction SilentlyContinue
+        Write-Log "Tray startup entry removed"
+    } catch { }
+    
+    # Kill any running tray process
+    Get-Process -Name "powershell" -ErrorAction SilentlyContinue | Where-Object {
+        $_.CommandLine -like "*-TrayMode*"
+    } | Stop-Process -Force -ErrorAction SilentlyContinue
+    
     if (Test-Path $ConfigPath) {
         Remove-Item -Path $ConfigPath -Recurse -Force
         Write-Log "Configuration removed"
@@ -1185,10 +1204,306 @@ function Apply-Policy {
     }
 }
 
+# ==================== TRAY MODE FUNCTIONS ====================
+
+# Embedded Peritus icon as base64 ICO (16x16 and 32x32)
+$script:TrayIconBase64 = @"
+AAABAAIAEBAAAAEAIABoBAAAJgAAACAgAAABACAAqBAAAI4EAAAoAAAAEAAAACAAAAABACAAAAAAAAAEAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAeXl5AAAAAACAgICAgICAAICAgP+AgID/gICA/4CAgICA
+gIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAgIAAgICA/4CAgP+AgID/gICA/4CAgP+AgID/gICA/4CA
+gP+AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAACAgIAAgICA/4CAgP+AgID/gICA/4CAgP+AgID/gICA/4CAgP+AgID/
+gICA/4CAgAAAAAAAAAAAAAAAAACAgIAAgICA/4CAgP+AgID/gICA/4CAgP+AgID/gICA/4CAgP+AgID/gICA/4CA
+gP+AgIAAAAAAAAAAAACAgIAAgICA/4CAgP+AgID/gICA/zMz//8zM///MzP//4CAgP+AgID/gICA/4CAgP+AgID/
+gICAAAAAAAB5eXkAgICA/4CAgP+AgID/MzP//zMz//8zM///MzP//zMz//+AgID/gICA/4CAgP+AgID/gICA/4CA
+gAAAAACAgID/gICA/4CAgP8zM///MzP//zMz//8zM///MzP//zMz//+AgID/gICA/4CAgP+AgID/gICA/4CAgICA
+gID/gICA/4CAgP8zM///MzP//zMz//8zM///MzP//zMz//8zM///gICA/4CAgP+AgID/gICA/4CAgP+AgICAgICA
+/4CAgP+AgID/MzP//zMz//8zM///MzP//zMz//8zM///MzP//4CAgP+AgID/gICA/4CAgP+AgID/gICAgICA/4CA
+gP+AgID/gICA/zMz//8zM///MzP//zMz//8zM///gICA/4CAgP+AgID/gICA/4CAgP+AgIAAAAAAAICA/4CAgP+A
+gID/gICA/4CAgP8zM///MzP//zMz//+AgID/gICA/4CAgP+AgID/gICA/4CAgAAAAAAAAAAAAICA/4CAgP+AgID/
+gICA/4CAgP+AgID/gICA/4CAgP+AgID/gICA/4CAgP+AgIAAAAAAAAAAAAAAAAAAAACAgID/gICA/4CAgP+AgID/
+gICA/4CAgP+AgID/gICA/4CAgP+AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAICAgP+AgID/gICA/4CAgP+AgID/gICA
+/4CAgP+AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAgID/gICA/4CAgP+AgID/gICAAICAgAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKAAA
+ACAAAABAAAAAAQAgAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACc
+nJwAnJyc/5ycnP+cnJz/nJyc/5ycnP+cnJz/nJycAJycnACcnJwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+"@
+
+function Get-TrayIcon {
+    try {
+        # Try to load from file first
+        if (Test-Path $TrayIconFile) {
+            return New-Object System.Drawing.Icon($TrayIconFile)
+        }
+        
+        # Decode and save the embedded icon
+        $iconBytes = [Convert]::FromBase64String($script:TrayIconBase64)
+        [System.IO.File]::WriteAllBytes($TrayIconFile, $iconBytes)
+        return New-Object System.Drawing.Icon($TrayIconFile)
+    } catch {
+        # Fallback to PowerShell icon
+        return [System.Drawing.Icon]::ExtractAssociatedIcon((Get-Process -Id $PID).Path)
+    }
+}
+
+function Get-EndpointStatus {
+    param([string]$AgentToken)
+    try {
+        $headers = @{ "Content-Type" = "application/json"; "x-agent-token" = $AgentToken }
+        $response = Invoke-RestMethod -Uri "$ApiBaseUrl/status" -Method GET -Headers $headers
+        return $response
+    } catch {
+        return $null
+    }
+}
+
+function Show-StatusForm {
+    param([object]$StatusData)
+    
+    $form = New-Object System.Windows.Forms.Form
+    $form.Text = "Peritus Secure - Status"
+    $form.Size = New-Object System.Drawing.Size(420, 380)
+    $form.StartPosition = "CenterScreen"
+    $form.FormBorderStyle = "FixedDialog"
+    $form.MaximizeBox = $false
+    $form.MinimizeBox = $false
+    $form.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
+    $form.ForeColor = [System.Drawing.Color]::White
+    
+    $y = 15
+    
+    # Header
+    $lblTitle = New-Object System.Windows.Forms.Label
+    $lblTitle.Text = "Peritus Secure Agent"
+    $lblTitle.Font = New-Object System.Drawing.Font("Segoe UI", 14, [System.Drawing.FontStyle]::Bold)
+    $lblTitle.Location = New-Object System.Drawing.Point(15, $y)
+    $lblTitle.Size = New-Object System.Drawing.Size(380, 30)
+    $form.Controls.Add($lblTitle)
+    $y += 40
+    
+    if ($StatusData -and $StatusData.endpoint) {
+        # Endpoint info
+        $lblHost = New-Object System.Windows.Forms.Label
+        $lblHost.Text = "Hostname: $($StatusData.endpoint.hostname)"
+        $lblHost.Font = New-Object System.Drawing.Font("Segoe UI", 10)
+        $lblHost.Location = New-Object System.Drawing.Point(15, $y)
+        $lblHost.Size = New-Object System.Drawing.Size(380, 22)
+        $form.Controls.Add($lblHost)
+        $y += 25
+        
+        $lblLastSeen = New-Object System.Windows.Forms.Label
+        $lastSeen = if ($StatusData.endpoint.last_seen_at) { 
+            try { ([datetime]$StatusData.endpoint.last_seen_at).ToLocalTime().ToString("g") } catch { "Unknown" }
+        } else { "Unknown" }
+        $lblLastSeen.Text = "Last Sync: $lastSeen"
+        $lblLastSeen.Font = New-Object System.Drawing.Font("Segoe UI", 10)
+        $lblLastSeen.Location = New-Object System.Drawing.Point(15, $y)
+        $lblLastSeen.Size = New-Object System.Drawing.Size(380, 22)
+        $form.Controls.Add($lblLastSeen)
+        $y += 35
+        
+        # Protection Status
+        $lblProtection = New-Object System.Windows.Forms.Label
+        $protectionStatus = if ($StatusData.status.realtime_protection) { "✓ Protected" } else { "⚠ Not Protected" }
+        $lblProtection.Text = "Real-time Protection: $protectionStatus"
+        $lblProtection.Font = New-Object System.Drawing.Font("Segoe UI", 10)
+        $lblProtection.ForeColor = if ($StatusData.status.realtime_protection) { [System.Drawing.Color]::LightGreen } else { [System.Drawing.Color]::Orange }
+        $lblProtection.Location = New-Object System.Drawing.Point(15, $y)
+        $lblProtection.Size = New-Object System.Drawing.Size(380, 22)
+        $form.Controls.Add($lblProtection)
+        $y += 35
+        
+        # Separator
+        $sep1 = New-Object System.Windows.Forms.Label
+        $sep1.Text = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        $sep1.ForeColor = [System.Drawing.Color]::Gray
+        $sep1.Location = New-Object System.Drawing.Point(15, $y)
+        $sep1.Size = New-Object System.Drawing.Size(380, 20)
+        $form.Controls.Add($sep1)
+        $y += 25
+        
+        # Policies header
+        $lblPolicies = New-Object System.Windows.Forms.Label
+        $lblPolicies.Text = "Assigned Policies"
+        $lblPolicies.Font = New-Object System.Drawing.Font("Segoe UI", 11, [System.Drawing.FontStyle]::Bold)
+        $lblPolicies.Location = New-Object System.Drawing.Point(15, $y)
+        $lblPolicies.Size = New-Object System.Drawing.Size(380, 25)
+        $form.Controls.Add($lblPolicies)
+        $y += 30
+        
+        # Defender Policy
+        $defenderName = if ($StatusData.policies.defender) { $StatusData.policies.defender.name } else { "None" }
+        $lblDefender = New-Object System.Windows.Forms.Label
+        $lblDefender.Text = "• Defender: $defenderName"
+        $lblDefender.Font = New-Object System.Drawing.Font("Segoe UI", 10)
+        $lblDefender.Location = New-Object System.Drawing.Point(25, $y)
+        $lblDefender.Size = New-Object System.Drawing.Size(370, 22)
+        $form.Controls.Add($lblDefender)
+        $y += 24
+        
+        # UAC Policy
+        $uacName = if ($StatusData.policies.uac) { $StatusData.policies.uac.name } else { "None" }
+        $lblUac = New-Object System.Windows.Forms.Label
+        $lblUac.Text = "• UAC: $uacName"
+        $lblUac.Font = New-Object System.Drawing.Font("Segoe UI", 10)
+        $lblUac.Location = New-Object System.Drawing.Point(25, $y)
+        $lblUac.Size = New-Object System.Drawing.Size(370, 22)
+        $form.Controls.Add($lblUac)
+        $y += 24
+        
+        # Windows Update Policy
+        $wuName = if ($StatusData.policies.windows_update) { $StatusData.policies.windows_update.name } else { "None" }
+        $lblWu = New-Object System.Windows.Forms.Label
+        $lblWu.Text = "• Windows Update: $wuName"
+        $lblWu.Font = New-Object System.Drawing.Font("Segoe UI", 10)
+        $lblWu.Location = New-Object System.Drawing.Point(25, $y)
+        $lblWu.Size = New-Object System.Drawing.Size(370, 22)
+        $form.Controls.Add($lblWu)
+        $y += 24
+        
+        # WDAC Rule Sets
+        $wdacCount = $StatusData.policies.wdac_rule_sets
+        $lblWdac = New-Object System.Windows.Forms.Label
+        $lblWdac.Text = "• WDAC Rule Sets: $wdacCount"
+        $lblWdac.Font = New-Object System.Drawing.Font("Segoe UI", 10)
+        $lblWdac.Location = New-Object System.Drawing.Point(25, $y)
+        $lblWdac.Size = New-Object System.Drawing.Size(370, 22)
+        $form.Controls.Add($lblWdac)
+        $y += 35
+        
+        # Threats
+        $threatCount = $StatusData.threats.active_count
+        $lblThreats = New-Object System.Windows.Forms.Label
+        $lblThreats.Text = if ($threatCount -gt 0) { "⚠ Active Threats: $threatCount" } else { "✓ No Active Threats" }
+        $lblThreats.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
+        $lblThreats.ForeColor = if ($threatCount -gt 0) { [System.Drawing.Color]::Orange } else { [System.Drawing.Color]::LightGreen }
+        $lblThreats.Location = New-Object System.Drawing.Point(15, $y)
+        $lblThreats.Size = New-Object System.Drawing.Size(380, 22)
+        $form.Controls.Add($lblThreats)
+    } else {
+        $lblError = New-Object System.Windows.Forms.Label
+        $lblError.Text = "Unable to fetch status. Check connection."
+        $lblError.Font = New-Object System.Drawing.Font("Segoe UI", 10)
+        $lblError.ForeColor = [System.Drawing.Color]::Orange
+        $lblError.Location = New-Object System.Drawing.Point(15, $y)
+        $lblError.Size = New-Object System.Drawing.Size(380, 22)
+        $form.Controls.Add($lblError)
+    }
+    
+    # Close button
+    $btnClose = New-Object System.Windows.Forms.Button
+    $btnClose.Text = "Close"
+    $btnClose.Size = New-Object System.Drawing.Size(80, 30)
+    $btnClose.Location = New-Object System.Drawing.Point(315, 300)
+    $btnClose.BackColor = [System.Drawing.Color]::FromArgb(60, 60, 60)
+    $btnClose.FlatStyle = "Flat"
+    $btnClose.Add_Click({ $form.Close() })
+    $form.Controls.Add($btnClose)
+    
+    $form.ShowDialog() | Out-Null
+}
+
+function Start-TrayApplication {
+    param([string]$AgentToken)
+    
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+    
+    Write-Log "Starting Tray Application..."
+    
+    $script:trayIcon = New-Object System.Windows.Forms.NotifyIcon
+    $script:trayIcon.Icon = Get-TrayIcon
+    $script:trayIcon.Text = "Peritus Secure - Protected"
+    $script:trayIcon.Visible = $true
+    
+    # Create context menu
+    $contextMenu = New-Object System.Windows.Forms.ContextMenuStrip
+    
+    # Status menu item
+    $menuStatus = New-Object System.Windows.Forms.ToolStripMenuItem
+    $menuStatus.Text = "View Status..."
+    $menuStatus.Add_Click({
+        $status = Get-EndpointStatus -AgentToken $AgentToken
+        Show-StatusForm -StatusData $status
+    })
+    $contextMenu.Items.Add($menuStatus) | Out-Null
+    
+    # Separator
+    $contextMenu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator)) | Out-Null
+    
+    # View Logs
+    $menuLogs = New-Object System.Windows.Forms.ToolStripMenuItem
+    $menuLogs.Text = "View Logs"
+    $menuLogs.Add_Click({
+        if (Test-Path $LogFile) {
+            Start-Process notepad.exe -ArgumentList $LogFile
+        } else {
+            [System.Windows.Forms.MessageBox]::Show("Log file not found.", "Peritus Secure", "OK", "Information")
+        }
+    })
+    $contextMenu.Items.Add($menuLogs) | Out-Null
+    
+    # Sync Now
+    $menuSync = New-Object System.Windows.Forms.ToolStripMenuItem
+    $menuSync.Text = "Sync Now"
+    $menuSync.Add_Click({
+        $script:trayIcon.Text = "Peritus Secure - Syncing..."
+        try {
+            Send-Heartbeat -AgentToken $AgentToken
+            $script:trayIcon.ShowBalloonTip(3000, "Peritus Secure", "Sync completed successfully", [System.Windows.Forms.ToolTipIcon]::Info)
+        } catch {
+            $script:trayIcon.ShowBalloonTip(3000, "Peritus Secure", "Sync failed: $_", [System.Windows.Forms.ToolTipIcon]::Warning)
+        }
+        $script:trayIcon.Text = "Peritus Secure - Protected"
+    })
+    $contextMenu.Items.Add($menuSync) | Out-Null
+    
+    # Separator
+    $contextMenu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator)) | Out-Null
+    
+    # Exit
+    $menuExit = New-Object System.Windows.Forms.ToolStripMenuItem
+    $menuExit.Text = "Exit"
+    $menuExit.Add_Click({
+        $script:trayIcon.Visible = $false
+        $script:trayIcon.Dispose()
+        [System.Windows.Forms.Application]::Exit()
+    })
+    $contextMenu.Items.Add($menuExit) | Out-Null
+    
+    $script:trayIcon.ContextMenuStrip = $contextMenu
+    
+    # Double-click to show status
+    $script:trayIcon.Add_DoubleClick({
+        $status = Get-EndpointStatus -AgentToken $AgentToken
+        Show-StatusForm -StatusData $status
+    })
+    
+    # Background sync timer (60 seconds)
+    $timer = New-Object System.Windows.Forms.Timer
+    $timer.Interval = 60000
+    $timer.Add_Tick({
+        try {
+            Send-Heartbeat -AgentToken $AgentToken
+            $status = Get-EndpointStatus -AgentToken $AgentToken
+            if ($status -and $status.status) {
+                $script:trayIcon.Text = if ($status.status.realtime_protection) { 
+                    "Peritus Secure - Protected" 
+                } else { 
+                    "Peritus Secure - Warning" 
+                }
+            }
+        } catch { }
+    })
+    $timer.Start()
+    
+    Write-Log "Tray application started. Running message loop..."
+    [System.Windows.Forms.Application]::Run()
+}
+
 # ==================== MAIN EXECUTION ====================
 
 Write-Log "=========================================="
-Write-Log "Peritus Secure Agent v2.3.1"
+Write-Log "Peritus Secure Agent v2.6.0"
 Write-Log "=========================================="
 
 if ($Uninstall) { Uninstall-Agent }
@@ -1201,6 +1516,16 @@ if (Test-Path $ConfigFile) {
     $agentToken = $config.agent_token
     $isFirstRun = $false
     Write-Log "Found existing agent configuration"
+}
+
+# TrayMode - run the system tray application
+if ($TrayMode) {
+    if (-not $agentToken) {
+        Write-Log "Agent not registered. Please run the installer first." -Level "ERROR"
+        exit 1
+    }
+    Start-TrayApplication -AgentToken $agentToken
+    exit 0
 }
 
 # If the user runs a freshly-downloaded script (not the installed one), upgrade the installed agent script + task.
@@ -1223,6 +1548,16 @@ if ($isFirstRun) {
     Write-Log "First run detected - installing as scheduled task..."
     $scriptContent = Get-Content -Path $MyInvocation.MyCommand.Path -Raw
     Install-AgentTask -ScriptContent $scriptContent
+    
+    # Register tray application to start at user login
+    try {
+        $trayCommand = "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File \`"$ScriptPath\`" -TrayMode"
+        Set-ItemProperty -Path "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" -Name "PeritusSecureTray" -Value $trayCommand -Force
+        Write-Log "Tray application registered for user login"
+    } catch {
+        Write-Log "Could not register tray startup: $_" -Level "WARN"
+    }
+    
     Write-Log ""
     Write-Log "=========================================="
     Write-Log "INSTALLATION COMPLETE!"
@@ -1233,10 +1568,17 @@ if ($isFirstRun) {
     Write-Log "  - Send status updates every $HeartbeatIntervalSeconds seconds"
     Write-Log "  - Apply security policies from the platform"
     Write-Log "  - Run silently in the background"
+    Write-Log "  - Show a system tray icon when you log in"
+    Write-Log ""
+    Write-Log "To start the tray application now:"
+    Write-Log "  powershell -File \`"$ScriptPath\`" -TrayMode"
     Write-Log ""
     Write-Log "To uninstall, run:"
     Write-Log "  powershell -File \`"$ScriptPath\`" -Uninstall"
     Write-Log ""
+    
+    # Optionally start tray now
+    Start-Process powershell.exe -ArgumentList "-WindowStyle Hidden -ExecutionPolicy Bypass -File \`"$ScriptPath\`" -TrayMode" -WindowStyle Hidden
 }
 
 Send-Heartbeat -AgentToken $agentToken

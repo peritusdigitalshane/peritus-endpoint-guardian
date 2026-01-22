@@ -168,6 +168,11 @@ Deno.serve(async (req) => {
       return await handleGetWindowsUpdatePolicy(req);
     }
 
+    // Route: GET /status - Get full endpoint status for tray application
+    if (path === "/status" && req.method === "GET") {
+      return await handleGetStatus(req);
+    }
+
     return new Response(JSON.stringify({ error: "Not found" }), {
       status: 404,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -1174,4 +1179,186 @@ async function generateHash(input: string): Promise<string> {
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.slice(0, 8).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+// GET /status - Get full endpoint status for tray application (no auth required beyond token)
+async function handleGetStatus(req: Request) {
+  const endpoint = await validateAgentToken(req);
+
+  // Get latest status record
+  const { data: latestStatus } = await supabase
+    .from("endpoint_status")
+    .select("*")
+    .eq("endpoint_id", endpoint.id)
+    .order("recorded_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  // Get Defender policy
+  let defenderPolicy = null;
+  let defenderSource = null;
+  if (endpoint.policy_id) {
+    const { data: policy } = await supabase
+      .from("defender_policies")
+      .select("id, name")
+      .eq("id", endpoint.policy_id)
+      .maybeSingle();
+    if (policy) {
+      defenderPolicy = policy;
+      defenderSource = "direct";
+    }
+  }
+  // Check group inheritance for defender policy
+  if (!defenderPolicy) {
+    const { data: groupMemberships } = await supabase
+      .from("endpoint_group_memberships")
+      .select("endpoint_groups(policy_id)")
+      .eq("endpoint_id", endpoint.id);
+    for (const m of groupMemberships || []) {
+      const g = m.endpoint_groups as unknown as { policy_id: string | null } | null;
+      if (g?.policy_id) {
+        const { data: policy } = await supabase
+          .from("defender_policies")
+          .select("id, name")
+          .eq("id", g.policy_id)
+          .maybeSingle();
+        if (policy) {
+          defenderPolicy = policy;
+          defenderSource = "group";
+          break;
+        }
+      }
+    }
+  }
+
+  // Get UAC policy
+  let uacPolicy = null;
+  let uacSource = null;
+  if (endpoint.uac_policy_id) {
+    const { data: policy } = await supabase
+      .from("uac_policies")
+      .select("id, name")
+      .eq("id", endpoint.uac_policy_id)
+      .maybeSingle();
+    if (policy) {
+      uacPolicy = policy;
+      uacSource = "direct";
+    }
+  }
+  if (!uacPolicy) {
+    const { data: groupMemberships } = await supabase
+      .from("endpoint_group_memberships")
+      .select("endpoint_groups(uac_policy_id)")
+      .eq("endpoint_id", endpoint.id);
+    for (const m of groupMemberships || []) {
+      const g = m.endpoint_groups as unknown as { uac_policy_id: string | null } | null;
+      if (g?.uac_policy_id) {
+        const { data: policy } = await supabase
+          .from("uac_policies")
+          .select("id, name")
+          .eq("id", g.uac_policy_id)
+          .maybeSingle();
+        if (policy) {
+          uacPolicy = policy;
+          uacSource = "group";
+          break;
+        }
+      }
+    }
+  }
+
+  // Get Windows Update policy
+  let wuPolicy = null;
+  let wuSource = null;
+  if (endpoint.windows_update_policy_id) {
+    const { data: policy } = await supabase
+      .from("windows_update_policies")
+      .select("id, name")
+      .eq("id", endpoint.windows_update_policy_id)
+      .maybeSingle();
+    if (policy) {
+      wuPolicy = policy;
+      wuSource = "direct";
+    }
+  }
+  if (!wuPolicy) {
+    const { data: groupMemberships } = await supabase
+      .from("endpoint_group_memberships")
+      .select("endpoint_groups(windows_update_policy_id)")
+      .eq("endpoint_id", endpoint.id);
+    for (const m of groupMemberships || []) {
+      const g = m.endpoint_groups as unknown as { windows_update_policy_id: string | null } | null;
+      if (g?.windows_update_policy_id) {
+        const { data: policy } = await supabase
+          .from("windows_update_policies")
+          .select("id, name")
+          .eq("id", g.windows_update_policy_id)
+          .maybeSingle();
+        if (policy) {
+          wuPolicy = policy;
+          wuSource = "group";
+          break;
+        }
+      }
+    }
+  }
+
+  // Get WDAC rule sets count
+  const { data: directAssignments } = await supabase
+    .from("endpoint_rule_set_assignments")
+    .select("rule_set_id")
+    .eq("endpoint_id", endpoint.id);
+  const directRuleSets = directAssignments?.length || 0;
+
+  // Count group-inherited rule sets
+  const { data: groupMemberships } = await supabase
+    .from("endpoint_group_memberships")
+    .select("group_id")
+    .eq("endpoint_id", endpoint.id);
+  const groupIds = groupMemberships?.map(m => m.group_id) || [];
+  let groupRuleSets = 0;
+  if (groupIds.length > 0) {
+    const { data: groupAssignments } = await supabase
+      .from("group_rule_set_assignments")
+      .select("rule_set_id")
+      .in("group_id", groupIds);
+    groupRuleSets = groupAssignments?.length || 0;
+  }
+
+  // Get threat count (active threats only)
+  const { count: activeThreats } = await supabase
+    .from("endpoint_threats")
+    .select("*", { count: "exact", head: true })
+    .eq("endpoint_id", endpoint.id)
+    .not("status", "in", '("Resolved","Removed","Blocked")');
+
+  return new Response(
+    JSON.stringify({
+      success: true,
+      endpoint: {
+        id: endpoint.id,
+        hostname: endpoint.hostname,
+        os_version: endpoint.os_version,
+        defender_version: endpoint.defender_version,
+        last_seen_at: endpoint.last_seen_at,
+        is_online: endpoint.is_online,
+      },
+      status: latestStatus ? {
+        realtime_protection: latestStatus.realtime_protection_enabled,
+        antivirus_enabled: latestStatus.antivirus_enabled,
+        signature_age: latestStatus.antivirus_signature_age,
+        recorded_at: latestStatus.recorded_at,
+      } : null,
+      policies: {
+        defender: defenderPolicy ? { ...defenderPolicy, source: defenderSource } : null,
+        uac: uacPolicy ? { ...uacPolicy, source: uacSource } : null,
+        windows_update: wuPolicy ? { ...wuPolicy, source: wuSource } : null,
+        wdac_rule_sets: directRuleSets + groupRuleSets,
+      },
+      threats: {
+        active_count: activeThreats || 0,
+      },
+    }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
 }
