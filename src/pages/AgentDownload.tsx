@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,7 +10,17 @@ import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useTenant } from "@/contexts/TenantContext";
 
-const generatePowershellScript = (orgId: string, apiBaseUrl: string) => {
+const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+};
+
+const generatePowershellScript = (orgId: string, apiBaseUrl: string, trayIconPngBase64: string) => {
   return `#Requires -RunAsAdministrator
 <#
 .SYNOPSIS
@@ -1206,23 +1216,38 @@ function Apply-Policy {
 
 # ==================== TRAY MODE FUNCTIONS ====================
 
-function Download-TrayIcon {
-    # Download the Peritus icon from the server and save as ICO
-    $iconUrl = "https://id-preview--587aeb0c-5923-4707-8f47-ecfcbb3274e6.lovable.app/peritus-icon.png"
-    
+# Embedded tray icon (Base64 PNG). Keeping this ASCII-only prevents mojibake in PowerShell 5.1
+# when the script is saved without a UTF-8 BOM.
+$script:TrayIconPngBase64 = @"
+${trayIconPngBase64}
+"@
+
+function Write-EmbeddedTrayIcon {
     try {
         Add-Type -AssemblyName System.Drawing
-        
-        # Download PNG to memory stream first (avoids file locking issues)
-        $webClient = New-Object System.Net.WebClient
-        $pngBytes = $webClient.DownloadData($iconUrl)
-        Write-Log "Downloaded icon from: $iconUrl (Size: $($pngBytes.Length) bytes)"
-        
-        # Load from memory stream
+    } catch {
+        Write-Log "System.Drawing not available: $_" -Level "WARN"
+        return $false
+    }
+
+    $b64 = ($script:TrayIconPngBase64 | Out-String).Trim()
+    if (-not $b64 -or $b64.Length -lt 50) {
+        Write-Log "Embedded tray icon is missing or empty" -Level "WARN"
+        return $false
+    }
+
+    $memStream = $null
+    $originalBitmap = $null
+    $resized = $null
+    $graphics = $null
+
+    try {
+        $pngBytes = [Convert]::FromBase64String($b64)
+        Write-Log "Loaded embedded icon (Size: $($pngBytes.Length) bytes)"
+
         $memStream = New-Object System.IO.MemoryStream(,$pngBytes)
         $originalBitmap = [System.Drawing.Image]::FromStream($memStream)
-        Write-Log "Loaded image: $($originalBitmap.Width)x$($originalBitmap.Height)"
-        
+
         # Create 32x32 bitmap for tray icon
         $resized = New-Object System.Drawing.Bitmap(32, 32)
         $graphics = [System.Drawing.Graphics]::FromImage($resized)
@@ -1231,34 +1256,36 @@ function Download-TrayIcon {
         $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
         $graphics.DrawImage($originalBitmap, 0, 0, 32, 32)
         $graphics.Dispose()
-        
+        $graphics = $null
+
         # Convert to icon
         $iconHandle = $resized.GetHicon()
         $icon = [System.Drawing.Icon]::FromHandle($iconHandle)
-        
+
         # Save as ICO file
         $fileStream = [System.IO.File]::Create($TrayIconFile)
         $icon.Save($fileStream)
         $fileStream.Close()
-        
-        $originalBitmap.Dispose()
-        $resized.Dispose()
-        $memStream.Dispose()
-        
+
         Write-Log "Icon saved to: $TrayIconFile"
         return $true
     } catch {
-        Write-Log "Failed to download/convert icon: $_" -Level "WARN"
+        Write-Log "Failed to load embedded tray icon: $_" -Level "WARN"
+        return $false
+    } finally {
+        if ($graphics) { $graphics.Dispose() }
+        if ($resized) { $resized.Dispose() }
+        if ($originalBitmap) { $originalBitmap.Dispose() }
+        if ($memStream) { $memStream.Dispose() }
     }
-    return $false
 }
 
 function Get-TrayIcon {
     Add-Type -AssemblyName System.Drawing
     
-    # Try to download if not exists
+    # Try to write embedded icon if not exists
     if (-not (Test-Path $TrayIconFile)) {
-        Download-TrayIcon | Out-Null
+        Write-EmbeddedTrayIcon | Out-Null
     }
     
     try {
@@ -1273,24 +1300,6 @@ function Get-TrayIcon {
     } catch {
         Write-Log "Failed to load saved icon: $_" -Level "WARN"
     }
-    
-    try {
-        # Try Windows Security shield icon (index 77 in shell32.dll)
-        $shell32 = "$env:SystemRoot\\System32\\shell32.dll"
-        Add-Type -TypeDefinition @"
-using System;
-using System.Runtime.InteropServices;
-public class IconExtractor {
-    [DllImport("shell32.dll", CharSet = CharSet.Auto)]
-    public static extern IntPtr ExtractIcon(IntPtr hInst, string lpszExeFileName, int nIconIndex);
-}
-"@ -ErrorAction SilentlyContinue
-        $iconHandle = [IconExtractor]::ExtractIcon([IntPtr]::Zero, $shell32, 77)
-        if ($iconHandle -ne [IntPtr]::Zero) {
-            Write-Log "Using Windows Security shield icon"
-            return [System.Drawing.Icon]::FromHandle($iconHandle)
-        }
-    } catch { }
     
     try {
         # Fallback to PowerShell icon
@@ -1407,7 +1416,7 @@ function Show-StatusForm {
         # Defender Policy
         $defenderName = if ($StatusData.policies.defender) { $StatusData.policies.defender.name } else { "None" }
         $lblDefender = New-Object System.Windows.Forms.Label
-        $lblDefender.Text = "• Defender: $defenderName"
+        $lblDefender.Text = "- Defender: $defenderName"
         $lblDefender.Font = New-Object System.Drawing.Font("Segoe UI", 10)
         $lblDefender.Location = New-Object System.Drawing.Point(25, $y)
         $lblDefender.Size = New-Object System.Drawing.Size(370, 22)
@@ -1417,7 +1426,7 @@ function Show-StatusForm {
         # UAC Policy
         $uacName = if ($StatusData.policies.uac) { $StatusData.policies.uac.name } else { "None" }
         $lblUac = New-Object System.Windows.Forms.Label
-        $lblUac.Text = "• UAC: $uacName"
+        $lblUac.Text = "- UAC: $uacName"
         $lblUac.Font = New-Object System.Drawing.Font("Segoe UI", 10)
         $lblUac.Location = New-Object System.Drawing.Point(25, $y)
         $lblUac.Size = New-Object System.Drawing.Size(370, 22)
@@ -1427,7 +1436,7 @@ function Show-StatusForm {
         # Windows Update Policy
         $wuName = if ($StatusData.policies.windows_update) { $StatusData.policies.windows_update.name } else { "None" }
         $lblWu = New-Object System.Windows.Forms.Label
-        $lblWu.Text = "• Windows Update: $wuName"
+        $lblWu.Text = "- Windows Update: $wuName"
         $lblWu.Font = New-Object System.Drawing.Font("Segoe UI", 10)
         $lblWu.Location = New-Object System.Drawing.Point(25, $y)
         $lblWu.Size = New-Object System.Drawing.Size(370, 22)
@@ -1437,7 +1446,7 @@ function Show-StatusForm {
         # WDAC Rule Sets
         $wdacCount = $StatusData.policies.wdac_rule_sets
         $lblWdac = New-Object System.Windows.Forms.Label
-        $lblWdac.Text = "• WDAC Rule Sets: $wdacCount"
+        $lblWdac.Text = "- WDAC Rule Sets: $wdacCount"
         $lblWdac.Font = New-Object System.Drawing.Font("Segoe UI", 10)
         $lblWdac.Location = New-Object System.Drawing.Point(25, $y)
         $lblWdac.Size = New-Object System.Drawing.Size(370, 22)
@@ -1722,6 +1731,8 @@ Write-Log "Agent run complete."
 const AgentDownload = () => {
   const { currentOrganization, isLoading } = useTenant();
   const [copied, setCopied] = useState(false);
+  const [trayIconBase64, setTrayIconBase64] = useState<string>("");
+  const [trayIconError, setTrayIconError] = useState<string | null>(null);
   const { toast } = useToast();
 
   const orgId = currentOrganization?.id || null;
@@ -1729,7 +1740,32 @@ const AgentDownload = () => {
   const error = !isLoading && !currentOrganization ? "No organization found. Please contact support." : null;
 
   const apiBaseUrl = "https://njdcyjxgtckgtzgzoctw.supabase.co/functions/v1/agent-api";
-  const powershellScript = orgId ? generatePowershellScript(orgId, apiBaseUrl) : "";
+  const powershellScript = useMemo(
+    () => (orgId ? generatePowershellScript(orgId, apiBaseUrl, trayIconBase64) : ""),
+    [orgId, apiBaseUrl, trayIconBase64]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadIcon = async () => {
+      try {
+        // Fetch from same-origin public asset and embed as Base64 to avoid PS WebClient/encoding pitfalls.
+        const res = await fetch("/peritus-icon.png", { cache: "force-cache" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const buf = await res.arrayBuffer();
+        const b64 = arrayBufferToBase64(buf);
+        if (!cancelled) setTrayIconBase64(b64);
+      } catch (e) {
+        if (!cancelled) {
+          setTrayIconError(e instanceof Error ? e.message : String(e));
+        }
+      }
+    };
+    loadIcon();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleCopy = async () => {
     try {
@@ -1750,7 +1786,8 @@ const AgentDownload = () => {
   };
 
   const handleDownload = () => {
-    const blob = new Blob([powershellScript], { type: "text/plain" });
+    // Prefix UTF-8 BOM to make PowerShell 5.1 consistently parse script files as UTF-8.
+    const blob = new Blob(["\ufeff", powershellScript], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -1867,12 +1904,21 @@ const AgentDownload = () => {
               </TabsList>
 
               <TabsContent value="download" className="space-y-4 mt-4">
+                {trayIconError && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Tray icon embed failed</AlertTitle>
+                    <AlertDescription>
+                      Could not load /peritus-icon.png for embedding ({trayIconError}). The agent will fall back to a generic icon.
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <div className="flex gap-3">
-                  <Button onClick={handleDownload} className="gap-2">
+                  <Button onClick={handleDownload} className="gap-2" disabled={!powershellScript}>
                     <Download className="h-4 w-4" />
                     Download PeritusSecureAgent.ps1
                   </Button>
-                  <Button variant="outline" onClick={handleCopy} className="gap-2">
+                  <Button variant="outline" onClick={handleCopy} className="gap-2" disabled={!powershellScript}>
                     {copied ? (
                       <CheckCircle className="h-4 w-4 text-status-healthy" />
                     ) : (
