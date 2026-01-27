@@ -14,6 +14,7 @@ import {
   Building2,
   ShieldCheck,
   FolderOpen,
+  Sparkles,
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
@@ -27,6 +28,7 @@ const navigation = [
   { name: "Event Logs", href: "/logs", icon: ScrollText },
   { name: "Policies", href: "/policies", icon: FileText },
   { name: "App Control", href: "/security", icon: ShieldCheck },
+  { name: "AI Advisor", href: "/recommendations", icon: Sparkles },
   { name: "Deploy Agent", href: "/deploy", icon: Download },
   { name: "Activity", href: "/activity", icon: Activity },
   { name: "Users", href: "/users", icon: Users },
