@@ -1465,7 +1465,7 @@ function Show-StatusForm {
     
     $form = New-Object System.Windows.Forms.Form
     $form.Text = "Peritus Secure - Status"
-    $form.Size = New-Object System.Drawing.Size(420, 380)
+    $form.Size = New-Object System.Drawing.Size(420, 400)
     $form.StartPosition = "CenterScreen"
     $form.FormBorderStyle = "FixedDialog"
     $form.MaximizeBox = $false
