@@ -1593,11 +1593,11 @@ function Show-StatusForm {
         $form.Controls.Add($lblError)
     }
     
-    # Close button
+    # Close button - centered at bottom
     $btnClose = New-Object System.Windows.Forms.Button
     $btnClose.Text = "Close"
-    $btnClose.Size = New-Object System.Drawing.Size(80, 30)
-    $btnClose.Location = New-Object System.Drawing.Point(315, 300)
+    $btnClose.Size = New-Object System.Drawing.Size(100, 32)
+    $btnClose.Location = New-Object System.Drawing.Point(155, 320)
     $btnClose.BackColor = [System.Drawing.Color]::FromArgb(70, 130, 180)
     $btnClose.ForeColor = [System.Drawing.Color]::White
     $btnClose.FlatStyle = "Flat"
