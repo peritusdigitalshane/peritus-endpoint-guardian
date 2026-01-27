@@ -908,6 +908,7 @@ export type Database = {
           organization_type: string
           parent_partner_id: string | null
           slug: string
+          subscription_plan: Database["public"]["Enums"]["subscription_plan"]
           updated_at: string
         }
         Insert: {
@@ -918,6 +919,7 @@ export type Database = {
           organization_type?: string
           parent_partner_id?: string | null
           slug: string
+          subscription_plan?: Database["public"]["Enums"]["subscription_plan"]
           updated_at?: string
         }
         Update: {
@@ -928,6 +930,7 @@ export type Database = {
           organization_type?: string
           parent_partner_id?: string | null
           slug?: string
+          subscription_plan?: Database["public"]["Enums"]["subscription_plan"]
           updated_at?: string
         }
         Relationships: [
@@ -939,6 +942,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      plan_features: {
+        Row: {
+          advanced_threat_analytics: boolean
+          ai_security_advisor: boolean
+          api_access: boolean
+          compliance_reporting: boolean
+          created_at: string
+          custom_policies: boolean
+          id: string
+          max_devices: number | null
+          plan: Database["public"]["Enums"]["subscription_plan"]
+          priority_support: boolean
+          updated_at: string
+        }
+        Insert: {
+          advanced_threat_analytics?: boolean
+          ai_security_advisor?: boolean
+          api_access?: boolean
+          compliance_reporting?: boolean
+          created_at?: string
+          custom_policies?: boolean
+          id?: string
+          max_devices?: number | null
+          plan: Database["public"]["Enums"]["subscription_plan"]
+          priority_support?: boolean
+          updated_at?: string
+        }
+        Update: {
+          advanced_threat_analytics?: boolean
+          ai_security_advisor?: boolean
+          api_access?: boolean
+          compliance_reporting?: boolean
+          created_at?: string
+          custom_policies?: boolean
+          id?: string
+          max_devices?: number | null
+          plan?: Database["public"]["Enums"]["subscription_plan"]
+          priority_support?: boolean
+          updated_at?: string
+        }
+        Relationships: []
       }
       platform_settings: {
         Row: {
@@ -1424,6 +1469,11 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_add_device: { Args: { _org_id: string }; Returns: boolean }
+      get_effective_plan: {
+        Args: { _org_id: string }
+        Returns: Database["public"]["Enums"]["subscription_plan"]
+      }
       get_partner_customer_org_ids: {
         Args: { _user_id: string }
         Returns: string[]
@@ -1472,6 +1522,7 @@ export type Database = {
     Enums: {
       asr_action: "disabled" | "enabled" | "audit"
       org_role: "owner" | "admin" | "member"
+      subscription_plan: "free" | "pro" | "business"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1601,6 +1652,7 @@ export const Constants = {
     Enums: {
       asr_action: ["disabled", "enabled", "audit"],
       org_role: ["owner", "admin", "member"],
+      subscription_plan: ["free", "pro", "business"],
     },
   },
 } as const
