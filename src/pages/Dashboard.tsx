@@ -4,8 +4,10 @@ import { SecurityScore } from "@/components/dashboard/SecurityScore";
 import { ThreatsList } from "@/components/dashboard/ThreatsList";
 import { EndpointsTable } from "@/components/dashboard/EndpointsTable";
 import { ComplianceChart } from "@/components/dashboard/ComplianceChart";
-import { Shield, Monitor, AlertTriangle, CheckCircle, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Shield, Monitor, AlertTriangle, CheckCircle, Sparkles } from "lucide-react";
 import { useDashboardStats } from "@/hooks/useDashboardData";
+import { Link } from "react-router-dom";
 
 const Dashboard = () => {
   const { 
@@ -22,11 +24,19 @@ const Dashboard = () => {
     <MainLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold">Security Dashboard</h1>
-          <p className="text-muted-foreground">
-            Overview of your endpoint security posture
-          </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Security Dashboard</h1>
+            <p className="text-muted-foreground">
+              Overview of your endpoint security posture
+            </p>
+          </div>
+          <Button asChild>
+            <Link to="/recommendations">
+              <Sparkles className="mr-2 h-4 w-4" />
+              AI Recommendations
+            </Link>
+          </Button>
         </div>
 
         {/* Stats Row */}
