@@ -1190,7 +1190,7 @@ async function handleGetStatus(req: Request) {
     .from("endpoint_status")
     .select("*")
     .eq("endpoint_id", endpoint.id)
-    .order("recorded_at", { ascending: false })
+    .order("collected_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 
@@ -1347,7 +1347,7 @@ async function handleGetStatus(req: Request) {
         realtime_protection: latestStatus.realtime_protection_enabled,
         antivirus_enabled: latestStatus.antivirus_enabled,
         signature_age: latestStatus.antivirus_signature_age,
-        recorded_at: latestStatus.recorded_at,
+        collected_at: latestStatus.collected_at,
       } : null,
       policies: {
         defender: defenderPolicy ? { ...defenderPolicy, source: defenderSource } : null,
