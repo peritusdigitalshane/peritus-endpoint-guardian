@@ -905,6 +905,8 @@ export type Database = {
           event_log_retention_days: number
           id: string
           name: string
+          organization_type: string
+          parent_partner_id: string | null
           slug: string
           updated_at: string
         }
@@ -913,6 +915,8 @@ export type Database = {
           event_log_retention_days?: number
           id?: string
           name: string
+          organization_type?: string
+          parent_partner_id?: string | null
           slug: string
           updated_at?: string
         }
@@ -921,10 +925,20 @@ export type Database = {
           event_log_retention_days?: number
           id?: string
           name?: string
+          organization_type?: string
+          parent_partner_id?: string | null
           slug?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "organizations_parent_partner_id_fkey"
+            columns: ["parent_partner_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       platform_settings: {
         Row: {
@@ -1410,12 +1424,21 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_partner_customer_org_ids: {
+        Args: { _user_id: string }
+        Returns: string[]
+      }
       get_user_org_ids: { Args: { _user_id: string }; Returns: string[] }
       is_admin_of_org: {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean
       }
       is_member_of_org: {
+        Args: { _org_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_partner_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_partner_admin_of_org: {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean
       }

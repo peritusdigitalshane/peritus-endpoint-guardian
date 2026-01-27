@@ -34,6 +34,8 @@ import {
   ChevronUp,
   Clock,
   Settings,
+  Handshake,
+  UserPlus,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
@@ -41,7 +43,17 @@ import { Badge } from "@/components/ui/badge";
 import { EnrollmentCodesSection } from "@/components/admin/EnrollmentCodesSection";
 import { RetentionSettingsDialog } from "@/components/admin/RetentionSettingsDialog";
 import { PlatformSettingsSection } from "@/components/admin/PlatformSettingsSection";
+import { PartnersSection } from "@/components/admin/PartnersSection";
+import { DirectCustomersSection } from "@/components/admin/DirectCustomersSection";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  organization_type: "partner" | "customer";
+  parent_partner_id: string | null;
+}
 
 const Admin = () => {
   const { isSuperAdmin, setImpersonatedOrg, isLoading: tenantLoading } = useTenant();
@@ -99,8 +111,15 @@ const Admin = () => {
     }
   };
 
-  const handleViewAsTenant = (org: { id: string; name: string; slug: string }) => {
-    setImpersonatedOrg(org);
+  const handleViewAsTenant = (org: { id: string; name: string; slug: string; organization_type?: string; parent_partner_id?: string | null }) => {
+    const fullOrg: Organization = {
+      id: org.id,
+      name: org.name,
+      slug: org.slug,
+      organization_type: (org.organization_type as "partner" | "customer") || "customer",
+      parent_partner_id: org.parent_partner_id ?? null,
+    };
+    setImpersonatedOrg(fullOrg);
     toast({
       title: "Viewing as tenant",
       description: `Now viewing as ${org.name}. Use the header to switch or exit.`,
@@ -170,16 +189,24 @@ const Admin = () => {
             </div>
             <h1 className="text-2xl font-bold mt-2">Administration</h1>
             <p className="text-muted-foreground">
-              Manage customers and platform settings
+              Manage partners, customers, and platform settings
             </p>
           </div>
         </div>
 
-        <Tabs defaultValue="customers" className="space-y-6">
+        <Tabs defaultValue="partners" className="space-y-6">
           <TabsList>
-            <TabsTrigger value="customers" className="gap-2">
+            <TabsTrigger value="partners" className="gap-2">
+              <Handshake className="h-4 w-4" />
+              Partners
+            </TabsTrigger>
+            <TabsTrigger value="direct-customers" className="gap-2">
+              <UserPlus className="h-4 w-4" />
+              Direct Customers
+            </TabsTrigger>
+            <TabsTrigger value="all-orgs" className="gap-2">
               <Building2 className="h-4 w-4" />
-              Customers
+              All Organizations
             </TabsTrigger>
             <TabsTrigger value="settings" className="gap-2">
               <Settings className="h-4 w-4" />
@@ -187,12 +214,20 @@ const Admin = () => {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="customers" className="space-y-6">
+          <TabsContent value="partners" className="space-y-6">
+            <PartnersSection />
+          </TabsContent>
+
+          <TabsContent value="direct-customers" className="space-y-6">
+            <DirectCustomersSection />
+          </TabsContent>
+
+          <TabsContent value="all-orgs" className="space-y-6">
             {/* Add Customer Button */}
             <div className="flex justify-end">
               <Button onClick={() => setCreateDialogOpen(true)}>
                 <Plus className="mr-2 h-4 w-4" />
-                Add Customer
+                Add Organization
               </Button>
             </div>
 
@@ -204,7 +239,7 @@ const Admin = () => {
                     <Building2 className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Total Customers</p>
+                    <p className="text-sm text-muted-foreground">Total Organizations</p>
                     <p className="text-2xl font-bold">{organizations.length}</p>
                   </div>
                 </div>
@@ -237,13 +272,13 @@ const Admin = () => {
               </div>
             </div>
 
-            {/* Customers Table */}
+            {/* Organizations Table */}
             <div className="rounded-lg border border-border bg-card">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Slug</TableHead>
+                    <TableHead>Organization</TableHead>
+                    <TableHead>Type</TableHead>
                     <TableHead className="text-center">Endpoints</TableHead>
                     <TableHead className="text-center">Users</TableHead>
                     <TableHead className="text-center">Log Retention</TableHead>
@@ -260,13 +295,16 @@ const Admin = () => {
                           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
                             <Building2 className="h-4 w-4 text-primary" />
                           </div>
-                          <span className="font-medium">{org.name}</span>
+                          <div>
+                            <span className="font-medium">{org.name}</span>
+                            <div className="text-xs text-muted-foreground">{org.slug}</div>
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
-                          {org.slug}
-                        </code>
+                        <Badge variant={(org as any).organization_type === "partner" ? "default" : "secondary"}>
+                          {(org as any).organization_type || "customer"}
+                        </Badge>
                       </TableCell>
                       <TableCell className="text-center">{org.endpoint_count}</TableCell>
                       <TableCell className="text-center">{org.member_count}</TableCell>
@@ -310,7 +348,7 @@ const Admin = () => {
                             onClick={() => handleViewAsTenant(org)}
                           >
                             <Eye className="h-4 w-4 mr-1" />
-                            View as Tenant
+                            View as
                           </Button>
                         </div>
                       </TableCell>
@@ -330,7 +368,7 @@ const Admin = () => {
                 {organizations.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                      No customers found. Create your first customer to get started.
+                      No organizations found. Create your first organization to get started.
                     </TableCell>
                   </TableRow>
                 )}
@@ -348,14 +386,14 @@ const Admin = () => {
         <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Add New Customer</DialogTitle>
+              <DialogTitle>Add New Organization</DialogTitle>
               <DialogDescription>
                 Create a new customer organization. They will be able to manage their own endpoints and policies.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="org-name">Customer Name</Label>
+                <Label htmlFor="org-name">Organization Name</Label>
                 <Input
                   id="org-name"
                   placeholder="Acme Corporation"
@@ -382,7 +420,7 @@ const Admin = () => {
               </Button>
               <Button onClick={handleCreateOrg} disabled={createOrg.isPending}>
                 {createOrg.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Create Customer
+                Create Organization
               </Button>
             </DialogFooter>
           </DialogContent>
