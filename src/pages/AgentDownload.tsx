@@ -1223,42 +1223,53 @@ ${trayIconPngBase64}
 "@
 
 function Write-EmbeddedTrayIcon {
+    # Ensure System.Drawing is loaded
     try {
-        Add-Type -AssemblyName System.Drawing
+        Add-Type -AssemblyName System.Drawing -ErrorAction Stop
     } catch {
         Write-Log "System.Drawing not available: $_" -Level "WARN"
         return $false
     }
 
-    $b64 = ($script:TrayIconPngBase64 | Out-String).Trim()
-    if (-not $b64 -or $b64.Length -lt 50) {
-        Write-Log "Embedded tray icon is missing or empty" -Level "WARN"
+    # Get the Base64 string - handle potential here-string formatting
+    $b64 = $script:TrayIconPngBase64
+    if ($b64 -is [array]) { $b64 = $b64 -join "" }
+    $b64 = ($b64 | Out-String).Trim() -replace '\s+', ''
+    
+    if (-not $b64 -or $b64.Length -lt 100) {
+        Write-Log "Embedded tray icon is missing or too short (length: $($b64.Length))" -Level "WARN"
         return $false
     }
+    
+    Write-Log "Processing embedded icon (Base64 length: $($b64.Length) chars)"
 
     $memStream = $null
     $originalBitmap = $null
     $resized = $null
     $graphics = $null
+    $fileStream = $null
 
     try {
         $pngBytes = [Convert]::FromBase64String($b64)
-        Write-Log "Loaded embedded icon (Size: $($pngBytes.Length) bytes)"
+        Write-Log "Decoded PNG bytes: $($pngBytes.Length)"
 
         $memStream = New-Object System.IO.MemoryStream(,$pngBytes)
         $originalBitmap = [System.Drawing.Image]::FromStream($memStream)
+        Write-Log "Loaded image: $($originalBitmap.Width)x$($originalBitmap.Height)"
 
         # Create 32x32 bitmap for tray icon
-        $resized = New-Object System.Drawing.Bitmap(32, 32)
+        $resized = New-Object System.Drawing.Bitmap(32, 32, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
         $graphics = [System.Drawing.Graphics]::FromImage($resized)
         $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
         $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
         $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+        $graphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
+        $graphics.Clear([System.Drawing.Color]::Transparent)
         $graphics.DrawImage($originalBitmap, 0, 0, 32, 32)
         $graphics.Dispose()
         $graphics = $null
 
-        # Convert to icon
+        # Convert bitmap to icon via handle
         $iconHandle = $resized.GetHicon()
         $icon = [System.Drawing.Icon]::FromHandle($iconHandle)
 
@@ -1266,17 +1277,20 @@ function Write-EmbeddedTrayIcon {
         $fileStream = [System.IO.File]::Create($TrayIconFile)
         $icon.Save($fileStream)
         $fileStream.Close()
+        $fileStream = $null
 
-        Write-Log "Icon saved to: $TrayIconFile"
+        Write-Log "Tray icon saved to: $TrayIconFile (file exists: $(Test-Path $TrayIconFile))"
         return $true
     } catch {
-        Write-Log "Failed to load embedded tray icon: $_" -Level "WARN"
+        Write-Log "Failed to create tray icon: $($_.Exception.Message)" -Level "WARN"
+        Write-Log "Stack: $($_.ScriptStackTrace)" -Level "WARN"
         return $false
     } finally {
-        if ($graphics) { $graphics.Dispose() }
-        if ($resized) { $resized.Dispose() }
-        if ($originalBitmap) { $originalBitmap.Dispose() }
-        if ($memStream) { $memStream.Dispose() }
+        if ($fileStream) { try { $fileStream.Dispose() } catch {} }
+        if ($graphics) { try { $graphics.Dispose() } catch {} }
+        if ($resized) { try { $resized.Dispose() } catch {} }
+        if ($originalBitmap) { try { $originalBitmap.Dispose() } catch {} }
+        if ($memStream) { try { $memStream.Dispose() } catch {} }
     }
 }
 
@@ -1648,6 +1662,20 @@ if ($isFirstRun) {
     $scriptContent = Get-Content -Path $MyInvocation.MyCommand.Path -Raw
     Install-AgentTask -ScriptContent $scriptContent
     
+    # Pre-create the tray icon ICO file so TrayMode has it ready
+    Write-Log "Creating tray icon..."
+    try {
+        Add-Type -AssemblyName System.Drawing -ErrorAction Stop
+        $iconCreated = Write-EmbeddedTrayIcon
+        if ($iconCreated) {
+            Write-Log "Tray icon created successfully at $TrayIconFile"
+        } else {
+            Write-Log "Tray icon creation returned false - will use fallback" -Level "WARN"
+        }
+    } catch {
+        Write-Log "Could not create tray icon during install: $_ - will use fallback" -Level "WARN"
+    }
+    
     # Register tray application to start at user login
     try {
         $trayCommand = "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File \`"$ScriptPath\`" -TrayMode"
@@ -1676,7 +1704,8 @@ if ($isFirstRun) {
     Write-Log "  powershell -File \`"$ScriptPath\`" -Uninstall"
     Write-Log ""
     
-    # Optionally start tray now
+    # Start tray application immediately
+    Write-Log "Starting tray application..."
     Start-Process powershell.exe -ArgumentList "-WindowStyle Hidden -ExecutionPolicy Bypass -File \`"$ScriptPath\`" -TrayMode" -WindowStyle Hidden
 }
 
