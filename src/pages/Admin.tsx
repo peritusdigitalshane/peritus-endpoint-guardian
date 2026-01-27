@@ -30,6 +30,7 @@ import {
   Ticket,
   Loader2,
   ShieldAlert,
+  CreditCard,
   ChevronDown,
   ChevronUp,
   Clock,
@@ -45,6 +46,7 @@ import { RetentionSettingsDialog } from "@/components/admin/RetentionSettingsDia
 import { PlatformSettingsSection } from "@/components/admin/PlatformSettingsSection";
 import { PartnersSection } from "@/components/admin/PartnersSection";
 import { DirectCustomersSection } from "@/components/admin/DirectCustomersSection";
+import { SubscriptionPlansSection } from "@/components/admin/SubscriptionPlansSection";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface Organization {
@@ -207,6 +209,10 @@ const Admin = () => {
             <TabsTrigger value="all-orgs" className="gap-2">
               <Building2 className="h-4 w-4" />
               All Organizations
+            </TabsTrigger>
+            <TabsTrigger value="plans" className="gap-2">
+              <CreditCard className="h-4 w-4" />
+              Subscription Plans
             </TabsTrigger>
             <TabsTrigger value="settings" className="gap-2">
               <Settings className="h-4 w-4" />
@@ -375,6 +381,10 @@ const Admin = () => {
               </TableBody>
               </Table>
             </div>
+          </TabsContent>
+
+          <TabsContent value="plans" className="space-y-6">
+            <SubscriptionPlansSection />
           </TabsContent>
 
           <TabsContent value="settings" className="space-y-6">
