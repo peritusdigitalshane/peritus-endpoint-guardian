@@ -9,6 +9,7 @@ import { Download, Copy, CheckCircle, Shield, Terminal, Clock, Zap, AlertCircle,
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useTenant } from "@/contexts/TenantContext";
+import trayIconPng from "@/assets/peritus-tray-icon.png";
 
 const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
   const bytes = new Uint8Array(buffer);
@@ -1326,26 +1327,34 @@ $script:TrayIconIcoBase64 = @"
 ${trayIconIcoBase64}
 "@
 
-function Write-EmbeddedTrayIcon {
-    # Get the Base64 string - handle potential here-string formatting
+function Get-EmbeddedTrayIconBytes {
     $b64 = $script:TrayIconIcoBase64
     if ($b64 -is [array]) { $b64 = $b64 -join "" }
     $b64 = ($b64 | Out-String).Trim() -replace '\s+', ''
-    
     if (-not $b64 -or $b64.Length -lt 100) {
         Write-Log "Embedded tray icon is missing or too short (length: $($b64.Length))" -Level "WARN"
-        return $false
+        return $null
     }
-    
-    Write-Log "Processing embedded icon (Base64 length: $($b64.Length) chars)"
-
     try {
         $icoBytes = [Convert]::FromBase64String($b64)
-        Write-Log "Decoded ICO bytes: $($icoBytes.Length)"
         if ($icoBytes.Length -lt 100) {
             Write-Log "Decoded ICO bytes too small" -Level "WARN"
-            return $false
+            return $null
         }
+        $hdr = ($icoBytes[0..3] | ForEach-Object { $_.ToString('X2') }) -join ' '
+        Write-Log "Embedded ICO header bytes: $hdr"
+        return $icoBytes
+    } catch {
+        Write-Log "Failed to decode embedded ICO Base64: $($_.Exception.Message)" -Level "WARN"
+        return $null
+    }
+}
+
+function Write-EmbeddedTrayIcon {
+    try {
+        $icoBytes = Get-EmbeddedTrayIconBytes
+        if (-not $icoBytes) { return $false }
+        Write-Log "Writing embedded icon to disk (bytes: $($icoBytes.Length))"
         [System.IO.File]::WriteAllBytes($TrayIconFile, $icoBytes)
         Write-Log "Tray icon saved to: $TrayIconFile (file exists: $(Test-Path $TrayIconFile))"
         return (Test-Path $TrayIconFile)
@@ -1358,6 +1367,21 @@ function Write-EmbeddedTrayIcon {
 
 function Get-TrayIcon {
     Add-Type -AssemblyName System.Drawing
+
+    # 1) Preferred: load icon directly from embedded bytes in memory (no file IO)
+    try {
+        $icoBytes = Get-EmbeddedTrayIconBytes
+        if ($icoBytes) {
+            $script:TrayIconStream = New-Object System.IO.MemoryStream(, $icoBytes)
+            $icon = New-Object System.Drawing.Icon($script:TrayIconStream)
+            if ($icon) {
+                Write-Log "Loaded tray icon from embedded bytes"
+                return $icon
+            }
+        }
+    } catch {
+        Write-Log "Failed to load embedded icon in-memory: $($_.Exception.Message)" -Level "WARN"
+    }
     
     # Try to write embedded icon if not exists
     if (-not (Test-Path $TrayIconFile)) {
@@ -1387,25 +1411,35 @@ function Get-TrayIcon {
             }
         } catch { }
     }
-    
+
+    # Final fallback - create a simple Peritus-styled icon (shield + P)
     try {
-        # Fallback to PowerShell icon
-        $psPath = (Get-Process -Id $PID).Path
-        if ($psPath) {
-            Write-Log "Using PowerShell icon as fallback"
-            return [System.Drawing.Icon]::ExtractAssociatedIcon($psPath)
-        }
-    } catch { }
-    
-    # Final fallback - create a simple colored icon
-    try {
-        Write-Log "Creating fallback blue circle icon"
-        $bmp = New-Object System.Drawing.Bitmap(32, 32)
+        Write-Log "Creating fallback Peritus icon (drawn)"
+        $bmp = New-Object System.Drawing.Bitmap(32, 32, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
         $g = [System.Drawing.Graphics]::FromImage($bmp)
+        $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
         $g.Clear([System.Drawing.Color]::Transparent)
-        $brush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(0, 122, 204))
-        $g.FillEllipse($brush, 2, 2, 28, 28)
-        $g.DrawEllipse([System.Drawing.Pens]::White, 4, 4, 24, 24)
+
+        # Shield polygon
+        $points = New-Object 'System.Drawing.Point[]' 6
+        $points[0] = New-Object System.Drawing.Point(16, 2)
+        $points[1] = New-Object System.Drawing.Point(28, 7)
+        $points[2] = New-Object System.Drawing.Point(28, 16)
+        $points[3] = New-Object System.Drawing.Point(16, 30)
+        $points[4] = New-Object System.Drawing.Point(4, 16)
+        $points[5] = New-Object System.Drawing.Point(4, 7)
+        $shieldBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(0, 135, 200))
+        $g.FillPolygon($shieldBrush, $points)
+        $g.DrawPolygon([System.Drawing.Pens]::White, $points)
+
+        # Letter P
+        $font = New-Object System.Drawing.Font('Segoe UI', 18, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
+        $sf = New-Object System.Drawing.StringFormat
+        $sf.Alignment = [System.Drawing.StringAlignment]::Center
+        $sf.LineAlignment = [System.Drawing.StringAlignment]::Center
+        $rect = New-Object System.Drawing.RectangleF(0, 1, 32, 31)
+        $g.DrawString('P', $font, [System.Drawing.Brushes]::White, $rect, $sf)
+
         $g.Dispose()
         $iconHandle = $bmp.GetHicon()
         return [System.Drawing.Icon]::FromHandle($iconHandle)
@@ -1872,6 +1906,7 @@ const AgentDownload = () => {
   const { currentOrganization, isLoading } = useTenant();
   const [copied, setCopied] = useState(false);
   const [trayIconBase64, setTrayIconBase64] = useState<string>("");
+  const [trayIconLoading, setTrayIconLoading] = useState<boolean>(true);
   const [trayIconError, setTrayIconError] = useState<string | null>(null);
   const { toast } = useToast();
 
@@ -1888,17 +1923,24 @@ const AgentDownload = () => {
   useEffect(() => {
     let cancelled = false;
     const loadIcon = async () => {
+      if (!cancelled) {
+        setTrayIconLoading(true);
+        setTrayIconError(null);
+      }
       try {
-        // Import the generated tray icon asset
-        const { default: trayIconUrl } = await import("@/assets/peritus-tray-icon.png");
-        const res = await fetch(trayIconUrl, { cache: "force-cache" });
+        // Fetch from bundled asset and embed as Base64 ICO.
+        const res = await fetch(trayIconPng, { cache: "force-cache" });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const blob = await res.blob();
         const b64 = await blobToIcoBase64(blob, 32);
-        if (!cancelled) setTrayIconBase64(b64);
+        if (!cancelled) {
+          setTrayIconBase64(b64);
+          setTrayIconLoading(false);
+        }
       } catch (e) {
         if (!cancelled) {
           setTrayIconError(e instanceof Error ? e.message : String(e));
+          setTrayIconLoading(false);
         }
       }
     };
@@ -2054,12 +2096,31 @@ const AgentDownload = () => {
                     </AlertDescription>
                   </Alert>
                 )}
+
+                {trayIconLoading && (
+                  <Alert>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <AlertTitle>Preparing tray icon…</AlertTitle>
+                    <AlertDescription>
+                      Please wait a moment—this ensures the downloaded script contains the Peritus tray icon (and won’t fall back to the PowerShell icon).
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <div className="flex gap-3">
-                  <Button onClick={handleDownload} className="gap-2" disabled={!powershellScript}>
+                  <Button
+                    onClick={handleDownload}
+                    className="gap-2"
+                    disabled={!powershellScript || trayIconLoading || (!trayIconBase64 && !trayIconError)}
+                  >
                     <Download className="h-4 w-4" />
                     Download PeritusSecureAgent.ps1
                   </Button>
-                  <Button variant="outline" onClick={handleCopy} className="gap-2" disabled={!powershellScript}>
+                  <Button
+                    variant="outline"
+                    onClick={handleCopy}
+                    className="gap-2"
+                    disabled={!powershellScript || trayIconLoading || (!trayIconBase64 && !trayIconError)}
+                  >
                     {copied ? (
                       <CheckCircle className="h-4 w-4 text-status-healthy" />
                     ) : (
