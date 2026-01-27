@@ -1652,7 +1652,7 @@ function Start-TrayApplication {
 
 function Test-IsSystemAccount {
     try {
-        return ([Security.Principal.WindowsIdentity]::GetCurrent().IsSystem -or ([Security.Principal.WindowsIdentity]::GetCurrent().Name -eq "NT AUTHORITY\\SYSTEM")
+        return ([Security.Principal.WindowsIdentity]::GetCurrent().IsSystem -or ([Security.Principal.WindowsIdentity]::GetCurrent().Name -eq "NT AUTHORITY\\SYSTEM"))
     } catch {
         return $false
     }
