@@ -1889,8 +1889,9 @@ const AgentDownload = () => {
     let cancelled = false;
     const loadIcon = async () => {
       try {
-        // Fetch from same-origin public asset and embed as Base64 ICO.
-        const res = await fetch("/peritus-icon.png", { cache: "force-cache" });
+        // Import the generated tray icon asset
+        const { default: trayIconUrl } = await import("@/assets/peritus-tray-icon.png");
+        const res = await fetch(trayIconUrl, { cache: "force-cache" });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const blob = await res.blob();
         const b64 = await blobToIcoBase64(blob, 32);
@@ -2049,7 +2050,7 @@ const AgentDownload = () => {
                     <AlertCircle className="h-4 w-4" />
                     <AlertTitle>Tray icon embed failed</AlertTitle>
                     <AlertDescription>
-                      Could not load /peritus-icon.png for embedding ({trayIconError}). The agent will fall back to a generic icon.
+                      Could not load tray icon for embedding ({trayIconError}). The agent will fall back to a generic icon.
                     </AlertDescription>
                   </Alert>
                 )}
