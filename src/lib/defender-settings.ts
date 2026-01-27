@@ -206,6 +206,11 @@ export interface DefenderPolicy {
   // Exploit Protection
   exploit_protection_enabled: boolean;
   
+  // Exclusions
+  exclusion_paths: string[];
+  exclusion_processes: string[];
+  exclusion_extensions: string[];
+  
   created_at: string;
   updated_at: string;
   created_by: string | null;

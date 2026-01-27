@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, Save, Shield, Zap, Lock, AlertTriangle } from "lucide-react";
+import { X, Save, Shield, Zap, Lock, AlertTriangle, FolderX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AsrRuleToggle } from "./AsrRuleToggle";
+import { ExclusionsEditor } from "./ExclusionsEditor";
 import {
   DefenderPolicy,
   AsrAction,
@@ -64,6 +65,9 @@ const defaultPolicy: Partial<DefenderPolicy> = {
   asr_block_adobe_child_process: "audit",
   asr_block_wmi_persistence: "enabled",
   exploit_protection_enabled: true,
+  exclusion_paths: [],
+  exclusion_processes: [],
+  exclusion_extensions: [],
 };
 
 export function PolicyEditor({ policy, onSave, onClose }: PolicyEditorProps) {
@@ -135,7 +139,7 @@ export function PolicyEditor({ policy, onSave, onClose }: PolicyEditorProps) {
 
               {/* Tabbed Settings */}
               <Tabs defaultValue="basic" className="w-full">
-                <TabsList className="grid w-full grid-cols-4">
+                <TabsList className="grid w-full grid-cols-5">
                   <TabsTrigger value="basic" className="text-xs">
                     <Shield className="h-3.5 w-3.5 mr-1.5" />
                     Basic
@@ -150,7 +154,11 @@ export function PolicyEditor({ policy, onSave, onClose }: PolicyEditorProps) {
                   </TabsTrigger>
                   <TabsTrigger value="asr" className="text-xs">
                     <AlertTriangle className="h-3.5 w-3.5 mr-1.5" />
-                    ASR Rules
+                    ASR
+                  </TabsTrigger>
+                  <TabsTrigger value="exclusions" className="text-xs">
+                    <FolderX className="h-3.5 w-3.5 mr-1.5" />
+                    Exclusions
                   </TabsTrigger>
                 </TabsList>
 
@@ -334,6 +342,18 @@ export function PolicyEditor({ policy, onSave, onClose }: PolicyEditorProps) {
                       }
                     />
                   ))}
+                </TabsContent>
+
+                {/* Exclusions */}
+                <TabsContent value="exclusions" className="mt-4">
+                  <ExclusionsEditor
+                    exclusionPaths={formData.exclusion_paths || []}
+                    exclusionProcesses={formData.exclusion_processes || []}
+                    exclusionExtensions={formData.exclusion_extensions || []}
+                    onPathsChange={(paths) => updateField("exclusion_paths", paths)}
+                    onProcessesChange={(processes) => updateField("exclusion_processes", processes)}
+                    onExtensionsChange={(extensions) => updateField("exclusion_extensions", extensions)}
+                  />
                 </TabsContent>
               </Tabs>
             </div>

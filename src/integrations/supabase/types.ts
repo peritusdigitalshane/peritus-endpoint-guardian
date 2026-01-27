@@ -105,6 +105,9 @@ export type Database = {
           created_by: string | null
           description: string | null
           email_scanning: boolean
+          exclusion_extensions: string[] | null
+          exclusion_paths: string[] | null
+          exclusion_processes: string[] | null
           exploit_protection_enabled: boolean
           id: string
           ioav_protection: boolean
@@ -150,6 +153,9 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           email_scanning?: boolean
+          exclusion_extensions?: string[] | null
+          exclusion_paths?: string[] | null
+          exclusion_processes?: string[] | null
           exploit_protection_enabled?: boolean
           id?: string
           ioav_protection?: boolean
@@ -195,6 +201,9 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           email_scanning?: boolean
+          exclusion_extensions?: string[] | null
+          exclusion_paths?: string[] | null
+          exclusion_processes?: string[] | null
           exploit_protection_enabled?: boolean
           id?: string
           ioav_protection?: boolean
