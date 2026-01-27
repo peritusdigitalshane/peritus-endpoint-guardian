@@ -1,4 +1,7 @@
 project_id = "njdcyjxgtckgtzgzoctw"
+[functions.ai-security-advisor]
+verify_jwt = false
+
 
 [functions.agent-api]
 verify_jwt = false
