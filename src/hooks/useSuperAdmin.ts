@@ -9,6 +9,7 @@ interface Organization {
   slug: string;
   created_at: string;
   updated_at: string;
+  event_log_retention_days: number;
 }
 
 interface OrganizationWithStats extends Organization {
@@ -120,6 +121,38 @@ export function useUpdateOrganization() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-organizations"] });
       queryClient.invalidateQueries({ queryKey: ["admin-organizations-with-stats"] });
+    },
+  });
+}
+
+export function useUpdateOrganizationRetention() {
+  const queryClient = useQueryClient();
+  const { currentOrganization } = useTenant();
+
+  return useMutation({
+    mutationFn: async ({ id, retentionDays }: { id: string; retentionDays: number }) => {
+      const { data, error } = await supabase
+        .from("organizations")
+        .update({ event_log_retention_days: retentionDays })
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      // Log activity
+      if (currentOrganization?.id) {
+        await logActivity(currentOrganization.id, "update", "organization_retention", id, { 
+          retention_days: retentionDays 
+        });
+      }
+      
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-organizations"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-organizations-with-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
     },
   });
 }
