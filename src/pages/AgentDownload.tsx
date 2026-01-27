@@ -20,9 +20,36 @@ const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
   return btoa(binary);
 };
 
-const blobToCleanPngBase64 = async (blob: Blob, size = 256) => {
-  // Some PNGs render fine in browsers but fail strict decoding in GDI+ (System.Drawing).
-  // Re-encoding via canvas produces a decoder-friendly PNG.
+const createSinglePngIco = (pngBytes: Uint8Array, width: number, height: number): ArrayBuffer => {
+  // ICO container holding a single PNG image.
+  // Windows supports PNG-compressed images inside .ico.
+  const headerSize = 6;
+  const entrySize = 16;
+  const imageOffset = headerSize + entrySize;
+  const out = new Uint8Array(imageOffset + pngBytes.length);
+  const dv = new DataView(out.buffer);
+
+  // ICONDIR
+  dv.setUint16(0, 0, true); // reserved
+  dv.setUint16(2, 1, true); // type = 1 (icon)
+  dv.setUint16(4, 1, true); // count
+
+  // ICONDIRENTRY
+  out[6] = width === 256 ? 0 : width;
+  out[7] = height === 256 ? 0 : height;
+  out[8] = 0; // color count
+  out[9] = 0; // reserved
+  dv.setUint16(10, 1, true); // planes
+  dv.setUint16(12, 32, true); // bit count
+  dv.setUint32(14, pngBytes.length, true); // bytes in resource
+  dv.setUint32(18, imageOffset, true); // image offset
+
+  out.set(pngBytes, imageOffset);
+  return out.buffer;
+};
+
+const blobToIcoBase64 = async (blob: Blob, size = 32) => {
+  // Convert a PNG to an ICO (single 32x32 PNG) so PowerShell can write bytes directly.
   const url = URL.createObjectURL(blob);
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -46,16 +73,25 @@ const blobToCleanPngBase64 = async (blob: Blob, size = 256) => {
     const y = Math.round((size - h) / 2);
     ctx.drawImage(img, x, y, w, h);
 
-    const dataUrl = canvas.toDataURL("image/png");
-    const b64 = dataUrl.split(",")[1];
-    if (!b64) throw new Error("Failed to encode icon image");
-    return b64;
+    const pngBlob: Blob = await new Promise((resolve, reject) => {
+      canvas.toBlob(
+        (b) => {
+          if (b) resolve(b);
+          else reject(new Error("Failed to encode icon image"));
+        },
+        "image/png"
+      );
+    });
+
+    const pngBuf = await pngBlob.arrayBuffer();
+    const icoBuf = createSinglePngIco(new Uint8Array(pngBuf), size, size);
+    return arrayBufferToBase64(icoBuf);
   } finally {
     URL.revokeObjectURL(url);
   }
 };
 
-const generatePowershellScript = (orgId: string, apiBaseUrl: string, trayIconPngBase64: string) => {
+const generatePowershellScript = (orgId: string, apiBaseUrl: string, trayIconIcoBase64: string) => {
   return `#Requires -RunAsAdministrator
 <#
 .SYNOPSIS
@@ -1251,23 +1287,15 @@ function Apply-Policy {
 
 # ==================== TRAY MODE FUNCTIONS ====================
 
-# Embedded tray icon (Base64 PNG). Keeping this ASCII-only prevents mojibake in PowerShell 5.1
-# when the script is saved without a UTF-8 BOM.
-$script:TrayIconPngBase64 = @"
-${trayIconPngBase64}
+# Embedded tray icon (Base64 ICO). Writing raw bytes avoids PNG decoding issues in System.Drawing.
+# Keeping this ASCII-only prevents mojibake in PowerShell 5.1 when the script is saved without a UTF-8 BOM.
+$script:TrayIconIcoBase64 = @"
+${trayIconIcoBase64}
 "@
 
 function Write-EmbeddedTrayIcon {
-    # Ensure System.Drawing is loaded
-    try {
-        Add-Type -AssemblyName System.Drawing -ErrorAction Stop
-    } catch {
-        Write-Log "System.Drawing not available: $_" -Level "WARN"
-        return $false
-    }
-
     # Get the Base64 string - handle potential here-string formatting
-    $b64 = $script:TrayIconPngBase64
+    $b64 = $script:TrayIconIcoBase64
     if ($b64 -is [array]) { $b64 = $b64 -join "" }
     $b64 = ($b64 | Out-String).Trim() -replace '\s+', ''
     
@@ -1279,60 +1307,15 @@ function Write-EmbeddedTrayIcon {
     Write-Log "Processing embedded icon (Base64 length: $($b64.Length) chars)"
 
     try {
-        $pngBytes = [Convert]::FromBase64String($b64)
-        Write-Log "Decoded PNG bytes: $($pngBytes.Length)"
-
-        # Use WPF's more tolerant image decoder instead of GDI+
-        Add-Type -AssemblyName PresentationCore -ErrorAction Stop
-        
-        $memStream = New-Object System.IO.MemoryStream(,$pngBytes)
-        $decoder = New-Object System.Windows.Media.Imaging.PngBitmapDecoder(
-            $memStream,
-            [System.Windows.Media.Imaging.BitmapCreateOptions]::PreservePixelFormat,
-            [System.Windows.Media.Imaging.BitmapCacheOption]::OnLoad
-        )
-        $frame = $decoder.Frames[0]
-        Write-Log "Loaded image via WPF: $($frame.PixelWidth)x$($frame.PixelHeight)"
-
-        # Convert WPF BitmapSource to GDI+ Bitmap for icon creation
-        $encoder = New-Object System.Windows.Media.Imaging.PngBitmapEncoder
-        $encoder.Frames.Add([System.Windows.Media.Imaging.BitmapFrame]::Create($frame))
-        
-        $convertedStream = New-Object System.IO.MemoryStream
-        $encoder.Save($convertedStream)
-        $convertedStream.Position = 0
-        
-        $originalBitmap = [System.Drawing.Image]::FromStream($convertedStream)
-        Write-Log "Converted to GDI+: $($originalBitmap.Width)x$($originalBitmap.Height)"
-
-        # Create 32x32 bitmap for tray icon
-        $resized = New-Object System.Drawing.Bitmap(32, 32, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
-        $graphics = [System.Drawing.Graphics]::FromImage($resized)
-        $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-        $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
-        $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
-        $graphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
-        $graphics.Clear([System.Drawing.Color]::Transparent)
-        $graphics.DrawImage($originalBitmap, 0, 0, 32, 32)
-        $graphics.Dispose()
-
-        # Convert bitmap to icon via handle
-        $iconHandle = $resized.GetHicon()
-        $icon = [System.Drawing.Icon]::FromHandle($iconHandle)
-
-        # Save as ICO file
-        $fileStream = [System.IO.File]::Create($TrayIconFile)
-        $icon.Save($fileStream)
-        $fileStream.Close()
-
-        # Cleanup
-        $resized.Dispose()
-        $originalBitmap.Dispose()
-        $convertedStream.Dispose()
-        $memStream.Dispose()
-
+        $icoBytes = [Convert]::FromBase64String($b64)
+        Write-Log "Decoded ICO bytes: $($icoBytes.Length)"
+        if ($icoBytes.Length -lt 100) {
+            Write-Log "Decoded ICO bytes too small" -Level "WARN"
+            return $false
+        }
+        [System.IO.File]::WriteAllBytes($TrayIconFile, $icoBytes)
         Write-Log "Tray icon saved to: $TrayIconFile (file exists: $(Test-Path $TrayIconFile))"
-        return $true
+        return (Test-Path $TrayIconFile)
     } catch {
         Write-Log "Failed to create tray icon: $($_.Exception.Message)" -Level "WARN"
         Write-Log "Stack: $($_.ScriptStackTrace)" -Level "WARN"
@@ -1352,13 +1335,24 @@ function Get-TrayIcon {
         # Try to load from saved icon file first
         if (Test-Path $TrayIconFile) {
             $icon = New-Object System.Drawing.Icon($TrayIconFile)
-            if ($icon) { 
+            if ($icon) {
                 Write-Log "Loaded icon from: $TrayIconFile"
-                return $icon 
+                return $icon
             }
         }
     } catch {
         Write-Log "Failed to load saved icon: $_" -Level "WARN"
+        try { Remove-Item -Path $TrayIconFile -Force -ErrorAction SilentlyContinue } catch { }
+        try { Write-EmbeddedTrayIcon | Out-Null } catch { }
+        try {
+            if (Test-Path $TrayIconFile) {
+                $icon = New-Object System.Drawing.Icon($TrayIconFile)
+                if ($icon) {
+                    Write-Log "Loaded icon from: $TrayIconFile"
+                    return $icon
+                }
+            }
+        } catch { }
     }
     
     try {
@@ -1862,11 +1856,11 @@ const AgentDownload = () => {
     let cancelled = false;
     const loadIcon = async () => {
       try {
-        // Fetch from same-origin public asset and embed as Base64 to avoid PS WebClient/encoding pitfalls.
+        // Fetch from same-origin public asset and embed as Base64 ICO.
         const res = await fetch("/peritus-icon.png", { cache: "force-cache" });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const blob = await res.blob();
-        const b64 = await blobToCleanPngBase64(blob, 256);
+        const b64 = await blobToIcoBase64(blob, 32);
         if (!cancelled) setTrayIconBase64(b64);
       } catch (e) {
         if (!cancelled) {
