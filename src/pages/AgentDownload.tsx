@@ -20,6 +20,41 @@ const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
   return btoa(binary);
 };
 
+const blobToCleanPngBase64 = async (blob: Blob, size = 256) => {
+  // Some PNGs render fine in browsers but fail strict decoding in GDI+ (System.Drawing).
+  // Re-encoding via canvas produces a decoder-friendly PNG.
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error("Failed to decode icon image"));
+      el.src = url;
+    });
+
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas context unavailable");
+
+    ctx.clearRect(0, 0, size, size);
+    const scale = Math.min(size / img.width, size / img.height);
+    const w = Math.max(1, Math.round(img.width * scale));
+    const h = Math.max(1, Math.round(img.height * scale));
+    const x = Math.round((size - w) / 2);
+    const y = Math.round((size - h) / 2);
+    ctx.drawImage(img, x, y, w, h);
+
+    const dataUrl = canvas.toDataURL("image/png");
+    const b64 = dataUrl.split(",")[1];
+    if (!b64) throw new Error("Failed to encode icon image");
+    return b64;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+};
+
 const generatePowershellScript = (orgId: string, apiBaseUrl: string, trayIconPngBase64: string) => {
   return `#Requires -RunAsAdministrator
 <#
@@ -1615,6 +1650,41 @@ function Start-TrayApplication {
 
 # ==================== MAIN EXECUTION ====================
 
+function Test-IsSystemAccount {
+    try {
+        return ([Security.Principal.WindowsIdentity]::GetCurrent().IsSystem -or ([Security.Principal.WindowsIdentity]::GetCurrent().Name -eq "NT AUTHORITY\\SYSTEM")
+    } catch {
+        return $false
+    }
+}
+
+function Ensure-TrayStartupAndLaunch {
+    # Ensure tray auto-start + start it now (interactive installs/updates only)
+    if (Test-IsSystemAccount) { return }
+    try {
+        if (-not [Environment]::UserInteractive) { return }
+    } catch { }
+
+    # Register tray application to start at user login (best effort)
+    try {
+        $trayCommand = "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File \`"$ScriptPath\`" -TrayMode"
+        Set-ItemProperty -Path "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" -Name "PeritusSecureTray" -Value $trayCommand -Force
+    } catch { }
+
+    # Avoid launching duplicates
+    try {
+        $existingTray = Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue | Where-Object {
+            $_.CommandLine -like "*$ScriptPath*" -and $_.CommandLine -like "*-TrayMode*"
+        } | Select-Object -First 1
+        if ($existingTray) { return }
+    } catch { }
+
+    # Start tray application immediately (best effort)
+    try {
+        Start-Process powershell.exe -ArgumentList "-WindowStyle Hidden -ExecutionPolicy Bypass -File \`"$ScriptPath\`" -TrayMode" -WindowStyle Hidden
+    } catch { }
+}
+
 Write-Log "=========================================="
 Write-Log "Peritus Secure Agent v2.6.0"
 Write-Log "=========================================="
@@ -1649,6 +1719,9 @@ if (-not $isFirstRun -and $MyInvocation.MyCommand.Path -and ($MyInvocation.MyCom
         $scriptContent = Get-Content -Path $MyInvocation.MyCommand.Path -Raw
         Install-AgentTask -ScriptContent $scriptContent
         Write-Log "Installed agent updated successfully"
+
+        # Important: update runs were not starting the tray app.
+        Ensure-TrayStartupAndLaunch
     } catch {
         Write-Log "Failed to update installed agent: $_" -Level "WARN"
     }
@@ -1781,8 +1854,8 @@ const AgentDownload = () => {
         // Fetch from same-origin public asset and embed as Base64 to avoid PS WebClient/encoding pitfalls.
         const res = await fetch("/peritus-icon.png", { cache: "force-cache" });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const buf = await res.arrayBuffer();
-        const b64 = arrayBufferToBase64(buf);
+        const blob = await res.blob();
+        const b64 = await blobToCleanPngBase64(blob, 256);
         if (!cancelled) setTrayIconBase64(b64);
       } catch (e) {
         if (!cancelled) {
