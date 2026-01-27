@@ -195,7 +195,6 @@ If there are no endpoints or data, acknowledge that and suggest deploying agents
           { role: "system", content: systemPrompt },
           { role: "user", content: securitySummary },
         ],
-        temperature: 0.7,
         response_format: { type: "json_object" },
       }),
     });
