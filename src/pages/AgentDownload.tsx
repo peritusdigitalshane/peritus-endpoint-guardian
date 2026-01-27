@@ -1598,8 +1598,12 @@ function Show-StatusForm {
     $btnClose.Text = "Close"
     $btnClose.Size = New-Object System.Drawing.Size(80, 30)
     $btnClose.Location = New-Object System.Drawing.Point(315, 300)
-    $btnClose.BackColor = [System.Drawing.Color]::FromArgb(60, 60, 60)
+    $btnClose.BackColor = [System.Drawing.Color]::FromArgb(70, 130, 180)
+    $btnClose.ForeColor = [System.Drawing.Color]::White
     $btnClose.FlatStyle = "Flat"
+    $btnClose.FlatAppearance.BorderSize = 0
+    $btnClose.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+    $btnClose.Cursor = [System.Windows.Forms.Cursors]::Hand
     $btnClose.Add_Click({ $form.Close() })
     $form.Controls.Add($btnClose)
     
