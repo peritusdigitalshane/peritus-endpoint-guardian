@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 
 export interface EndpointEventLog {
   id: string;
@@ -15,25 +16,36 @@ export interface EndpointEventLog {
   created_at: string;
   endpoints?: {
     hostname: string;
+    organization_id: string;
   };
 }
 
 export function useEventLogs(limit = 100) {
+  const { currentOrganization } = useTenant();
+  
   return useQuery({
-    queryKey: ["event-logs", limit],
+    queryKey: ["event-logs", limit, currentOrganization?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("endpoint_event_logs")
         .select(`
           *,
-          endpoints(hostname)
+          endpoints!inner(hostname, organization_id)
         `)
         .order("event_time", { ascending: false })
         .limit(limit);
 
+      // Filter by current organization if set
+      if (currentOrganization?.id) {
+        query = query.eq("endpoints.organization_id", currentOrganization.id);
+      }
+
+      const { data, error } = await query;
+
       if (error) throw error;
       return (data ?? []) as EndpointEventLog[];
     },
+    enabled: !!currentOrganization?.id,
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 }
