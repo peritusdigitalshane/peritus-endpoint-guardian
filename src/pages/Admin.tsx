@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { useTenant } from "@/contexts/TenantContext";
-import { useOrganizationsWithStats, useCreateOrganization } from "@/hooks/useSuperAdmin";
+import { useOrganizationsWithStats, useCreateOrganization, useUpdateOrganizationRetention } from "@/hooks/useSuperAdmin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,16 +32,19 @@ import {
   ShieldAlert,
   ChevronDown,
   ChevronUp,
+  Clock,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { EnrollmentCodesSection } from "@/components/admin/EnrollmentCodesSection";
+import { RetentionSettingsDialog } from "@/components/admin/RetentionSettingsDialog";
 
 const Admin = () => {
   const { isSuperAdmin, setImpersonatedOrg, isLoading: tenantLoading } = useTenant();
   const { data: organizations = [], isLoading } = useOrganizationsWithStats();
   const createOrg = useCreateOrganization();
+  const updateRetention = useUpdateOrganizationRetention();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -49,6 +52,11 @@ const Admin = () => {
   const [newOrgName, setNewOrgName] = useState("");
   const [newOrgSlug, setNewOrgSlug] = useState("");
   const [expandedOrgId, setExpandedOrgId] = useState<string | null>(null);
+  const [retentionDialogOrg, setRetentionDialogOrg] = useState<{
+    id: string;
+    name: string;
+    retention_days: number;
+  } | null>(null);
 
   // Generate slug from name
   const handleNameChange = (name: string) => {
@@ -99,6 +107,24 @@ const Admin = () => {
 
   const toggleExpanded = (orgId: string) => {
     setExpandedOrgId(expandedOrgId === orgId ? null : orgId);
+  };
+
+  const handleSaveRetention = async (days: number) => {
+    if (!retentionDialogOrg) return;
+    try {
+      await updateRetention.mutateAsync({ id: retentionDialogOrg.id, retentionDays: days });
+      toast({
+        title: "Retention updated",
+        description: `Event logs will be retained for ${days} days.`,
+      });
+      setRetentionDialogOrg(null);
+    } catch (error: any) {
+      toast({
+        title: "Failed to update retention",
+        description: error.message || "Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   if (tenantLoading || isLoading) {
@@ -200,6 +226,7 @@ const Admin = () => {
                 <TableHead>Slug</TableHead>
                 <TableHead className="text-center">Endpoints</TableHead>
                 <TableHead className="text-center">Users</TableHead>
+                <TableHead className="text-center">Log Retention</TableHead>
                 <TableHead className="text-center">Created</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -223,6 +250,21 @@ const Admin = () => {
                   </TableCell>
                   <TableCell className="text-center">{org.endpoint_count}</TableCell>
                   <TableCell className="text-center">{org.member_count}</TableCell>
+                  <TableCell className="text-center">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground hover:text-foreground"
+                      onClick={() => setRetentionDialogOrg({
+                        id: org.id,
+                        name: org.name,
+                        retention_days: org.event_log_retention_days,
+                      })}
+                    >
+                      <Clock className="h-3 w-3 mr-1" />
+                      {org.event_log_retention_days}d
+                    </Button>
+                  </TableCell>
                   <TableCell className="text-center text-sm text-muted-foreground">
                     {new Date(org.created_at).toLocaleDateString()}
                   </TableCell>
@@ -255,7 +297,7 @@ const Admin = () => {
                 </TableRow>
                 {expandedOrgId === org.id && (
                   <TableRow>
-                    <TableCell colSpan={6} className="bg-muted/30 p-4">
+                    <TableCell colSpan={7} className="bg-muted/30 p-4">
                       <EnrollmentCodesSection 
                         organizationId={org.id} 
                         organizationName={org.name} 
@@ -267,7 +309,7 @@ const Admin = () => {
             ))}
             {organizations.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                   No customers found. Create your first customer to get started.
                 </TableCell>
               </TableRow>
@@ -319,6 +361,18 @@ const Admin = () => {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Retention Settings Dialog */}
+        {retentionDialogOrg && (
+          <RetentionSettingsDialog
+            open={!!retentionDialogOrg}
+            onOpenChange={(open) => !open && setRetentionDialogOrg(null)}
+            organizationName={retentionDialogOrg.name}
+            currentRetentionDays={retentionDialogOrg.retention_days}
+            onSave={handleSaveRetention}
+            isPending={updateRetention.isPending}
+          />
+        )}
       </div>
     </MainLayout>
   );

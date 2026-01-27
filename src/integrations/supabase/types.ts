@@ -902,6 +902,7 @@ export type Database = {
       organizations: {
         Row: {
           created_at: string
+          event_log_retention_days: number
           id: string
           name: string
           slug: string
@@ -909,6 +910,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          event_log_retention_days?: number
           id?: string
           name: string
           slug: string
@@ -916,6 +918,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          event_log_retention_days?: number
           id?: string
           name?: string
           slug?: string
