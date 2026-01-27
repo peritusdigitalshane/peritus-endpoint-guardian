@@ -6,6 +6,8 @@ interface Organization {
   id: string;
   name: string;
   slug: string;
+  organization_type: "partner" | "customer";
+  parent_partner_id: string | null;
 }
 
 interface TenantContextType {
@@ -15,10 +17,14 @@ interface TenantContextType {
   currentOrganization: Organization | null;
   // Whether the user is a super admin
   isSuperAdmin: boolean;
+  // Whether the user is a partner admin
+  isPartnerAdmin: boolean;
   // Whether we're currently impersonating another tenant
   isImpersonating: boolean;
   // All organizations (only available for super admins)
   allOrganizations: Organization[];
+  // Partner's customer organizations (for partner admins)
+  partnerCustomers: Organization[];
   // Set the impersonated organization (null to stop impersonating)
   setImpersonatedOrg: (org: Organization | null) => void;
   // Loading state
@@ -29,8 +35,10 @@ const TenantContext = createContext<TenantContextType>({
   userOrganization: null,
   currentOrganization: null,
   isSuperAdmin: false,
+  isPartnerAdmin: false,
   isImpersonating: false,
   allOrganizations: [],
+  partnerCustomers: [],
   setImpersonatedOrg: () => {},
   isLoading: true,
 });
@@ -48,7 +56,9 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
   const [userOrganization, setUserOrganization] = useState<Organization | null>(null);
   const [impersonatedOrg, setImpersonatedOrgState] = useState<Organization | null>(null);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [isPartnerAdmin, setIsPartnerAdmin] = useState(false);
   const [allOrganizations, setAllOrganizations] = useState<Organization[]>([]);
+  const [partnerCustomers, setPartnerCustomers] = useState<Organization[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -56,7 +66,9 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
       if (!user) {
         setUserOrganization(null);
         setIsSuperAdmin(false);
+        setIsPartnerAdmin(false);
         setAllOrganizations([]);
+        setPartnerCustomers([]);
         setImpersonatedOrgState(null);
         setIsLoading(false);
         return;
@@ -72,6 +84,16 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
 
         const isAdmin = !!isAdminData;
         setIsSuperAdmin(isAdmin);
+
+        // Check partner admin status
+        const { data: isPartnerData, error: isPartnerError } = await supabase.rpc(
+          "is_partner_admin",
+          { _user_id: user.id }
+        );
+        if (isPartnerError) throw isPartnerError;
+
+        const isPartner = !!isPartnerData;
+        setIsPartnerAdmin(isPartner);
 
         // Get user's organization
         const { data: membershipData, error: membershipError } = await supabase
@@ -89,12 +111,12 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
         if (membershipData) {
           const { data: orgData } = await supabase
             .from("organizations")
-            .select("id, name, slug")
+            .select("id, name, slug, organization_type, parent_partner_id")
             .eq("id", membershipData.organization_id)
             .single();
 
           if (orgData) {
-            setUserOrganization(orgData);
+            setUserOrganization(orgData as Organization);
           }
         }
 
@@ -102,12 +124,30 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
         if (isAdmin) {
           const { data: allOrgs, error: orgsError } = await supabase
             .from("organizations")
-            .select("id, name, slug")
+            .select("id, name, slug, organization_type, parent_partner_id")
             .order("name");
 
           if (orgsError) throw orgsError;
 
-          setAllOrganizations(allOrgs || []);
+          setAllOrganizations((allOrgs || []) as Organization[]);
+        }
+
+        // If partner admin, fetch their customer organizations
+        if (isPartner && !isAdmin) {
+          const { data: customerOrgs, error: customerError } = await supabase
+            .rpc("get_partner_customer_org_ids", { _user_id: user.id });
+
+          if (customerError) throw customerError;
+
+          if (customerOrgs && customerOrgs.length > 0) {
+            const { data: customers } = await supabase
+              .from("organizations")
+              .select("id, name, slug, organization_type, parent_partner_id")
+              .in("id", customerOrgs)
+              .order("name");
+
+            setPartnerCustomers((customers || []) as Organization[]);
+          }
         }
       } catch (error) {
         console.error("Error loading tenant data:", error);
@@ -122,8 +162,8 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
   }, [user, authLoading]);
 
   const setImpersonatedOrg = (org: Organization | null) => {
-    if (!isSuperAdmin && org !== null) {
-      console.warn("Only super admins can impersonate organizations");
+    if (!isSuperAdmin && !isPartnerAdmin && org !== null) {
+      console.warn("Only super admins or partner admins can impersonate organizations");
       return;
     }
     setImpersonatedOrgState(org);
@@ -138,8 +178,10 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
         userOrganization,
         currentOrganization,
         isSuperAdmin,
+        isPartnerAdmin,
         isImpersonating,
         allOrganizations,
+        partnerCustomers,
         setImpersonatedOrg,
         isLoading,
       }}
