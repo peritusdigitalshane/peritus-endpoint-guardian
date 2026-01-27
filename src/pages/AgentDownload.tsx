@@ -1465,7 +1465,9 @@ function Show-StatusForm {
     
     $form = New-Object System.Windows.Forms.Form
     $form.Text = "Peritus Secure - Status"
-    $form.Size = New-Object System.Drawing.Size(420, 400)
+    # Use ClientSize (not Size) so DPI/border chrome doesn't clip bottom controls.
+    $form.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::Dpi
+    $form.ClientSize = New-Object System.Drawing.Size(420, 420)
     $form.StartPosition = "CenterScreen"
     $form.FormBorderStyle = "FixedDialog"
     $form.MaximizeBox = $false
@@ -1593,11 +1595,15 @@ function Show-StatusForm {
         $form.Controls.Add($lblError)
     }
     
-    # Close button - centered at bottom
+    # Close button (bottom-right, DPI-safe)
     $btnClose = New-Object System.Windows.Forms.Button
     $btnClose.Text = "Close"
-    $btnClose.Size = New-Object System.Drawing.Size(100, 32)
-    $btnClose.Location = New-Object System.Drawing.Point(155, 320)
+    $btnClose.Size = New-Object System.Drawing.Size(110, 34)
+    $btnClose.Anchor = [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Right
+    $btnClose.Location = New-Object System.Drawing.Point(
+        ($form.ClientSize.Width - $btnClose.Width - 20),
+        ($form.ClientSize.Height - $btnClose.Height - 20)
+    )
     $btnClose.BackColor = [System.Drawing.Color]::FromArgb(70, 130, 180)
     $btnClose.ForeColor = [System.Drawing.Color]::White
     $btnClose.FlatStyle = "Flat"
