@@ -33,12 +33,15 @@ import {
   ChevronDown,
   ChevronUp,
   Clock,
+  Settings,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { EnrollmentCodesSection } from "@/components/admin/EnrollmentCodesSection";
 import { RetentionSettingsDialog } from "@/components/admin/RetentionSettingsDialog";
+import { PlatformSettingsSection } from "@/components/admin/PlatformSettingsSection";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const Admin = () => {
   const { isSuperAdmin, setImpersonatedOrg, isLoading: tenantLoading } = useTenant();
@@ -165,158 +168,181 @@ const Admin = () => {
                 Super Admin
               </Badge>
             </div>
-            <h1 className="text-2xl font-bold mt-2">Customer Management</h1>
+            <h1 className="text-2xl font-bold mt-2">Administration</h1>
             <p className="text-muted-foreground">
-              Create and manage customer organizations
+              Manage customers and platform settings
             </p>
           </div>
-          <Button onClick={() => setCreateDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Customer
-          </Button>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="rounded-lg border border-border bg-card p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                <Building2 className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Customers</p>
-                <p className="text-2xl font-bold">{organizations.length}</p>
-              </div>
-            </div>
-          </div>
-          <div className="rounded-lg border border-border bg-card p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-500/10">
-                <Monitor className="h-5 w-5 text-green-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Endpoints</p>
-                <p className="text-2xl font-bold">
-                  {organizations.reduce((acc, org) => acc + org.endpoint_count, 0)}
-                </p>
-              </div>
-            </div>
-          </div>
-          <div className="rounded-lg border border-border bg-card p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10">
-                <Users className="h-5 w-5 text-blue-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Users</p>
-                <p className="text-2xl font-bold">
-                  {organizations.reduce((acc, org) => acc + org.member_count, 0)}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
+        <Tabs defaultValue="customers" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="customers" className="gap-2">
+              <Building2 className="h-4 w-4" />
+              Customers
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="gap-2">
+              <Settings className="h-4 w-4" />
+              Platform Settings
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Customers Table */}
-        <div className="rounded-lg border border-border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Customer</TableHead>
-                <TableHead>Slug</TableHead>
-                <TableHead className="text-center">Endpoints</TableHead>
-                <TableHead className="text-center">Users</TableHead>
-                <TableHead className="text-center">Log Retention</TableHead>
-                <TableHead className="text-center">Created</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-            {organizations.map((org) => (
-              <React.Fragment key={org.id}>
-                <TableRow key={org.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
-                        <Building2 className="h-4 w-4 text-primary" />
-                      </div>
-                      <span className="font-medium">{org.name}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
-                      {org.slug}
-                    </code>
-                  </TableCell>
-                  <TableCell className="text-center">{org.endpoint_count}</TableCell>
-                  <TableCell className="text-center">{org.member_count}</TableCell>
-                  <TableCell className="text-center">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-muted-foreground hover:text-foreground"
-                      onClick={() => setRetentionDialogOrg({
-                        id: org.id,
-                        name: org.name,
-                        retention_days: org.event_log_retention_days,
-                      })}
-                    >
-                      <Clock className="h-3 w-3 mr-1" />
-                      {org.event_log_retention_days}d
-                    </Button>
-                  </TableCell>
-                  <TableCell className="text-center text-sm text-muted-foreground">
-                    {new Date(org.created_at).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => toggleExpanded(org.id)}
-                        title="Manage enrollment codes"
-                      >
-                        <Ticket className="h-4 w-4 mr-1" />
-                        Codes
-                        {expandedOrgId === org.id ? (
-                          <ChevronUp className="h-4 w-4 ml-1" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4 ml-1" />
-                        )}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleViewAsTenant(org)}
-                      >
-                        <Eye className="h-4 w-4 mr-1" />
-                        View as Tenant
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-                {expandedOrgId === org.id && (
+          <TabsContent value="customers" className="space-y-6">
+            {/* Add Customer Button */}
+            <div className="flex justify-end">
+              <Button onClick={() => setCreateDialogOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Customer
+              </Button>
+            </div>
+
+            {/* Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="rounded-lg border border-border bg-card p-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                    <Building2 className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Customers</p>
+                    <p className="text-2xl font-bold">{organizations.length}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-lg border border-border bg-card p-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-500/10">
+                    <Monitor className="h-5 w-5 text-green-500" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Endpoints</p>
+                    <p className="text-2xl font-bold">
+                      {organizations.reduce((acc, org) => acc + org.endpoint_count, 0)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-lg border border-border bg-card p-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10">
+                    <Users className="h-5 w-5 text-blue-500" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Users</p>
+                    <p className="text-2xl font-bold">
+                      {organizations.reduce((acc, org) => acc + org.member_count, 0)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Customers Table */}
+            <div className="rounded-lg border border-border bg-card">
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={7} className="bg-muted/30 p-4">
-                      <EnrollmentCodesSection 
-                        organizationId={org.id} 
-                        organizationName={org.name} 
-                      />
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Slug</TableHead>
+                    <TableHead className="text-center">Endpoints</TableHead>
+                    <TableHead className="text-center">Users</TableHead>
+                    <TableHead className="text-center">Log Retention</TableHead>
+                    <TableHead className="text-center">Created</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                {organizations.map((org) => (
+                  <React.Fragment key={org.id}>
+                    <TableRow key={org.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+                            <Building2 className="h-4 w-4 text-primary" />
+                          </div>
+                          <span className="font-medium">{org.name}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                          {org.slug}
+                        </code>
+                      </TableCell>
+                      <TableCell className="text-center">{org.endpoint_count}</TableCell>
+                      <TableCell className="text-center">{org.member_count}</TableCell>
+                      <TableCell className="text-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-muted-foreground hover:text-foreground"
+                          onClick={() => setRetentionDialogOrg({
+                            id: org.id,
+                            name: org.name,
+                            retention_days: org.event_log_retention_days,
+                          })}
+                        >
+                          <Clock className="h-3 w-3 mr-1" />
+                          {org.event_log_retention_days}d
+                        </Button>
+                      </TableCell>
+                      <TableCell className="text-center text-sm text-muted-foreground">
+                        {new Date(org.created_at).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toggleExpanded(org.id)}
+                            title="Manage enrollment codes"
+                          >
+                            <Ticket className="h-4 w-4 mr-1" />
+                            Codes
+                            {expandedOrgId === org.id ? (
+                              <ChevronUp className="h-4 w-4 ml-1" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4 ml-1" />
+                            )}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleViewAsTenant(org)}
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            View as Tenant
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                    {expandedOrgId === org.id && (
+                      <TableRow>
+                        <TableCell colSpan={7} className="bg-muted/30 p-4">
+                          <EnrollmentCodesSection 
+                            organizationId={org.id} 
+                            organizationName={org.name} 
+                          />
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </React.Fragment>
+                ))}
+                {organizations.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      No customers found. Create your first customer to get started.
                     </TableCell>
                   </TableRow>
                 )}
-              </React.Fragment>
-            ))}
-            {organizations.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                  No customers found. Create your first customer to get started.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-          </Table>
-        </div>
+              </TableBody>
+              </Table>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="settings" className="space-y-6">
+            <PlatformSettingsSection />
+          </TabsContent>
+        </Tabs>
 
         {/* Create Organization Dialog */}
         <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
