@@ -141,6 +141,21 @@ serve(async (req) => {
     const outdatedSignatures = statuses.filter(s => s.antivirus_signature_age !== null && s.antivirus_signature_age > 1).length;
     const behaviorMonitorEnabled = statuses.filter(s => s.behavior_monitor_enabled === true).length;
 
+    // Group threats by name for better analysis
+    const threatsByName = new Map<string, { count: number; severity: string; status: string }>();
+    for (const t of threats) {
+      const existing = threatsByName.get(t.threat_name);
+      if (existing) {
+        existing.count++;
+      } else {
+        threatsByName.set(t.threat_name, { count: 1, severity: t.severity, status: t.status });
+      }
+    }
+
+    const threatDetails = Array.from(threatsByName.entries())
+      .map(([name, data]) => `  - ${name}: ${data.count} occurrence(s), severity: ${data.severity}, status: ${data.status}`)
+      .join("\n");
+
     // Build the prompt
     const securitySummary = `
 Security Summary for Organization:
@@ -149,19 +164,24 @@ Security Summary for Organization:
 - Endpoints with Policy Assigned: ${endpointsWithPolicy}
 
 Protection Status (of ${statuses.length} endpoints with status data):
-- Real-time Protection Enabled: ${realtimeEnabled}
-- Antivirus Enabled: ${antivirusEnabled}
-- Behavior Monitoring Enabled: ${behaviorMonitorEnabled}
+- Real-time Protection Enabled: ${realtimeEnabled}/${statuses.length}
+- Antivirus Enabled: ${antivirusEnabled}/${statuses.length}
+- Behavior Monitoring Enabled: ${behaviorMonitorEnabled}/${statuses.length}
 - Outdated Signatures (>1 day): ${outdatedSignatures}
 
-Threats:
+Threat Summary:
 - Active Threats: ${activeThreats.length}
-- Total Threats Recorded: ${threats.length}
-${activeThreats.length > 0 ? `- Active Threat Details: ${activeThreats.slice(0, 10).map(t => `${t.threat_name} (${t.severity})`).join(", ")}` : ""}
+- Total Threats Recorded (including resolved): ${threats.length}
+${threatDetails ? `\nDetailed Threat Breakdown:\n${threatDetails}` : "- No threats detected"}
 `;
 
     const systemPrompt = `You are an expert Windows security analyst specializing in Microsoft Defender for Endpoint. 
 Analyze the provided security telemetry and provide actionable recommendations to improve the organization's security posture.
+
+IMPORTANT CONTEXT:
+- EICAR test files (e.g., "Virus:DOS/EICAR_Test_File", "EICAR-Test-File") are INTENTIONAL test files used to verify antivirus functionality. They are NOT real threats and should be treated as positive indicators that detection is working.
+- Threats with status "resolved", "removed", or "blocked" have been successfully handled and are not active concerns.
+- Focus recommendations on actual security gaps, not on test files or already-resolved detections.
 
 Format your response as a JSON object with the following structure:
 {
@@ -179,8 +199,11 @@ Format your response as a JSON object with the following structure:
   "positive_findings": ["List of things that are working well"]
 }
 
-Provide 3-7 prioritized recommendations based on the data. Focus on practical, actionable advice.
-If there are no endpoints or data, acknowledge that and suggest deploying agents.`;
+Guidelines:
+- Only include recommendations for ACTUAL security issues, not test files or resolved threats.
+- If all protections are enabled and threats are resolved/test files, acknowledge the strong security posture.
+- Provide 0-7 recommendations based on actual issues found. It's okay to have zero recommendations if security is good.
+- If there are no endpoints or data, acknowledge that and suggest deploying agents.`;
 
     // Call OpenAI
     const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
