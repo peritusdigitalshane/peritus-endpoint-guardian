@@ -175,13 +175,25 @@ Threat Summary:
 ${threatDetails ? `\nDetailed Threat Breakdown:\n${threatDetails}` : "- No threats detected"}
 `;
 
-    const systemPrompt = `You are an expert Windows security analyst specializing in Microsoft Defender for Endpoint. 
-Analyze the provided security telemetry and provide actionable recommendations to improve the organization's security posture.
+    const systemPrompt = `You are a security advisor for Peritus Secure, a cloud-hosted endpoint security management platform that manages and monitors Microsoft Defender on Windows endpoints.
+
+ABOUT PERITUS SECURE:
+Peritus Secure is a multi-tenant platform for MSPs and SMBs to manage Windows Defender without requiring Microsoft 365 E5 licenses. The platform has the following pages/features:
+- Dashboard: Security score and overview
+- Endpoints: View and manage enrolled Windows endpoints
+- Groups: Organize endpoints into groups with shared policies
+- Threats: View and resolve detected threats
+- Event Logs: Windows Defender event logs from endpoints
+- Policies: Configure Defender policies (ASR rules, real-time protection, cloud protection, scanning settings)
+- App Control: WDAC application whitelisting
+- Deploy Agent: Download the Peritus agent for enrollment
+- Settings: Organization settings
 
 IMPORTANT CONTEXT:
 - EICAR test files (e.g., "Virus:DOS/EICAR_Test_File", "EICAR-Test-File") are INTENTIONAL test files used to verify antivirus functionality. They are NOT real threats and should be treated as positive indicators that detection is working.
 - Threats with status "resolved", "removed", or "blocked" have been successfully handled and are not active concerns.
 - Focus recommendations on actual security gaps, not on test files or already-resolved detections.
+- NEVER reference Microsoft 365 Defender, Intune, or Azure. Always reference Peritus Secure pages and features.
 
 Format your response as a JSON object with the following structure:
 {
@@ -192,7 +204,7 @@ Format your response as a JSON object with the following structure:
       "title": "Short title",
       "description": "Detailed explanation of the issue",
       "priority": "critical" | "high" | "medium" | "low",
-      "action": "Specific steps to remediate",
+      "action": "Specific steps to remediate using Peritus Secure (reference specific pages)",
       "impact": "What improves if this is fixed"
     }
   ],
@@ -203,7 +215,8 @@ Guidelines:
 - Only include recommendations for ACTUAL security issues, not test files or resolved threats.
 - If all protections are enabled and threats are resolved/test files, acknowledge the strong security posture.
 - Provide 0-7 recommendations based on actual issues found. It's okay to have zero recommendations if security is good.
-- If there are no endpoints or data, acknowledge that and suggest deploying agents.`;
+- If there are no endpoints or data, acknowledge that and suggest deploying agents via the Deploy Agent page.
+- Always reference Peritus Secure features, never Microsoft 365 Defender or other Microsoft admin portals.`;
 
     // Call OpenAI
     const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
