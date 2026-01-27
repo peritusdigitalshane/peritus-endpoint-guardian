@@ -20,13 +20,23 @@ const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
   return btoa(binary);
 };
 
-const createSinglePngIco = (pngBytes: Uint8Array, width: number, height: number): ArrayBuffer => {
-  // ICO container holding a single PNG image.
-  // Windows supports PNG-compressed images inside .ico.
+const createSingleBmpIco = (imageData: ImageData): ArrayBuffer => {
+  // ICO container holding a single 32bpp BMP (DIB) image.
+  // This format is reliably readable by .NET Framework's System.Drawing.Icon.
+  const width = imageData.width;
+  const height = imageData.height;
+
   const headerSize = 6;
   const entrySize = 16;
   const imageOffset = headerSize + entrySize;
-  const out = new Uint8Array(imageOffset + pngBytes.length);
+
+  const dibHeaderSize = 40; // BITMAPINFOHEADER
+  const pixelDataSize = width * height * 4; // BGRA
+  const andRowBytes = Math.ceil(width / 32) * 4; // rows aligned to 32 bits
+  const andMaskSize = andRowBytes * height;
+  const imageSize = dibHeaderSize + pixelDataSize + andMaskSize;
+
+  const out = new Uint8Array(imageOffset + imageSize);
   const dv = new DataView(out.buffer);
 
   // ICONDIR
@@ -41,15 +51,48 @@ const createSinglePngIco = (pngBytes: Uint8Array, width: number, height: number)
   out[9] = 0; // reserved
   dv.setUint16(10, 1, true); // planes
   dv.setUint16(12, 32, true); // bit count
-  dv.setUint32(14, pngBytes.length, true); // bytes in resource
+  dv.setUint32(14, imageSize, true); // bytes in resource
   dv.setUint32(18, imageOffset, true); // image offset
 
-  out.set(pngBytes, imageOffset);
+  // BITMAPINFOHEADER
+  const p = imageOffset;
+  dv.setUint32(p + 0, dibHeaderSize, true);
+  dv.setInt32(p + 4, width, true);
+  dv.setInt32(p + 8, height * 2, true); // color + mask
+  dv.setUint16(p + 12, 1, true); // planes
+  dv.setUint16(p + 14, 32, true); // bpp
+  dv.setUint32(p + 16, 0, true); // BI_RGB
+  dv.setUint32(p + 20, pixelDataSize + andMaskSize, true);
+  dv.setInt32(p + 24, 0, true); // ppm X
+  dv.setInt32(p + 28, 0, true); // ppm Y
+  dv.setUint32(p + 32, 0, true); // colors used
+  dv.setUint32(p + 36, 0, true); // important colors
+
+  // Pixel data (BGRA, bottom-up)
+  const src = imageData.data;
+  const pixelStart = p + dibHeaderSize;
+  for (let y = 0; y < height; y++) {
+    const srcY = height - 1 - y;
+    for (let x = 0; x < width; x++) {
+      const si = (srcY * width + x) * 4;
+      const di = pixelStart + (y * width + x) * 4;
+      out[di + 0] = src[si + 2]; // B
+      out[di + 1] = src[si + 1]; // G
+      out[di + 2] = src[si + 0]; // R
+      out[di + 3] = src[si + 3]; // A
+    }
+  }
+
+  // AND mask (all zero = fully opaque)
+  // out is already zero-initialized in most JS engines, but ensure it explicitly.
+  const maskStart = pixelStart + pixelDataSize;
+  out.fill(0, maskStart, maskStart + andMaskSize);
+
   return out.buffer;
 };
 
 const blobToIcoBase64 = async (blob: Blob, size = 32) => {
-  // Convert a PNG to an ICO (single 32x32 PNG) so PowerShell can write bytes directly.
+  // Convert the source image to a BMP-based .ico in-browser.
   const url = URL.createObjectURL(blob);
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -73,18 +116,8 @@ const blobToIcoBase64 = async (blob: Blob, size = 32) => {
     const y = Math.round((size - h) / 2);
     ctx.drawImage(img, x, y, w, h);
 
-    const pngBlob: Blob = await new Promise((resolve, reject) => {
-      canvas.toBlob(
-        (b) => {
-          if (b) resolve(b);
-          else reject(new Error("Failed to encode icon image"));
-        },
-        "image/png"
-      );
-    });
-
-    const pngBuf = await pngBlob.arrayBuffer();
-    const icoBuf = createSinglePngIco(new Uint8Array(pngBuf), size, size);
+    const imageData = ctx.getImageData(0, 0, size, size);
+    const icoBuf = createSingleBmpIco(imageData);
     return arrayBufferToBase64(icoBuf);
   } finally {
     URL.revokeObjectURL(url);
