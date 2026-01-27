@@ -1278,19 +1278,32 @@ function Write-EmbeddedTrayIcon {
     
     Write-Log "Processing embedded icon (Base64 length: $($b64.Length) chars)"
 
-    $memStream = $null
-    $originalBitmap = $null
-    $resized = $null
-    $graphics = $null
-    $fileStream = $null
-
     try {
         $pngBytes = [Convert]::FromBase64String($b64)
         Write-Log "Decoded PNG bytes: $($pngBytes.Length)"
 
+        # Use WPF's more tolerant image decoder instead of GDI+
+        Add-Type -AssemblyName PresentationCore -ErrorAction Stop
+        
         $memStream = New-Object System.IO.MemoryStream(,$pngBytes)
-        $originalBitmap = [System.Drawing.Image]::FromStream($memStream)
-        Write-Log "Loaded image: $($originalBitmap.Width)x$($originalBitmap.Height)"
+        $decoder = New-Object System.Windows.Media.Imaging.PngBitmapDecoder(
+            $memStream,
+            [System.Windows.Media.Imaging.BitmapCreateOptions]::PreservePixelFormat,
+            [System.Windows.Media.Imaging.BitmapCacheOption]::OnLoad
+        )
+        $frame = $decoder.Frames[0]
+        Write-Log "Loaded image via WPF: $($frame.PixelWidth)x$($frame.PixelHeight)"
+
+        # Convert WPF BitmapSource to GDI+ Bitmap for icon creation
+        $encoder = New-Object System.Windows.Media.Imaging.PngBitmapEncoder
+        $encoder.Frames.Add([System.Windows.Media.Imaging.BitmapFrame]::Create($frame))
+        
+        $convertedStream = New-Object System.IO.MemoryStream
+        $encoder.Save($convertedStream)
+        $convertedStream.Position = 0
+        
+        $originalBitmap = [System.Drawing.Image]::FromStream($convertedStream)
+        Write-Log "Converted to GDI+: $($originalBitmap.Width)x$($originalBitmap.Height)"
 
         # Create 32x32 bitmap for tray icon
         $resized = New-Object System.Drawing.Bitmap(32, 32, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
@@ -1302,7 +1315,6 @@ function Write-EmbeddedTrayIcon {
         $graphics.Clear([System.Drawing.Color]::Transparent)
         $graphics.DrawImage($originalBitmap, 0, 0, 32, 32)
         $graphics.Dispose()
-        $graphics = $null
 
         # Convert bitmap to icon via handle
         $iconHandle = $resized.GetHicon()
@@ -1312,7 +1324,12 @@ function Write-EmbeddedTrayIcon {
         $fileStream = [System.IO.File]::Create($TrayIconFile)
         $icon.Save($fileStream)
         $fileStream.Close()
-        $fileStream = $null
+
+        # Cleanup
+        $resized.Dispose()
+        $originalBitmap.Dispose()
+        $convertedStream.Dispose()
+        $memStream.Dispose()
 
         Write-Log "Tray icon saved to: $TrayIconFile (file exists: $(Test-Path $TrayIconFile))"
         return $true
@@ -1320,12 +1337,6 @@ function Write-EmbeddedTrayIcon {
         Write-Log "Failed to create tray icon: $($_.Exception.Message)" -Level "WARN"
         Write-Log "Stack: $($_.ScriptStackTrace)" -Level "WARN"
         return $false
-    } finally {
-        if ($fileStream) { try { $fileStream.Dispose() } catch {} }
-        if ($graphics) { try { $graphics.Dispose() } catch {} }
-        if ($resized) { try { $resized.Dispose() } catch {} }
-        if ($originalBitmap) { try { $originalBitmap.Dispose() } catch {} }
-        if ($memStream) { try { $memStream.Dispose() } catch {} }
     }
 }
 
