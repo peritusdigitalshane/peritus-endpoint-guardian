@@ -17,6 +17,7 @@ export interface EndpointEventLog {
   endpoints?: {
     hostname: string;
     organization_id: string;
+    policy_id: string | null;
   };
 }
 
@@ -30,7 +31,7 @@ export function useEventLogs(limit = 100) {
         .from("endpoint_event_logs")
         .select(`
           *,
-          endpoints!inner(hostname, organization_id)
+          endpoints!inner(hostname, organization_id, policy_id)
         `)
         .order("event_time", { ascending: false })
         .limit(limit);

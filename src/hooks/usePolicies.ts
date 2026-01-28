@@ -197,3 +197,75 @@ export function useAssignPolicy() {
     },
   });
 }
+
+export function useAddPolicyExclusion() {
+  const queryClient = useQueryClient();
+  const { currentOrganization } = useTenant();
+
+  return useMutation({
+    mutationFn: async ({
+      policyId,
+      exclusionType,
+      value,
+      policyName,
+    }: {
+      policyId: string;
+      exclusionType: "path" | "process";
+      value: string;
+      policyName?: string;
+    }) => {
+      // First fetch the current policy to get existing exclusions
+      const { data: policy, error: fetchError } = await supabase
+        .from("defender_policies")
+        .select("exclusion_paths, exclusion_processes, organization_id")
+        .eq("id", policyId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Build the update based on exclusion type
+      const updateData: { exclusion_paths?: string[]; exclusion_processes?: string[]; updated_at: string } = {
+        updated_at: new Date().toISOString(),
+      };
+
+      if (exclusionType === "path") {
+        const currentPaths = policy.exclusion_paths ?? [];
+        if (!currentPaths.includes(value)) {
+          updateData.exclusion_paths = [...currentPaths, value];
+        }
+      } else {
+        const currentProcesses = policy.exclusion_processes ?? [];
+        if (!currentProcesses.includes(value)) {
+          updateData.exclusion_processes = [...currentProcesses, value];
+        }
+      }
+
+      // Update the policy
+      const { data, error } = await supabase
+        .from("defender_policies")
+        .update(updateData)
+        .eq("id", policyId)
+        .select("*")
+        .single();
+
+      if (error) throw error;
+
+      // Log activity
+      if (policy.organization_id) {
+        await logActivity(
+          policy.organization_id,
+          "exclusion_added",
+          "policy",
+          policyId,
+          { policy: policyName, exclusion_type: exclusionType, value }
+        );
+      }
+
+      return data as DefenderPolicy;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["policies"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
+    },
+  });
+}
