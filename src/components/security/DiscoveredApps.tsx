@@ -16,7 +16,6 @@ import {
   Loader2, 
   CheckCircle2, 
   XCircle, 
-  Camera,
   Filter,
   Layers,
   Crosshair,
@@ -35,7 +34,7 @@ export function DiscoveredApps({ selectedPolicyId }: DiscoveredAppsProps) {
   const { data: apps, isLoading } = useWdacDiscoveredApps();
   const { data: policies } = useWdacPolicies();
   const { data: ruleSets } = useRuleSets();
-  const { createRule, createBaseline } = useWdacMutations();
+  const { createRule } = useWdacMutations();
   const { addRulesBulk } = useRuleSetMutations();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -52,11 +51,9 @@ export function DiscoveredApps({ selectedPolicyId }: DiscoveredAppsProps) {
   const [search, setSearch] = useState("");
   const [selectedApps, setSelectedApps] = useState<Set<string>>(new Set());
   const [showRuleDialog, setShowRuleDialog] = useState(false);
-  const [showBaselineDialog, setShowBaselineDialog] = useState(false);
   const [showRuleSetDialog, setShowRuleSetDialog] = useState(false);
   const [ruleAction, setRuleAction] = useState<"allow" | "block">("allow");
   const [ruleType, setRuleType] = useState<"publisher" | "path" | "hash" | "file_name">("publisher");
-  const [baselineName, setBaselineName] = useState("");
   const [selectedRuleSetId, setSelectedRuleSetId] = useState<string>("");
 
   const filteredApps = useMemo(() => {
@@ -172,29 +169,6 @@ export function DiscoveredApps({ selectedPolicyId }: DiscoveredAppsProps) {
     setSelectedRuleSetId("");
   };
 
-  const handleCreateBaseline = () => {
-    if (!selectedPolicyId || !baselineName) return;
-    
-    const selectedAppsList = filteredApps.filter((a) => selectedApps.has(a.id));
-    const snapshotData = selectedAppsList.map((app) => ({
-      file_name: app.file_name,
-      file_path: app.file_path,
-      file_hash: app.file_hash,
-      publisher: app.publisher,
-      product_name: app.product_name,
-    }));
-    
-    createBaseline.mutate({
-      policy_id: selectedPolicyId,
-      name: baselineName,
-      snapshot_data: snapshotData,
-    });
-    
-    setShowBaselineDialog(false);
-    setBaselineName("");
-    setSelectedApps(new Set());
-  };
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -226,24 +200,14 @@ export function DiscoveredApps({ selectedPolicyId }: DiscoveredAppsProps) {
                 </Button>
               )}
               {selectedPolicyId && (
-                <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowBaselineDialog(true)}
-                  >
-                    <Camera className="h-4 w-4 mr-2" />
-                    Baseline ({selectedApps.size})
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowRuleDialog(true)}
-                  >
-                    <Filter className="h-4 w-4 mr-2" />
-                    Legacy Rules ({selectedApps.size})
-                  </Button>
-                </>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowRuleDialog(true)}
+                >
+                  <Filter className="h-4 w-4 mr-2" />
+                  Legacy Rules ({selectedApps.size})
+                </Button>
               )}
             </>
           )}
@@ -448,41 +412,6 @@ export function DiscoveredApps({ selectedPolicyId }: DiscoveredAppsProps) {
         </DialogContent>
       </Dialog>
 
-      {/* Create Baseline Dialog */}
-      <Dialog open={showBaselineDialog} onOpenChange={setShowBaselineDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create Baseline Snapshot</DialogTitle>
-            <DialogDescription>
-              Capture the current state of {selectedApps.size} selected application(s) as a baseline.
-              This can be used to quickly restore or compare application states.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="baseline-name">Baseline Name</Label>
-              <Input
-                id="baseline-name"
-                value={baselineName}
-                onChange={(e) => setBaselineName(e.target.value)}
-                placeholder="e.g., Production Baseline 2024-01"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowBaselineDialog(false)}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleCreateBaseline} 
-              disabled={!baselineName || createBaseline.isPending}
-            >
-              {createBaseline.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Create Baseline
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Add to Rule Set Dialog */}
       <Dialog open={showRuleSetDialog} onOpenChange={setShowRuleSetDialog}>

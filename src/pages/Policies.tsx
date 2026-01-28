@@ -15,7 +15,6 @@ import { useCreatePolicy, usePolicies, useUpdatePolicy } from "@/hooks/usePolici
 // Import security components
 import { WdacPolicies } from "@/components/security/WdacPolicies";
 import { DiscoveredApps } from "@/components/security/DiscoveredApps";
-import { WdacRules } from "@/components/security/WdacRules";
 import { EndpointWdacList } from "@/components/security/EndpointWdacList";
 import { RuleSetsManager } from "@/components/security/RuleSetsManager";
 import { UacPoliciesManager } from "@/components/security/UacPoliciesManager";
@@ -148,10 +147,6 @@ const Policies = () => {
               <Shield className="h-4 w-4" />
               <span className="hidden sm:inline">Discovered Apps</span>
             </TabsTrigger>
-            <TabsTrigger value="baselines" className="flex items-center gap-2">
-              <Shield className="h-4 w-4" />
-              <span className="hidden sm:inline">WDAC Baselines</span>
-            </TabsTrigger>
             <TabsTrigger value="wdac-policies" className="flex items-center gap-2">
               <Shield className="h-4 w-4" />
               <span className="hidden sm:inline">WDAC Policies (Legacy)</span>
@@ -252,11 +247,6 @@ const Policies = () => {
           {/* Discovered Apps Tab */}
           <TabsContent value="apps">
             <DiscoveredApps selectedPolicyId={selectedWdacPolicyId} />
-          </TabsContent>
-
-          {/* Baselines Tab */}
-          <TabsContent value="baselines">
-            <WdacRules selectedPolicyId={selectedWdacPolicyId} onSelectPolicy={setSelectedWdacPolicyId} />
           </TabsContent>
 
           {/* WDAC Policies Tab */}
