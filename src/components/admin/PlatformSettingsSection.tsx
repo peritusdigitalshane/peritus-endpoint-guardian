@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
+import { VirusTotalSettingsCard } from "./VirusTotalSettingsCard";
 
 interface OpenAIModel {
   id: string;

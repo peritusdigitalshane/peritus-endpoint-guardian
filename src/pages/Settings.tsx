@@ -2,7 +2,8 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTenant } from "@/contexts/TenantContext";
 import { PlatformSettingsSection } from "@/components/admin/PlatformSettingsSection";
-import { Building2, Shield } from "lucide-react";
+import { VirusTotalSettingsCard } from "@/components/admin/VirusTotalSettingsCard";
+import { Building2 } from "lucide-react";
 
 const Settings = () => {
   const { currentOrganization, isSuperAdmin } = useTenant();
@@ -53,8 +54,13 @@ const Settings = () => {
             </CardContent>
           </Card>
 
-          {/* AI Settings - Super Admin Only */}
-          {isSuperAdmin && <PlatformSettingsSection />}
+          {/* Super Admin Only Settings */}
+          {isSuperAdmin && (
+            <>
+              <PlatformSettingsSection />
+              <VirusTotalSettingsCard />
+            </>
+          )}
         </div>
       </div>
     </MainLayout>

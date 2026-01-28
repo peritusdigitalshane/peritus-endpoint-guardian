@@ -1005,6 +1005,9 @@ export type Database = {
           tags: string[] | null
           threat_name: string | null
           value: string
+          vt_detection_ratio: string | null
+          vt_enriched_at: string | null
+          vt_enrichment: Json | null
         }
         Insert: {
           created_at?: string
@@ -1020,6 +1023,9 @@ export type Database = {
           tags?: string[] | null
           threat_name?: string | null
           value: string
+          vt_detection_ratio?: string | null
+          vt_enriched_at?: string | null
+          vt_enrichment?: Json | null
         }
         Update: {
           created_at?: string
@@ -1035,6 +1041,9 @@ export type Database = {
           tags?: string[] | null
           threat_name?: string | null
           value?: string
+          vt_detection_ratio?: string | null
+          vt_enriched_at?: string | null
+          vt_enrichment?: Json | null
         }
         Relationships: [
           {

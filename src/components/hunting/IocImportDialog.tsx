@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useIocLibrary, detectIocType, type Severity, type IocSource } from "@/hooks/useThreatHunting";
+import { useIocLibrary, detectIocType, type Severity, type IocSource, type IocCreateInput } from "@/hooks/useThreatHunting";
 
 interface IocImportDialogProps {
   open: boolean;
@@ -88,7 +88,7 @@ export function IocImportDialog({ open, onOpenChange }: IocImportDialogProps) {
       });
     }
 
-    const formattedIocs = iocs.map(ioc => {
+    const formattedIocs: IocCreateInput[] = iocs.map(ioc => {
       const detection = detectIocType(ioc.value);
       return {
         value: ioc.value.trim(),
