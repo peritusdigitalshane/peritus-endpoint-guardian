@@ -21,6 +21,7 @@ import Admin from "./pages/Admin";
 import Users from "./pages/Users";
 import Settings from "./pages/Settings";
 import Recommendations from "./pages/Recommendations";
+import ThreatHunting from "./pages/ThreatHunting";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -97,6 +98,14 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <EventLogs />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/threat-hunting"
+                element={
+                  <ProtectedRoute>
+                    <ThreatHunting />
                   </ProtectedRoute>
                 }
               />

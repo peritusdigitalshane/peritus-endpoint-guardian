@@ -856,6 +856,203 @@ export type Database = {
           },
         ]
       }
+      hunt_jobs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          hunt_type: string
+          id: string
+          matches_found: number | null
+          name: string
+          organization_id: string
+          parameters: Json
+          started_at: string | null
+          status: string
+          total_endpoints: number | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          hunt_type: string
+          id?: string
+          matches_found?: number | null
+          name: string
+          organization_id: string
+          parameters?: Json
+          started_at?: string | null
+          status?: string
+          total_endpoints?: number | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          hunt_type?: string
+          id?: string
+          matches_found?: number | null
+          name?: string
+          organization_id?: string
+          parameters?: Json
+          started_at?: string | null
+          status?: string
+          total_endpoints?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hunt_jobs_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hunt_jobs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hunt_matches: {
+        Row: {
+          context: Json | null
+          created_at: string
+          endpoint_id: string
+          hunt_job_id: string
+          id: string
+          ioc_id: string | null
+          match_source: string
+          matched_value: string
+          reviewed: boolean
+          reviewed_at: string | null
+          reviewed_by: string | null
+        }
+        Insert: {
+          context?: Json | null
+          created_at?: string
+          endpoint_id: string
+          hunt_job_id: string
+          id?: string
+          ioc_id?: string | null
+          match_source: string
+          matched_value: string
+          reviewed?: boolean
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+        }
+        Update: {
+          context?: Json | null
+          created_at?: string
+          endpoint_id?: string
+          hunt_job_id?: string
+          id?: string
+          ioc_id?: string | null
+          match_source?: string
+          matched_value?: string
+          reviewed?: boolean
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hunt_matches_endpoint_id_fkey"
+            columns: ["endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "endpoints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hunt_matches_hunt_job_id_fkey"
+            columns: ["hunt_job_id"]
+            isOneToOne: false
+            referencedRelation: "hunt_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hunt_matches_ioc_id_fkey"
+            columns: ["ioc_id"]
+            isOneToOne: false
+            referencedRelation: "ioc_library"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hunt_matches_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ioc_library: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          hash_type: string | null
+          id: string
+          ioc_type: string
+          is_active: boolean
+          organization_id: string
+          severity: string
+          source: string
+          tags: string[] | null
+          threat_name: string | null
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          hash_type?: string | null
+          id?: string
+          ioc_type: string
+          is_active?: boolean
+          organization_id: string
+          severity?: string
+          source?: string
+          tags?: string[] | null
+          threat_name?: string | null
+          value: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          hash_type?: string | null
+          id?: string
+          ioc_type?: string
+          is_active?: boolean
+          organization_id?: string
+          severity?: string
+          source?: string
+          tags?: string[] | null
+          threat_name?: string | null
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ioc_library_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ioc_library_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_memberships: {
         Row: {
           created_at: string
