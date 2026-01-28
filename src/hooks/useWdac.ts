@@ -48,15 +48,6 @@ export interface WdacRule {
   created_by: string | null;
 }
 
-export interface WdacBaseline {
-  id: string;
-  policy_id: string;
-  name: string;
-  description: string | null;
-  snapshot_data: unknown[];
-  created_at: string;
-  created_by: string | null;
-}
 
 // Fetch WDAC policies
 export function useWdacPolicies() {
@@ -126,25 +117,6 @@ export function useWdacRules(policyId: string | null) {
   });
 }
 
-// Fetch baselines for a policy
-export function useWdacBaselines(policyId: string | null) {
-  return useQuery({
-    queryKey: ["wdac-baselines", policyId],
-    queryFn: async () => {
-      if (!policyId) return [];
-      
-      const { data, error } = await supabase
-        .from("wdac_baselines")
-        .select("*")
-        .eq("policy_id", policyId)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      return data as WdacBaseline[];
-    },
-    enabled: !!policyId,
-  });
-}
 
 // Mutations
 export function useWdacMutations() {
@@ -264,28 +236,6 @@ export function useWdacMutations() {
     },
   });
 
-  const createBaseline = useMutation({
-    mutationFn: async (baseline: { policy_id: string; name: string; description?: string; snapshot_data: unknown[] }) => {
-      const { data, error } = await supabase
-        .from("wdac_baselines")
-        .insert({ policy_id: baseline.policy_id, name: baseline.name, description: baseline.description, snapshot_data: baseline.snapshot_data as unknown as undefined })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["wdac-baselines", data.policy_id] });
-      logActivity(currentOrganization!.id, "create", "wdac_baseline", data.id, {
-        baseline_name: data.name,
-      });
-      toast({ title: "Baseline created", description: "Current application state has been captured" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Failed to create baseline", description: error.message, variant: "destructive" });
-    },
-  });
 
   return {
     createPolicy,
@@ -293,6 +243,5 @@ export function useWdacMutations() {
     deletePolicy,
     createRule,
     deleteRule,
-    createBaseline,
   };
 }
