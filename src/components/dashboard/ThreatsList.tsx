@@ -172,7 +172,7 @@ export function ThreatsList({
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {enableResolveActions && statusDisplay.label !== "Resolved" ? (
+                  {enableResolveActions && !["Resolved", "Blocked", "Removed"].includes(statusDisplay.label) ? (
                     <Button
                       variant="outline"
                       size="sm"
