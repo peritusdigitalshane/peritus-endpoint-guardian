@@ -173,6 +173,11 @@ Deno.serve(async (req) => {
       return await handleGetStatus(req);
     }
 
+    // Route: GET /agent-update - Check for agent updates and get new script
+    if (path === "/agent-update" && req.method === "GET") {
+      return await handleAgentUpdate(req);
+    }
+
     return new Response(JSON.stringify({ error: "Not found" }), {
       status: 404,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -1373,4 +1378,66 @@ async function handleGetStatus(req: Request) {
     }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
+}
+
+// Current agent version - increment when agent script changes
+const AGENT_VERSION = "2.7.0";
+
+// GET /agent-update - Check for updates and return new script if needed
+async function handleAgentUpdate(req: Request) {
+  const endpoint = await validateAgentToken(req);
+  const url = new URL(req.url);
+  const currentVersion = url.searchParams.get("version");
+
+  // Compare versions - simple semantic version comparison
+  const needsUpdate = !currentVersion || compareVersions(AGENT_VERSION, currentVersion) > 0;
+
+  if (!needsUpdate) {
+    return new Response(
+      JSON.stringify({
+        success: true,
+        update_available: false,
+        current_version: AGENT_VERSION,
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  // Fetch the agent script template from platform_settings or return a placeholder
+  // In production, this would fetch from a stored script or generate dynamically
+  const { data: orgData } = await supabase
+    .from("endpoints")
+    .select("organization_id")
+    .eq("id", endpoint.id)
+    .single();
+
+  if (!orgData) {
+    throw new Error("Endpoint organization not found");
+  }
+
+  return new Response(
+    JSON.stringify({
+      success: true,
+      update_available: true,
+      current_version: AGENT_VERSION,
+      organization_id: orgData.organization_id,
+      // Agent will download from the agent-script edge function using its token
+      script_endpoint: `${SUPABASE_URL}/functions/v1/agent-script`,
+    }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+
+// Compare semantic versions: returns 1 if a > b, -1 if a < b, 0 if equal
+function compareVersions(a: string, b: string): number {
+  const partsA = a.split(".").map(Number);
+  const partsB = b.split(".").map(Number);
+  
+  for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
+    const numA = partsA[i] || 0;
+    const numB = partsB[i] || 0;
+    if (numA > numB) return 1;
+    if (numA < numB) return -1;
+  }
+  return 0;
 }

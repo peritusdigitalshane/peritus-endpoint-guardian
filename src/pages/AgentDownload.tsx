@@ -167,6 +167,7 @@ $ApiBaseUrl = "${apiBaseUrl}"
 $TaskName = "PeritusSecureAgent"
 $TrayTaskName = "PeritusSecureTray"
 $ServiceName = "Peritus Secure Agent"
+$AgentVersion = "2.7.0"
 
 # Store ForceFullLogSync in script scope so functions can access it
 $script:ForceFullLogSync = $ForceFullLogSync.IsPresent
@@ -178,6 +179,7 @@ $ScriptPath = "$ConfigPath\\PeritusSecureAgent.ps1"
 $LogFile = "$ConfigPath\\agent.log"
 $PolicyHashFile = "$ConfigPath\\policy_hash.txt"
 $TrayIconFile = "$ConfigPath\\tray_icon.ico"
+$UpdateLockFile = "$ConfigPath\\update.lock"
 
 function Write-Log {
     param([string]$Message, [string]$Level = "INFO")
@@ -187,6 +189,80 @@ function Write-Log {
     
     if (Test-Path $ConfigPath) {
         Add-Content -Path $LogFile -Value $logMessage -ErrorAction SilentlyContinue
+    }
+}
+
+function Check-AgentUpdate {
+    param([string]$AgentToken)
+    
+    # Skip update check in TrayMode (background task handles updates)
+    if ($TrayMode) { return $false }
+    
+    # Prevent concurrent update attempts
+    if (Test-Path $UpdateLockFile) {
+        $lockAge = (Get-Date) - (Get-Item $UpdateLockFile).LastWriteTime
+        if ($lockAge.TotalMinutes -lt 5) {
+            Write-Log "Update already in progress, skipping check"
+            return $false
+        }
+        # Stale lock, remove it
+        Remove-Item $UpdateLockFile -Force -ErrorAction SilentlyContinue
+    }
+    
+    try {
+        Write-Log "Checking for agent updates (current version: $AgentVersion)..."
+        $headers = @{ "Content-Type" = "application/json"; "x-agent-token" = $AgentToken }
+        $response = Invoke-RestMethod -Uri "$ApiBaseUrl/agent-update?version=$AgentVersion" -Method GET -Headers $headers -TimeoutSec 30
+        
+        if (-not $response.update_available) {
+            Write-Log "Agent is up to date"
+            return $false
+        }
+        
+        Write-Log "Update available: version $($response.current_version)"
+        
+        # Create lock file
+        "updating" | Set-Content -Path $UpdateLockFile -Force
+        
+        # Download new script from the agent-script edge function
+        $scriptEndpoint = $response.script_endpoint
+        if (-not $scriptEndpoint) {
+            Write-Log "No script endpoint provided, skipping update" -Level "WARN"
+            Remove-Item $UpdateLockFile -Force -ErrorAction SilentlyContinue
+            return $false
+        }
+        
+        Write-Log "Downloading updated agent from: $scriptEndpoint"
+        $newScript = Invoke-RestMethod -Uri $scriptEndpoint -Method GET -Headers $headers -TimeoutSec 60
+        
+        if (-not $newScript -or $newScript.Length -lt 1000) {
+            Write-Log "Downloaded script appears invalid, skipping update" -Level "WARN"
+            Remove-Item $UpdateLockFile -Force -ErrorAction SilentlyContinue
+            return $false
+        }
+        
+        # Backup current script
+        $backupPath = "$ConfigPath\\PeritusSecureAgent.backup.ps1"
+        if (Test-Path $ScriptPath) {
+            Copy-Item $ScriptPath $backupPath -Force
+            Write-Log "Backed up current script to: $backupPath"
+        }
+        
+        # Write new script
+        $newScript | Set-Content -Path $ScriptPath -Force -Encoding UTF8
+        Write-Log "Updated agent script installed successfully"
+        
+        # Remove lock file
+        Remove-Item $UpdateLockFile -Force -ErrorAction SilentlyContinue
+        
+        # Exit to allow scheduled task to run the new version
+        Write-Log "Agent updated to version $($response.current_version). Exiting to run new version."
+        exit 0
+        
+    } catch {
+        Write-Log "Update check failed: $_" -Level "WARN"
+        Remove-Item $UpdateLockFile -Force -ErrorAction SilentlyContinue
+        return $false
     }
 }
 
@@ -1869,6 +1945,9 @@ if ($isFirstRun) {
     Write-Log "Starting tray application..."
     Start-Process powershell.exe -ArgumentList "-WindowStyle Hidden -ExecutionPolicy Bypass -File \`"$ScriptPath\`" -TrayMode" -WindowStyle Hidden
 }
+
+# Check for agent updates before running main logic
+Check-AgentUpdate -AgentToken $agentToken
 
 Send-Heartbeat -AgentToken $agentToken
 Send-Threats -AgentToken $agentToken
