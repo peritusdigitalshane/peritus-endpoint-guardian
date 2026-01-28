@@ -814,6 +814,214 @@ export type Database = {
           },
         ]
       }
+      firewall_audit_logs: {
+        Row: {
+          created_at: string
+          direction: string
+          endpoint_id: string
+          event_time: string
+          id: string
+          local_port: number
+          organization_id: string
+          protocol: string
+          remote_address: string
+          remote_port: number | null
+          rule_id: string | null
+          service_name: string
+        }
+        Insert: {
+          created_at?: string
+          direction?: string
+          endpoint_id: string
+          event_time: string
+          id?: string
+          local_port: number
+          organization_id: string
+          protocol?: string
+          remote_address: string
+          remote_port?: number | null
+          rule_id?: string | null
+          service_name: string
+        }
+        Update: {
+          created_at?: string
+          direction?: string
+          endpoint_id?: string
+          event_time?: string
+          id?: string
+          local_port?: number
+          organization_id?: string
+          protocol?: string
+          remote_address?: string
+          remote_port?: number | null
+          rule_id?: string | null
+          service_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "firewall_audit_logs_endpoint_id_fkey"
+            columns: ["endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "endpoints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "firewall_audit_logs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "firewall_audit_logs_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "firewall_service_rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      firewall_policies: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_default: boolean
+          name: string
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_default?: boolean
+          name: string
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_default?: boolean
+          name?: string
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "firewall_policies_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "firewall_policies_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      firewall_service_rules: {
+        Row: {
+          action: string
+          allowed_source_groups: string[] | null
+          allowed_source_ips: string[] | null
+          created_at: string
+          enabled: boolean
+          endpoint_group_id: string
+          id: string
+          mode: string
+          order_priority: number
+          policy_id: string
+          port: string
+          protocol: string
+          service_name: string
+        }
+        Insert: {
+          action?: string
+          allowed_source_groups?: string[] | null
+          allowed_source_ips?: string[] | null
+          created_at?: string
+          enabled?: boolean
+          endpoint_group_id: string
+          id?: string
+          mode?: string
+          order_priority?: number
+          policy_id: string
+          port: string
+          protocol?: string
+          service_name: string
+        }
+        Update: {
+          action?: string
+          allowed_source_groups?: string[] | null
+          allowed_source_ips?: string[] | null
+          created_at?: string
+          enabled?: boolean
+          endpoint_group_id?: string
+          id?: string
+          mode?: string
+          order_priority?: number
+          policy_id?: string
+          port?: string
+          protocol?: string
+          service_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "firewall_service_rules_endpoint_group_id_fkey"
+            columns: ["endpoint_group_id"]
+            isOneToOne: false
+            referencedRelation: "endpoint_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "firewall_service_rules_policy_id_fkey"
+            columns: ["policy_id"]
+            isOneToOne: false
+            referencedRelation: "firewall_policies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      firewall_templates: {
+        Row: {
+          category: string
+          created_at: string
+          default_mode: string
+          description: string | null
+          id: string
+          name: string
+          rules_json: Json
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          default_mode?: string
+          description?: string | null
+          id?: string
+          name: string
+          rules_json?: Json
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          default_mode?: string
+          description?: string | null
+          id?: string
+          name?: string
+          rules_json?: Json
+        }
+        Relationships: []
+      }
       group_rule_set_assignments: {
         Row: {
           assigned_at: string

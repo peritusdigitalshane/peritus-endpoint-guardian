@@ -15,6 +15,7 @@ import {
   FolderOpen,
   Sparkles,
   Crosshair,
+  Network,
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
@@ -28,6 +29,7 @@ const navigation = [
   { name: "Event Logs", href: "/logs", icon: ScrollText },
   { name: "Threat Hunting", href: "/threat-hunting", icon: Crosshair },
   { name: "Policies", href: "/policies", icon: FileText },
+  { name: "Network", href: "/network", icon: Network },
   { name: "AI Advisor", href: "/recommendations", icon: Sparkles },
   { name: "Deploy Agent", href: "/deploy", icon: Download },
   { name: "Activity", href: "/activity", icon: Activity },
