@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Trash2, Edit, MoreHorizontal, Power, PowerOff } from "lucide-react";
+import { Plus, Trash2, Edit, MoreHorizontal, Power, PowerOff, Search, Loader2, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -34,9 +35,10 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useIocLibrary, detectIocType, type Ioc, type IocType, type Severity, type IocSource } from "@/hooks/useThreatHunting";
+import { useIocLibrary, useVirusTotalLookup, detectIocType, type Ioc, type IocType, type Severity, type IocSource, type VTEnrichmentData, type IocCreateInput } from "@/hooks/useThreatHunting";
 import { IocTypeIcon, getIocTypeLabel } from "./IocTypeIcon";
 import { IocImportDialog } from "./IocImportDialog";
+import { IocEnrichmentDialog } from "./IocEnrichmentDialog";
 import { formatDistanceToNow } from "date-fns";
 
 const severityColors: Record<Severity, string> = {
@@ -46,13 +48,34 @@ const severityColors: Record<Severity, string> = {
   critical: "bg-red-500/10 text-red-500 border-red-500/20",
 };
 
+function getDetectionBadgeStyle(detectionRatio: string): string {
+  const [detected, total] = detectionRatio.split("/").map(Number);
+  if (detected === 0) {
+    return "bg-green-500/10 text-green-500 border-green-500/20";
+  }
+  if (detected / total < 0.1) {
+    return "bg-yellow-500/10 text-yellow-500 border-yellow-500/20";
+  }
+  return "bg-red-500/10 text-red-500 border-red-500/20";
+}
+
 export function IocLibraryManager() {
   const { iocs, isLoading, createIoc, updateIoc, deleteIoc } = useIocLibrary();
+  const vtLookup = useVirusTotalLookup();
   const [searchFilter, setSearchFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState<IocType | "all">("all");
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [editingIoc, setEditingIoc] = useState<Ioc | null>(null);
+  const [lookupLoadingId, setLookupLoadingId] = useState<string | null>(null);
+  
+  // Enrichment dialog state
+  const [showEnrichmentDialog, setShowEnrichmentDialog] = useState(false);
+  const [selectedEnrichment, setSelectedEnrichment] = useState<{
+    iocValue: string;
+    enrichment: VTEnrichmentData | null;
+    enrichedAt: string | null;
+  } | null>(null);
   
   // Form state
   const [formValue, setFormValue] = useState("");
@@ -90,7 +113,7 @@ export function IocLibraryManager() {
 
   const handleSave = async () => {
     const detection = detectIocType(formValue);
-    const iocData = {
+    const iocData: IocCreateInput = {
       value: formValue.trim(),
       ioc_type: formType,
       hash_type: detection.hashType ?? null,
@@ -127,6 +150,26 @@ export function IocLibraryManager() {
   const handleToggleActive = async (ioc: Ioc) => {
     await updateIoc.mutateAsync({ id: ioc.id, is_active: !ioc.is_active });
   };
+
+  const handleVirusTotalLookup = async (ioc: Ioc) => {
+    setLookupLoadingId(ioc.id);
+    try {
+      await vtLookup.mutateAsync({ hash: ioc.value, iocId: ioc.id });
+    } finally {
+      setLookupLoadingId(null);
+    }
+  };
+
+  const handleViewEnrichment = (ioc: Ioc) => {
+    setSelectedEnrichment({
+      iocValue: ioc.value,
+      enrichment: ioc.vt_enrichment as VTEnrichmentData | null,
+      enrichedAt: ioc.vt_enriched_at ?? null,
+    });
+    setShowEnrichmentDialog(true);
+  };
+
+  const isHashType = (ioc: Ioc) => ioc.ioc_type === "file_hash";
 
   return (
     <div className="space-y-4">
@@ -170,6 +213,7 @@ export function IocLibraryManager() {
               <TableHead>Value</TableHead>
               <TableHead>Threat Name</TableHead>
               <TableHead>Severity</TableHead>
+              <TableHead>VT Score</TableHead>
               <TableHead>Source</TableHead>
               <TableHead>Added</TableHead>
               <TableHead className="w-[50px]"></TableHead>
@@ -178,13 +222,13 @@ export function IocLibraryManager() {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                   Loading IOCs...
                 </TableCell>
               </TableRow>
             ) : filteredIocs.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                   No IOCs found. Add your first indicator of compromise.
                 </TableCell>
               </TableRow>
@@ -206,6 +250,21 @@ export function IocLibraryManager() {
                       {ioc.severity}
                     </Badge>
                   </TableCell>
+                  <TableCell>
+                    {ioc.vt_detection_ratio ? (
+                      <Badge
+                        variant="outline"
+                        className={`cursor-pointer ${getDetectionBadgeStyle(ioc.vt_detection_ratio)}`}
+                        onClick={() => handleViewEnrichment(ioc)}
+                      >
+                        {ioc.vt_detection_ratio}
+                      </Badge>
+                    ) : isHashType(ioc) ? (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">N/A</span>
+                    )}
+                  </TableCell>
                   <TableCell className="capitalize">{ioc.source}</TableCell>
                   <TableCell className="text-muted-foreground text-sm">
                     {formatDistanceToNow(new Date(ioc.created_at), { addSuffix: true })}
@@ -218,6 +277,28 @@ export function IocLibraryManager() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        {isHashType(ioc) && (
+                          <>
+                            <DropdownMenuItem
+                              onClick={() => handleVirusTotalLookup(ioc)}
+                              disabled={lookupLoadingId === ioc.id}
+                            >
+                              {lookupLoadingId === ioc.id ? (
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              ) : (
+                                <Search className="h-4 w-4 mr-2" />
+                              )}
+                              Lookup on VirusTotal
+                            </DropdownMenuItem>
+                            {ioc.vt_enrichment && (
+                              <DropdownMenuItem onClick={() => handleViewEnrichment(ioc)}>
+                                <ExternalLink className="h-4 w-4 mr-2" />
+                                View VT Results
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator />
+                          </>
+                        )}
                         <DropdownMenuItem onClick={() => handleEdit(ioc)}>
                           <Edit className="h-4 w-4 mr-2" />
                           Edit
@@ -354,6 +435,14 @@ export function IocLibraryManager() {
       </Dialog>
 
       <IocImportDialog open={showImportDialog} onOpenChange={setShowImportDialog} />
+      
+      <IocEnrichmentDialog
+        open={showEnrichmentDialog}
+        onOpenChange={setShowEnrichmentDialog}
+        iocValue={selectedEnrichment?.iocValue ?? ""}
+        enrichment={selectedEnrichment?.enrichment ?? null}
+        enrichedAt={selectedEnrichment?.enrichedAt ?? null}
+      />
     </div>
   );
 }

@@ -12,6 +12,28 @@ export type HuntStatus = "pending" | "running" | "completed" | "failed";
 export type HuntType = "ioc_sweep" | "quick_search" | "pattern_search";
 export type MatchSource = "discovered_apps" | "threats" | "event_logs";
 
+export interface VTEnrichmentData {
+  detection_ratio: string;
+  malicious_count: number;
+  total_engines: number;
+  threat_names: string[];
+  file_type: string | null;
+  file_size: number | null;
+  meaningful_name: string | null;
+  first_submission_date: string | null;
+  last_analysis_date: string | null;
+  sha256: string | null;
+  sha1: string | null;
+  md5: string | null;
+  raw_stats: {
+    malicious: number;
+    suspicious: number;
+    harmless: number;
+    undetected: number;
+    timeout: number;
+  };
+}
+
 export interface Ioc {
   id: string;
   organization_id: string;
@@ -26,7 +48,14 @@ export interface Ioc {
   tags: string[];
   created_at: string;
   created_by: string | null;
+  // VT enrichment fields - use unknown for JSON compatibility
+  vt_enrichment: unknown;
+  vt_enriched_at: string | null;
+  vt_detection_ratio: string | null;
 }
+
+// Type for creating IOCs (without VT fields which are set server-side)
+export type IocCreateInput = Omit<Ioc, "id" | "created_at" | "organization_id" | "vt_enrichment" | "vt_enriched_at" | "vt_detection_ratio">;
 
 export interface HuntJob {
   id: string;
@@ -127,11 +156,13 @@ export function useIocLibrary() {
   });
 
   const createIoc = useMutation({
-    mutationFn: async (ioc: Omit<Ioc, "id" | "created_at" | "organization_id">) => {
+    mutationFn: async (ioc: IocCreateInput) => {
       if (!orgId) throw new Error("No organization selected");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const insertData: any = { ...ioc, organization_id: orgId };
       const { data, error } = await supabase
         .from("ioc_library")
-        .insert({ ...ioc, organization_id: orgId })
+        .insert(insertData)
         .select()
         .single();
       
@@ -148,10 +179,12 @@ export function useIocLibrary() {
   });
 
   const updateIoc = useMutation({
-    mutationFn: async ({ id, ...updates }: Partial<Ioc> & { id: string }) => {
+    mutationFn: async ({ id, ...updates }: Partial<IocCreateInput> & { id: string }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const updateData: any = updates;
       const { data, error } = await supabase
         .from("ioc_library")
-        .update(updates)
+        .update(updateData)
         .eq("id", id)
         .select()
         .single();
@@ -187,11 +220,13 @@ export function useIocLibrary() {
   });
 
   const bulkCreateIocs = useMutation({
-    mutationFn: async (iocs: Omit<Ioc, "id" | "created_at" | "organization_id">[]) => {
+    mutationFn: async (iocs: IocCreateInput[]) => {
       if (!orgId) throw new Error("No organization selected");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const insertData: any[] = iocs.map(ioc => ({ ...ioc, organization_id: orgId }));
       const { data, error } = await supabase
         .from("ioc_library")
-        .insert(iocs.map(ioc => ({ ...ioc, organization_id: orgId })))
+        .insert(insertData)
         .select();
       
       if (error) throw error;
@@ -576,6 +611,49 @@ export function useExecuteHunt() {
         .update({ status: "failed", completed_at: new Date().toISOString() })
         .eq("id", jobId);
       toast({ title: "Hunt failed", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
+// Hook: VirusTotal Lookup
+export function useVirusTotalLookup() {
+  const { currentOrganization } = useTenant();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const orgId = currentOrganization?.id;
+
+  return useMutation({
+    mutationFn: async ({ hash, iocId }: { hash: string; iocId?: string }): Promise<VTEnrichmentData> => {
+      const { data, error } = await supabase.functions.invoke("virustotal-lookup", {
+        body: { action: "lookup", hash, iocId },
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (!data.success) {
+        throw new Error(data.error || "Lookup failed");
+      }
+
+      return data.enrichment as VTEnrichmentData;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["ioc_library", orgId] });
+      const status = data.malicious_count === 0 
+        ? "Clean - no threats detected" 
+        : `${data.malicious_count} engines detected threats`;
+      toast({
+        title: "VirusTotal lookup complete",
+        description: status,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "VirusTotal lookup failed",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 }
