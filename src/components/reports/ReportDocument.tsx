@@ -10,15 +10,16 @@ interface ReportDocumentProps {
 export function ReportDocument({ reportType, title, reportData, visibility }: ReportDocumentProps) {
   const isMonthly = reportType === "monthly_security";
 
+  // Use explicit colors for print/PDF - these will show on white background
   return (
-    <div className="text-foreground">
+    <div className="text-gray-900">
       {/* Header */}
-      <div className="report-header text-center mb-8 pb-6 border-b-2 border-border">
-        <h1 className="report-title text-2xl font-bold mb-2">{title}</h1>
-        <p className="report-subtitle text-muted-foreground text-sm">
+      <div className="report-header text-center mb-8 pb-6 border-b-2 border-gray-200">
+        <h1 className="report-title text-2xl font-bold mb-2 text-gray-900">{title}</h1>
+        <p className="report-subtitle text-gray-600 text-sm">
           {reportData.organizationName} | {reportData.reportPeriod}
         </p>
-        <p className="text-xs text-muted-foreground mt-2">
+        <p className="text-xs text-gray-500 mt-2">
           Generated on {new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
         </p>
       </div>
@@ -26,14 +27,14 @@ export function ReportDocument({ reportType, title, reportData, visibility }: Re
       {/* Executive Summary */}
       {visibility.executiveSummary && (
         <div className="section mb-8">
-          <h2 className="section-title text-lg font-semibold mb-4 pb-2 border-b border-border">
+          <h2 className="section-title text-lg font-semibold mb-4 pb-2 border-b border-gray-200 text-gray-900">
             Executive Summary
           </h2>
-          <p className="text-sm leading-relaxed">
+          <p className="text-sm leading-relaxed text-gray-700">
             This report provides a comprehensive overview of the security posture for{" "}
-            <strong>{reportData.organizationName}</strong> during the reporting period. 
-            The organization maintains <strong>{reportData.totalEndpoints}</strong> endpoints 
-            with a security score of <strong>{reportData.securityScore}%</strong>.
+            <strong className="text-gray-900">{reportData.organizationName}</strong> during the reporting period. 
+            The organization maintains <strong className="text-gray-900">{reportData.totalEndpoints}</strong> endpoints 
+            with a security score of <strong className="text-gray-900">{reportData.securityScore}%</strong>.
             {reportData.activeThreats && reportData.activeThreats > 0 
               ? ` There are currently ${reportData.activeThreats} active threats requiring attention.`
               : " All detected threats have been successfully addressed."
@@ -45,39 +46,39 @@ export function ReportDocument({ reportType, title, reportData, visibility }: Re
       {/* Security Score */}
       {visibility.securityScore && (
         <div className="section mb-8">
-          <h2 className="section-title text-lg font-semibold mb-4 pb-2 border-b border-border">
+          <h2 className="section-title text-lg font-semibold mb-4 pb-2 border-b border-gray-200 text-gray-900">
             Security Score
           </h2>
           <div className="metric-grid grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="metric-card bg-muted p-4 rounded-lg">
-              <div className="metric-value text-3xl font-bold text-primary">
+            <div className="metric-card bg-gray-100 p-4 rounded-lg">
+              <div className="metric-value text-3xl font-bold text-blue-600">
                 {reportData.securityScore}%
               </div>
-              <div className="metric-label text-xs text-muted-foreground uppercase">
+              <div className="metric-label text-xs text-gray-500 uppercase">
                 Overall Score
               </div>
             </div>
-            <div className="metric-card bg-muted p-4 rounded-lg">
-              <div className="metric-value text-3xl font-bold text-primary">
+            <div className="metric-card bg-gray-100 p-4 rounded-lg">
+              <div className="metric-value text-3xl font-bold text-blue-600">
                 {reportData.totalEndpoints}
               </div>
-              <div className="metric-label text-xs text-muted-foreground uppercase">
+              <div className="metric-label text-xs text-gray-500 uppercase">
                 Total Endpoints
               </div>
             </div>
-            <div className="metric-card bg-muted p-4 rounded-lg">
+            <div className="metric-card bg-gray-100 p-4 rounded-lg">
               <div className="metric-value text-3xl font-bold text-green-600">
                 {reportData.protectedEndpoints}
               </div>
-              <div className="metric-label text-xs text-muted-foreground uppercase">
+              <div className="metric-label text-xs text-gray-500 uppercase">
                 Protected
               </div>
             </div>
-            <div className="metric-card bg-muted p-4 rounded-lg">
-              <div className="metric-value text-3xl font-bold text-primary">
+            <div className="metric-card bg-gray-100 p-4 rounded-lg">
+              <div className="metric-value text-3xl font-bold text-blue-600">
                 {reportData.compliancePercentage}%
               </div>
-              <div className="metric-label text-xs text-muted-foreground uppercase">
+              <div className="metric-label text-xs text-gray-500 uppercase">
                 Compliant
               </div>
             </div>
@@ -88,22 +89,22 @@ export function ReportDocument({ reportType, title, reportData, visibility }: Re
       {/* Security Controls (Insurance Report) */}
       {visibility.securityControls && reportData.securityControls && (
         <div className="section mb-8">
-          <h2 className="section-title text-lg font-semibold mb-4 pb-2 border-b border-border">
+          <h2 className="section-title text-lg font-semibold mb-4 pb-2 border-b border-gray-200 text-gray-900">
             Security Controls
           </h2>
           <table className="table w-full border-collapse">
             <thead>
-              <tr className="bg-muted">
-                <th className="p-3 text-left text-sm font-semibold">Control</th>
-                <th className="p-3 text-left text-sm font-semibold">Status</th>
-                <th className="p-3 text-left text-sm font-semibold">Coverage</th>
-                <th className="p-3 text-left text-sm font-semibold">Description</th>
+              <tr className="bg-gray-100">
+                <th className="p-3 text-left text-sm font-semibold text-gray-900">Control</th>
+                <th className="p-3 text-left text-sm font-semibold text-gray-900">Status</th>
+                <th className="p-3 text-left text-sm font-semibold text-gray-900">Coverage</th>
+                <th className="p-3 text-left text-sm font-semibold text-gray-900">Description</th>
               </tr>
             </thead>
             <tbody>
               {reportData.securityControls.map((control, idx) => (
-                <tr key={idx} className="border-b border-border">
-                  <td className="p-3 text-sm font-medium">{control.name}</td>
+                <tr key={idx} className="border-b border-gray-200">
+                  <td className="p-3 text-sm font-medium text-gray-900">{control.name}</td>
                   <td className="p-3 text-sm">
                     <span className={
                       control.status === "implemented" ? "text-green-600 font-medium" :
@@ -115,18 +116,18 @@ export function ReportDocument({ reportType, title, reportData, visibility }: Re
                        "✗ Not Implemented"}
                     </span>
                   </td>
-                  <td className="p-3 text-sm">
+                  <td className="p-3 text-sm text-gray-900">
                     <div className="flex items-center gap-2">
-                      <div className="progress-bar h-2 w-16 bg-muted rounded overflow-hidden">
+                      <div className="progress-bar h-2 w-16 bg-gray-200 rounded overflow-hidden">
                         <div 
-                          className="progress-fill h-full bg-primary" 
+                          className="progress-fill h-full bg-blue-600" 
                           style={{ width: `${control.coverage}%` }}
                         />
                       </div>
                       <span>{control.coverage}%</span>
                     </div>
                   </td>
-                  <td className="p-3 text-sm text-muted-foreground">{control.description}</td>
+                  <td className="p-3 text-sm text-gray-600">{control.description}</td>
                 </tr>
               ))}
             </tbody>
@@ -137,27 +138,27 @@ export function ReportDocument({ reportType, title, reportData, visibility }: Re
       {/* Coverage Summary (Insurance Report) */}
       {visibility.coverageSummary && reportData.securityControls && (
         <div className="section mb-8">
-          <h2 className="section-title text-lg font-semibold mb-4 pb-2 border-b border-border">
+          <h2 className="section-title text-lg font-semibold mb-4 pb-2 border-b border-gray-200 text-gray-900">
             Coverage Summary
           </h2>
           <div className="grid grid-cols-3 gap-4">
-            <div className="bg-green-50 dark:bg-green-950/30 p-4 rounded-lg text-center">
+            <div className="bg-green-50 p-4 rounded-lg text-center">
               <div className="text-2xl font-bold text-green-600">
                 {reportData.securityControls.filter(c => c.status === "implemented").length}
               </div>
-              <div className="text-sm text-green-700 dark:text-green-400">Fully Implemented</div>
+              <div className="text-sm text-green-700">Fully Implemented</div>
             </div>
-            <div className="bg-yellow-50 dark:bg-yellow-950/30 p-4 rounded-lg text-center">
+            <div className="bg-yellow-50 p-4 rounded-lg text-center">
               <div className="text-2xl font-bold text-yellow-600">
                 {reportData.securityControls.filter(c => c.status === "partial").length}
               </div>
-              <div className="text-sm text-yellow-700 dark:text-yellow-400">Partially Implemented</div>
+              <div className="text-sm text-yellow-700">Partially Implemented</div>
             </div>
-            <div className="bg-red-50 dark:bg-red-950/30 p-4 rounded-lg text-center">
+            <div className="bg-red-50 p-4 rounded-lg text-center">
               <div className="text-2xl font-bold text-red-600">
                 {reportData.securityControls.filter(c => c.status === "not_implemented").length}
               </div>
-              <div className="text-sm text-red-700 dark:text-red-400">Not Implemented</div>
+              <div className="text-sm text-red-700">Not Implemented</div>
             </div>
           </div>
         </div>
@@ -166,21 +167,21 @@ export function ReportDocument({ reportType, title, reportData, visibility }: Re
       {/* Threat Summary */}
       {visibility.threatSummary && (
         <div className="section mb-8">
-          <h2 className="section-title text-lg font-semibold mb-4 pb-2 border-b border-border">
+          <h2 className="section-title text-lg font-semibold mb-4 pb-2 border-b border-gray-200 text-gray-900">
             Threat Summary
           </h2>
           <div className="metric-grid grid grid-cols-2 md:grid-cols-3 gap-4">
-            <div className="metric-card bg-muted p-4 rounded-lg">
-              <div className="metric-value text-3xl font-bold">{reportData.totalThreats}</div>
-              <div className="metric-label text-xs text-muted-foreground uppercase">Total Detected</div>
+            <div className="metric-card bg-gray-100 p-4 rounded-lg">
+              <div className="metric-value text-3xl font-bold text-gray-900">{reportData.totalThreats}</div>
+              <div className="metric-label text-xs text-gray-500 uppercase">Total Detected</div>
             </div>
-            <div className="metric-card bg-muted p-4 rounded-lg">
+            <div className="metric-card bg-gray-100 p-4 rounded-lg">
               <div className="metric-value text-3xl font-bold text-green-600">{reportData.resolvedThreats}</div>
-              <div className="metric-label text-xs text-muted-foreground uppercase">Resolved</div>
+              <div className="metric-label text-xs text-gray-500 uppercase">Resolved</div>
             </div>
-            <div className="metric-card bg-muted p-4 rounded-lg">
+            <div className="metric-card bg-gray-100 p-4 rounded-lg">
               <div className="metric-value text-3xl font-bold text-red-600">{reportData.activeThreats}</div>
-              <div className="metric-label text-xs text-muted-foreground uppercase">Active</div>
+              <div className="metric-label text-xs text-gray-500 uppercase">Active</div>
             </div>
           </div>
         </div>
@@ -189,37 +190,37 @@ export function ReportDocument({ reportType, title, reportData, visibility }: Re
       {/* Threat Details (Monthly Report) */}
       {isMonthly && visibility.threatDetails && (
         <div className="section mb-8">
-          <h2 className="section-title text-lg font-semibold mb-4 pb-2 border-b border-border">
+          <h2 className="section-title text-lg font-semibold mb-4 pb-2 border-b border-gray-200 text-gray-900">
             Threat Breakdown by Severity
           </h2>
           <table className="table w-full border-collapse">
             <thead>
-              <tr className="bg-muted">
-                <th className="p-3 text-left text-sm font-semibold">Severity</th>
-                <th className="p-3 text-left text-sm font-semibold">Count</th>
-                <th className="p-3 text-left text-sm font-semibold">Percentage</th>
+              <tr className="bg-gray-100">
+                <th className="p-3 text-left text-sm font-semibold text-gray-900">Severity</th>
+                <th className="p-3 text-left text-sm font-semibold text-gray-900">Count</th>
+                <th className="p-3 text-left text-sm font-semibold text-gray-900">Percentage</th>
               </tr>
             </thead>
             <tbody>
-              <tr className="border-b border-border">
+              <tr className="border-b border-gray-200">
                 <td className="p-3 text-sm font-medium text-red-600">Critical</td>
-                <td className="p-3 text-sm">{reportData.criticalThreats}</td>
-                <td className="p-3 text-sm">{reportData.totalThreats ? Math.round((reportData.criticalThreats || 0) / reportData.totalThreats * 100) : 0}%</td>
+                <td className="p-3 text-sm text-gray-900">{reportData.criticalThreats}</td>
+                <td className="p-3 text-sm text-gray-900">{reportData.totalThreats ? Math.round((reportData.criticalThreats || 0) / reportData.totalThreats * 100) : 0}%</td>
               </tr>
-              <tr className="border-b border-border">
+              <tr className="border-b border-gray-200">
                 <td className="p-3 text-sm font-medium text-orange-600">High</td>
-                <td className="p-3 text-sm">{reportData.highThreats}</td>
-                <td className="p-3 text-sm">{reportData.totalThreats ? Math.round((reportData.highThreats || 0) / reportData.totalThreats * 100) : 0}%</td>
+                <td className="p-3 text-sm text-gray-900">{reportData.highThreats}</td>
+                <td className="p-3 text-sm text-gray-900">{reportData.totalThreats ? Math.round((reportData.highThreats || 0) / reportData.totalThreats * 100) : 0}%</td>
               </tr>
-              <tr className="border-b border-border">
+              <tr className="border-b border-gray-200">
                 <td className="p-3 text-sm font-medium text-yellow-600">Medium</td>
-                <td className="p-3 text-sm">{reportData.mediumThreats}</td>
-                <td className="p-3 text-sm">{reportData.totalThreats ? Math.round((reportData.mediumThreats || 0) / reportData.totalThreats * 100) : 0}%</td>
+                <td className="p-3 text-sm text-gray-900">{reportData.mediumThreats}</td>
+                <td className="p-3 text-sm text-gray-900">{reportData.totalThreats ? Math.round((reportData.mediumThreats || 0) / reportData.totalThreats * 100) : 0}%</td>
               </tr>
-              <tr className="border-b border-border">
+              <tr className="border-b border-gray-200">
                 <td className="p-3 text-sm font-medium text-green-600">Low</td>
-                <td className="p-3 text-sm">{reportData.lowThreats}</td>
-                <td className="p-3 text-sm">{reportData.totalThreats ? Math.round((reportData.lowThreats || 0) / reportData.totalThreats * 100) : 0}%</td>
+                <td className="p-3 text-sm text-gray-900">{reportData.lowThreats}</td>
+                <td className="p-3 text-sm text-gray-900">{reportData.totalThreats ? Math.round((reportData.lowThreats || 0) / reportData.totalThreats * 100) : 0}%</td>
               </tr>
             </tbody>
           </table>
@@ -229,24 +230,24 @@ export function ReportDocument({ reportType, title, reportData, visibility }: Re
       {/* Compliance Overview */}
       {visibility.complianceOverview && (
         <div className="section mb-8">
-          <h2 className="section-title text-lg font-semibold mb-4 pb-2 border-b border-border">
+          <h2 className="section-title text-lg font-semibold mb-4 pb-2 border-b border-gray-200 text-gray-900">
             Compliance Overview
           </h2>
           <table className="table w-full border-collapse">
             <thead>
-              <tr className="bg-muted">
-                <th className="p-3 text-left text-sm font-semibold">Metric</th>
-                <th className="p-3 text-left text-sm font-semibold">Compliance</th>
-                <th className="p-3 text-left text-sm font-semibold">Status</th>
+              <tr className="bg-gray-100">
+                <th className="p-3 text-left text-sm font-semibold text-gray-900">Metric</th>
+                <th className="p-3 text-left text-sm font-semibold text-gray-900">Compliance</th>
+                <th className="p-3 text-left text-sm font-semibold text-gray-900">Status</th>
               </tr>
             </thead>
             <tbody>
-              <tr className="border-b border-border">
-                <td className="p-3 text-sm">Real-time Protection</td>
-                <td className="p-3 text-sm">
+              <tr className="border-b border-gray-200">
+                <td className="p-3 text-sm text-gray-900">Real-time Protection</td>
+                <td className="p-3 text-sm text-gray-900">
                   <div className="flex items-center gap-2">
-                    <div className="progress-bar h-2 w-24 bg-muted rounded overflow-hidden">
-                      <div className="progress-fill h-full bg-primary" style={{ width: `${reportData.realtimeProtection}%` }} />
+                    <div className="progress-bar h-2 w-24 bg-gray-200 rounded overflow-hidden">
+                      <div className="progress-fill h-full bg-blue-600" style={{ width: `${reportData.realtimeProtection}%` }} />
                     </div>
                     <span>{reportData.realtimeProtection}%</span>
                   </div>
@@ -257,12 +258,12 @@ export function ReportDocument({ reportType, title, reportData, visibility }: Re
                   </span>
                 </td>
               </tr>
-              <tr className="border-b border-border">
-                <td className="p-3 text-sm">Antivirus Enabled</td>
-                <td className="p-3 text-sm">
+              <tr className="border-b border-gray-200">
+                <td className="p-3 text-sm text-gray-900">Antivirus Enabled</td>
+                <td className="p-3 text-sm text-gray-900">
                   <div className="flex items-center gap-2">
-                    <div className="progress-bar h-2 w-24 bg-muted rounded overflow-hidden">
-                      <div className="progress-fill h-full bg-primary" style={{ width: `${reportData.antivirusEnabled}%` }} />
+                    <div className="progress-bar h-2 w-24 bg-gray-200 rounded overflow-hidden">
+                      <div className="progress-fill h-full bg-blue-600" style={{ width: `${reportData.antivirusEnabled}%` }} />
                     </div>
                     <span>{reportData.antivirusEnabled}%</span>
                   </div>
@@ -273,12 +274,12 @@ export function ReportDocument({ reportType, title, reportData, visibility }: Re
                   </span>
                 </td>
               </tr>
-              <tr className="border-b border-border">
-                <td className="p-3 text-sm">Signature Currency</td>
-                <td className="p-3 text-sm">
+              <tr className="border-b border-gray-200">
+                <td className="p-3 text-sm text-gray-900">Signature Currency</td>
+                <td className="p-3 text-sm text-gray-900">
                   <div className="flex items-center gap-2">
-                    <div className="progress-bar h-2 w-24 bg-muted rounded overflow-hidden">
-                      <div className="progress-fill h-full bg-primary" style={{ width: `${reportData.signatureCompliance}%` }} />
+                    <div className="progress-bar h-2 w-24 bg-gray-200 rounded overflow-hidden">
+                      <div className="progress-fill h-full bg-blue-600" style={{ width: `${reportData.signatureCompliance}%` }} />
                     </div>
                     <span>{reportData.signatureCompliance}%</span>
                   </div>
@@ -289,12 +290,12 @@ export function ReportDocument({ reportType, title, reportData, visibility }: Re
                   </span>
                 </td>
               </tr>
-              <tr className="border-b border-border">
-                <td className="p-3 text-sm">Behavior Monitoring</td>
-                <td className="p-3 text-sm">
+              <tr className="border-b border-gray-200">
+                <td className="p-3 text-sm text-gray-900">Behavior Monitoring</td>
+                <td className="p-3 text-sm text-gray-900">
                   <div className="flex items-center gap-2">
-                    <div className="progress-bar h-2 w-24 bg-muted rounded overflow-hidden">
-                      <div className="progress-fill h-full bg-primary" style={{ width: `${reportData.behaviorMonitoring}%` }} />
+                    <div className="progress-bar h-2 w-24 bg-gray-200 rounded overflow-hidden">
+                      <div className="progress-fill h-full bg-blue-600" style={{ width: `${reportData.behaviorMonitoring}%` }} />
                     </div>
                     <span>{reportData.behaviorMonitoring}%</span>
                   </div>
@@ -305,12 +306,12 @@ export function ReportDocument({ reportType, title, reportData, visibility }: Re
                   </span>
                 </td>
               </tr>
-              <tr className="border-b border-border">
-                <td className="p-3 text-sm">Policy Assigned</td>
-                <td className="p-3 text-sm">
+              <tr className="border-b border-gray-200">
+                <td className="p-3 text-sm text-gray-900">Policy Assigned</td>
+                <td className="p-3 text-sm text-gray-900">
                   <div className="flex items-center gap-2">
-                    <div className="progress-bar h-2 w-24 bg-muted rounded overflow-hidden">
-                      <div className="progress-fill h-full bg-primary" style={{ width: `${reportData.policyAssigned}%` }} />
+                    <div className="progress-bar h-2 w-24 bg-gray-200 rounded overflow-hidden">
+                      <div className="progress-fill h-full bg-blue-600" style={{ width: `${reportData.policyAssigned}%` }} />
                     </div>
                     <span>{reportData.policyAssigned}%</span>
                   </div>
@@ -329,10 +330,10 @@ export function ReportDocument({ reportType, title, reportData, visibility }: Re
       {/* Recommendations */}
       {visibility.recommendations && (
         <div className="section mb-8">
-          <h2 className="section-title text-lg font-semibold mb-4 pb-2 border-b border-border">
+          <h2 className="section-title text-lg font-semibold mb-4 pb-2 border-b border-gray-200 text-gray-900">
             {isMonthly ? "Recommendations" : "Improvement Areas"}
           </h2>
-          <ul className="space-y-2 text-sm">
+          <ul className="space-y-2 text-sm text-gray-700">
             {(reportData.realtimeProtection || 0) < 100 && (
               <li className="flex items-start gap-2">
                 <span className="text-red-500">•</span>
@@ -371,7 +372,7 @@ export function ReportDocument({ reportType, title, reportData, visibility }: Re
       )}
 
       {/* Footer */}
-      <div className="mt-12 pt-6 border-t border-border text-center text-xs text-muted-foreground">
+      <div className="mt-12 pt-6 border-t border-gray-200 text-center text-xs text-gray-500">
         <p>This report was generated by Peritus Security Platform</p>
         <p>Confidential - For internal use only</p>
       </div>
