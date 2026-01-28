@@ -156,7 +156,7 @@ const Login = () => {
             <CardDescription>
               {isSignUp
                 ? "Enter your enrollment code to get started"
-                : "Sign in to your Peritus Threat Defense account"}
+                : "Sign in to your Peritus Threat Defence account"}
             </CardDescription>
           </CardHeader>
           <CardContent>
