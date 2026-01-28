@@ -1465,6 +1465,66 @@ export type Database = {
         }
         Relationships: []
       }
+      security_reports: {
+        Row: {
+          created_at: string
+          generated_at: string
+          generated_by: string | null
+          id: string
+          organization_id: string
+          pdf_storage_path: string | null
+          report_data: Json
+          report_period_end: string
+          report_period_start: string
+          report_title: string
+          report_type: string
+          section_visibility: Json
+        }
+        Insert: {
+          created_at?: string
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          organization_id: string
+          pdf_storage_path?: string | null
+          report_data?: Json
+          report_period_end: string
+          report_period_start: string
+          report_title: string
+          report_type: string
+          section_visibility?: Json
+        }
+        Update: {
+          created_at?: string
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          organization_id?: string
+          pdf_storage_path?: string | null
+          report_data?: Json
+          report_period_end?: string
+          report_period_start?: string
+          report_title?: string
+          report_type?: string
+          section_visibility?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "security_reports_generated_by_fkey"
+            columns: ["generated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "security_reports_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       super_admins: {
         Row: {
           created_at: string

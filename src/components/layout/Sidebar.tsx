@@ -16,6 +16,7 @@ import {
   Sparkles,
   Crosshair,
   Network,
+  ClipboardList,
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
@@ -30,6 +31,7 @@ const navigation = [
   { name: "Threat Hunting", href: "/threat-hunting", icon: Crosshair },
   { name: "Policies", href: "/policies", icon: FileText },
   { name: "Network", href: "/network", icon: Network },
+  { name: "Reports", href: "/reports", icon: ClipboardList },
   { name: "AI Advisor", href: "/recommendations", icon: Sparkles },
   { name: "Deploy Agent", href: "/deploy", icon: Download },
   { name: "Activity", href: "/activity", icon: Activity },
