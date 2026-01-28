@@ -1,171 +1,165 @@
 
-
-# VirusTotal API Integration for IOC Library
+# One-Click ASR Exclusion from Event Logs
 
 ## Overview
 
-This plan adds VirusTotal integration to the IOC Library, enabling you to:
-1. **Lookup IOCs** - Enrich file hashes with VirusTotal reputation data (detection count, threat names, file info)
-2. **Auto-import IOCs** - Import related IOCs from VirusTotal analysis (contacted domains, dropped files, etc.)
-3. **Bulk enrichment** - Enrich multiple IOCs from your library with a single action
+This feature allows you to add processes or paths directly to policy exclusions from ASR audit events in the Event Logs page. When you're running in Audit mode to baseline your environment, you can review the events and click a button to exclude legitimate processes.
 
-## How It Works
+**Important**: Switching from Audit to Block mode remains a **manual action** in the Policy Editor. This feature only helps you build your exclusion list - you decide when the policy is ready to enforce.
 
-When you add a file hash (SHA256, SHA1, or MD5) to your IOC Library, you'll be able to click "Lookup on VirusTotal" to retrieve:
-- Detection ratio (e.g., "45/72 engines detected this file")
-- Threat names from AV vendors
-- File metadata (size, type, first/last seen dates)
-- Related IOCs (optional import)
-
-The enrichment data will be stored alongside the IOC for future reference.
-
-## Architecture
+## Workflow
 
 ```text
-+------------------+     +--------------------+     +------------------+
-|   IOC Library    |     |  virustotal-lookup |     |   VirusTotal     |
-|   (Frontend)     |---->|  Edge Function     |---->|   API v3         |
-+------------------+     +--------------------+     +------------------+
-| Click "Lookup"   |     | - Auth check       |     | GET /files/{id}  |
-| on hash IOC      |     | - Rate limiting    |     | Returns:         |
-|                  |     | - API call         |     | - detections     |
-|                  |<----|   & response parse |<----| - threat names   |
-| Display results  |     | - Store enrichment |     | - metadata       |
-+------------------+     +--------------------+     +------------------+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        ASR TUNING WORKFLOW                              │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  1. AUDIT PHASE                                                         │
+│     ┌──────────────┐                                                    │
+│     │ Policy set   │  Events flow into Event Logs                       │
+│     │ to AUDIT     │  ────────────────────────────►                     │
+│     └──────────────┘                                                    │
+│                                                                         │
+│  2. REVIEW & EXCLUDE (This Feature)                                     │
+│     ┌──────────────┐    ┌──────────────┐    ┌──────────────┐           │
+│     │ View Event   │───►│ Click "Add   │───►│ Exclusion    │           │
+│     │ Log Details  │    │ to Exclusion"│    │ Added        │           │
+│     └──────────────┘    └──────────────┘    └──────────────┘           │
+│     Repeat for each legitimate process                                  │
+│                                                                         │
+│  3. BLOCK PHASE (Manual - User Decision)                                │
+│     ┌──────────────┐                                                    │
+│     │ Open Policy  │  User manually changes ASR rule                    │
+│     │ Editor       │  from "Audit" to "Block"                           │
+│     └──────────────┘                                                    │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Implementation Steps
+## User Experience
 
-### Step 1: Store VirusTotal API Key
+**In the Event Log Detail Sheet (for ASR events):**
 
-Since API keys should never be in frontend code, I'll add a new platform setting (similar to the existing OpenAI key) to securely store your VirusTotal API key.
+When viewing an ASR/Exploit Guard audit event (Event IDs 1121, 1122), an "Add to Exclusions" button appears. Clicking it opens a dialog showing:
 
-- Add `virustotal_api_key` to platform_settings table
-- Add UI in Admin page to configure the key
-- Key is only accessible server-side (edge functions)
+- The ASR rule name (e.g., "Block credential stealing from LSASS")
+- The process path being excluded (e.g., `C:\Windows\System32\svchost.exe`)
+- The endpoint name and its assigned policy
+- Option to exclude as full path or just the process name
+- Confirmation before saving
 
-### Step 2: Create Edge Function
+**Edge Cases:**
+- If the endpoint has no policy assigned → Prompt to assign a policy first
+- If the path is already excluded → Show message "Already in exclusions"
+- If message cannot be parsed → Button is hidden
 
-New edge function: `supabase/functions/virustotal-lookup/index.ts`
+## Implementation Details
 
-Endpoints:
-| Endpoint | Purpose |
-|----------|---------|
-| POST /lookup | Look up a single hash and return enrichment data |
-| POST /bulk-enrich | Enrich multiple IOCs (with rate limiting) |
+### Step 1: Event Message Parser
 
-The function will:
-- Validate user authentication
-- Check for configured API key
-- Call VirusTotal API v3: `GET https://www.virustotal.com/api/v3/files/{hash}`
-- Parse response and return structured data
-- Optionally update the IOC record with enrichment data
+Create a utility to extract key fields from ASR event messages:
 
-### Step 3: Update Database Schema
+```typescript
+// src/lib/event-parser.ts
+interface AsrEventData {
+  asrRuleId: string;      // GUID like "9E6C4E1F-7D60..."
+  asrRuleName: string;    // Human name from ASR_RULES lookup
+  path: string;           // Triggering process path
+  processName: string;    // Target process (e.g., lsass.exe)
+  user: string;           // User context
+  detectionTime: string;
+}
 
-Add enrichment storage to the IOC Library:
-
-```sql
-ALTER TABLE ioc_library ADD COLUMN vt_enrichment JSONB DEFAULT NULL;
-ALTER TABLE ioc_library ADD COLUMN vt_enriched_at TIMESTAMPTZ DEFAULT NULL;
-ALTER TABLE ioc_library ADD COLUMN vt_detection_ratio TEXT DEFAULT NULL;
+function parseAsrEventMessage(message: string): AsrEventData | null
 ```
 
-The `vt_enrichment` column stores the full VirusTotal response for detailed views.
+### Step 2: Extend Event Logs Query
 
-### Step 4: Update Frontend Components
+Modify `useEventLogs` to include the endpoint's `policy_id` so we know which policy to update:
 
-**IocLibraryManager.tsx changes:**
-- Add "Lookup" button in the actions dropdown for hash-type IOCs
-- Display detection ratio badge in the table (e.g., "45/72" in red/yellow/green)
-- Add loading state during lookup
+```typescript
+// Current query joins endpoints for hostname
+// Add: policy_id to the select
+endpoints!inner(hostname, organization_id, policy_id)
+```
 
-**New IocEnrichmentDialog.tsx:**
-- Shows full VirusTotal results when clicking on an enriched IOC
-- Displays vendor detections, file info, related IOCs
-- Option to import related IOCs to your library
+### Step 3: Add Exclusion Dialog Component
 
-**IocTypeIcon.tsx changes:**
-- Add visual indicator for enriched vs non-enriched IOCs
+New component `EventLogAddExclusionDialog.tsx`:
 
-### Step 5: Admin Settings UI
+| Element | Description |
+|---------|-------------|
+| Rule Name | Shows "Block credential stealing from LSASS" etc. |
+| Process Path | The path to be excluded |
+| Exclusion Type | Radio: "Full Path" or "Process Name Only" |
+| Policy Info | Shows which policy will be updated |
+| Confirm Button | Adds to exclusions and closes |
 
-Add to the Platform Settings section:
-- VirusTotal API Key input field (password masked)
-- Test connection button
-- Usage/rate limit indicator
+### Step 4: Update EventLogDetailSheet
+
+For ASR audit events, add:
+- Parse message to extract path/process
+- Fetch the endpoint's policy details
+- Render "Add to Exclusions" button
+- Open dialog on click
+
+### Step 5: Policy Exclusion Hook
+
+New hook `useAddPolicyExclusion` in `usePolicies.ts`:
+- Takes policy ID and exclusion value
+- Appends to `exclusion_paths` or `exclusion_processes` array
+- Uses existing `useUpdatePolicy` mutation
+- Logs activity
 
 ## Files to Create
 
 | File | Purpose |
 |------|---------|
-| `supabase/functions/virustotal-lookup/index.ts` | Edge function for VT API calls |
-| `src/components/hunting/IocEnrichmentDialog.tsx` | Display enrichment details |
+| `src/lib/event-parser.ts` | Parse ASR event messages to extract path, process, rule ID |
+| `src/components/EventLogAddExclusionDialog.tsx` | Confirmation dialog for adding exclusions |
 
 ## Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/components/hunting/IocLibraryManager.tsx` | Add Lookup button, display VT data |
-| `src/components/admin/PlatformSettingsSection.tsx` | Add VT API key configuration |
-| `src/hooks/useThreatHunting.ts` | Add enrichment mutation hook |
-| `supabase/migrations/` | New migration for enrichment columns |
+| `src/components/EventLogDetailSheet.tsx` | Add exclusion button for ASR events, integrate dialog |
+| `src/hooks/useEventLogs.ts` | Include `policy_id` in endpoints join |
+| `src/hooks/usePolicies.ts` | Add `useAddPolicyExclusion` hook |
 
-## Rate Limiting Considerations
+## Technical Notes
 
-VirusTotal API has rate limits based on your plan:
-- **Free tier**: 4 requests/minute, 500 requests/day
-- **Premium**: Higher limits based on subscription
+### ASR Event Detection
 
-The edge function will:
-1. Track request counts per organization
-2. Return appropriate errors when limits are approached
-3. Support bulk operations with automatic pacing
+ASR audit events use Event IDs:
+- **1121**: ASR rule audited (would have blocked)
+- **1122**: ASR rule blocked
 
-## Technical Details
+The feature targets 1121 (audit) events since that's the tuning phase.
 
-### VirusTotal API Call Example
+### Message Parsing
 
-```typescript
-const response = await fetch(
-  `https://www.virustotal.com/api/v3/files/${hash}`,
-  {
-    headers: {
-      "x-apikey": vtApiKey,
-      "Accept": "application/json"
-    }
-  }
-);
-
-const data = await response.json();
-// data.data.attributes contains:
-// - last_analysis_stats (malicious, suspicious, harmless, etc.)
-// - popular_threat_classification
-// - meaningful_name
-// - type_description
-// - first_submission_date
+ASR messages follow this format:
+```
+Microsoft Defender Exploit Guard audited an operation...
+  ID: 9E6C4E1F-7D60-472F-BA1A-A39EF669E4B2
+  Path: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+  Process Name: C:\Windows\System32\lsass.exe
 ```
 
-### Detection Ratio Display Logic
+The parser uses regex to extract each field reliably.
 
-```text
-0 detections      -> Green badge "Clean"
-1-5 detections    -> Yellow badge "Suspicious"  
-6+ detections     -> Red badge with count "45/72"
-```
+### Rule ID to Name Mapping
 
-## Security Notes
+Uses the existing `ASR_RULES` array in `defender-settings.ts` to show human-readable rule names instead of GUIDs.
 
-- API key stored in `platform_settings`, never exposed to frontend
-- All VT requests go through authenticated edge function
-- Rate limiting prevents API abuse
-- Only super admins can configure the API key
+## What This Feature Does NOT Do
 
-## Future Enhancements (Not in Scope)
+- **Does NOT auto-switch to Block mode** - That remains a manual decision in the Policy Editor
+- **Does NOT modify the ASR rule settings** - Only adds exclusions
+- **Does NOT affect other endpoints** - Exclusions apply at the policy level (shared by endpoints using that policy)
 
-- URL and domain lookups (requires different VT endpoints)
-- IP address reputation checks
-- Automatic enrichment on IOC import
-- VT Intelligence search integration (premium)
-- Sandbox submission for unknown files
+## Security
 
+- Exclusion updates use existing `useUpdatePolicy` mutation (validates org ownership)
+- Activity logging records who added exclusions and when
+- Only users with policy edit access can add exclusions
