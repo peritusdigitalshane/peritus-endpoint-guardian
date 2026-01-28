@@ -512,8 +512,8 @@ async function handleLogs(req: Request) {
   // Be permissive: allow { logs: [...] } or a top-level array.
   const logsRaw = (body && typeof body === "object" && "logs" in body) ? (body as any).logs : body;
 
-  // Server-side filtering: keep only relevant Defender Operational event IDs.
-  // The agent may send a broader set (or all events in a time window) for reliability.
+  // Server-side filtering: keep only relevant event IDs.
+  // Defender Operational events for threats and protection status.
   const relevantDefenderOperationalEventIds = new Set<number>([
     1000, 1001, 1002, 1005, 1006, 1007, 1008, 1009, 1010, 1011, 1013, 1015, 1016,
     1116, 1117, 1118, 1119,
@@ -524,10 +524,22 @@ async function handleLogs(req: Request) {
     5000, 5001, 5004, 5007, 5008, 5010, 5012,
   ]);
 
+  // Security event IDs for process creation (IOC hunting).
+  const relevantSecurityEventIds = new Set<number>([
+    4688, // Process creation with command line
+    4689, // Process termination (optional context)
+  ]);
+
   const logs: any[] = Array.isArray(logsRaw)
     ? logsRaw.filter((l: any) => {
         const n = typeof l?.event_id === "number" ? l.event_id : Number(l?.event_id);
-        return Number.isFinite(n) && relevantDefenderOperationalEventIds.has(n);
+        if (!Number.isFinite(n)) return false;
+        const logSource = String(l?.event_source || "").toLowerCase();
+        // Accept Defender Operational events
+        if (logSource.includes("defender") && relevantDefenderOperationalEventIds.has(n)) return true;
+        // Accept Security audit events for process creation
+        if (logSource.includes("security") && relevantSecurityEventIds.has(n)) return true;
+        return false;
       })
     : [];
 
