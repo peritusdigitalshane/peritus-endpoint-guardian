@@ -134,43 +134,43 @@ const Policies = () => {
           <TabsList className="flex flex-wrap h-auto gap-1">
             <TabsTrigger value="defender" className="flex items-center gap-2">
               <Shield className="h-4 w-4" />
-              <span className="hidden sm:inline">Defender</span>
+              <span className="hidden sm:inline">Defender Policies</span>
             </TabsTrigger>
             <TabsTrigger value="rulesets" className="flex items-center gap-2">
               <Layers className="h-4 w-4" />
-              <span className="hidden sm:inline">Rule Sets</span>
+              <span className="hidden sm:inline">WDAC Rule Sets</span>
             </TabsTrigger>
             <TabsTrigger value="wdac-endpoints" className="flex items-center gap-2">
               <Monitor className="h-4 w-4" />
-              <span className="hidden sm:inline">WDAC Status</span>
+              <span className="hidden sm:inline">WDAC Endpoints</span>
             </TabsTrigger>
             <TabsTrigger value="apps" className="flex items-center gap-2">
               <Shield className="h-4 w-4" />
-              <span className="hidden sm:inline">Apps</span>
+              <span className="hidden sm:inline">Discovered Apps</span>
             </TabsTrigger>
             <TabsTrigger value="baselines" className="flex items-center gap-2">
               <Shield className="h-4 w-4" />
-              <span className="hidden sm:inline">Baselines</span>
+              <span className="hidden sm:inline">WDAC Baselines</span>
             </TabsTrigger>
             <TabsTrigger value="wdac-policies" className="flex items-center gap-2">
               <Shield className="h-4 w-4" />
-              <span className="hidden sm:inline">WDAC Policies</span>
+              <span className="hidden sm:inline">WDAC Policies (Legacy)</span>
             </TabsTrigger>
             <TabsTrigger value="uac-policies" className="flex items-center gap-2">
               <ShieldCheck className="h-4 w-4" />
-              <span className="hidden sm:inline">UAC</span>
+              <span className="hidden sm:inline">UAC Policies</span>
             </TabsTrigger>
             <TabsTrigger value="uac-status" className="flex items-center gap-2">
               <Monitor className="h-4 w-4" />
-              <span className="hidden sm:inline">UAC Status</span>
+              <span className="hidden sm:inline">UAC Endpoints</span>
             </TabsTrigger>
             <TabsTrigger value="wu-policies" className="flex items-center gap-2">
               <RefreshCw className="h-4 w-4" />
-              <span className="hidden sm:inline">Updates</span>
+              <span className="hidden sm:inline">Update Policies</span>
             </TabsTrigger>
             <TabsTrigger value="wu-status" className="flex items-center gap-2">
               <Monitor className="h-4 w-4" />
-              <span className="hidden sm:inline">Update Status</span>
+              <span className="hidden sm:inline">Update Endpoints</span>
             </TabsTrigger>
           </TabsList>
 
