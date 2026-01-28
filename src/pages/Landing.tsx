@@ -16,7 +16,7 @@ const Landing = () => {
             <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center">
               <Shield className="h-5 w-5 text-primary-foreground" />
             </div>
-            <span className="text-xl font-bold">Peritus Threat Defense</span>
+            <span className="text-xl font-bold">Peritus Threat Defence</span>
           </div>
           <div className="hidden md:flex items-center gap-8">
             <a href="#features" className="text-muted-foreground hover:text-foreground transition-colors">Features</a>

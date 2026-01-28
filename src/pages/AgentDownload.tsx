@@ -129,9 +129,9 @@ const generatePowershellScript = (orgId: string, apiBaseUrl: string, trayIconIco
   return `#Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    Peritus Threat Defense Agent - Windows Defender Management
+    Peritus Threat Defence Agent - Windows Defender Management
 .DESCRIPTION
-    This agent collects Windows Defender status and sends it to the Peritus Threat Defense platform.
+    This agent collects Windows Defender status and sends it to the Peritus Threat Defence platform.
     It also applies security policies configured in the platform.
 .PARAMETER OrganizationToken
     Your organization's unique token for agent registration
@@ -166,7 +166,7 @@ $ErrorActionPreference = "Stop"
 $ApiBaseUrl = "${apiBaseUrl}"
 $TaskName = "PeritusSecureAgent"
 $TrayTaskName = "PeritusSecureTray"
-$ServiceName = "Peritus Threat Defense Agent"
+$ServiceName = "Peritus Threat Defence Agent"
 $AgentVersion = "2.7.0"
 
 # Store ForceFullLogSync in script scope so functions can access it
@@ -267,7 +267,7 @@ function Check-AgentUpdate {
 }
 
 function Uninstall-Agent {
-    Write-Log "Uninstalling Peritus Threat Defense Agent..."
+    Write-Log "Uninstalling Peritus Threat Defence Agent..."
     
     # Remove scheduled task
     $existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
@@ -339,7 +339,7 @@ function Install-AgentTask {
     # RestartInterval must be >= 1 minute on many Windows builds (PT30S can fail task registration).
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
     
-    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggerStartup,$triggerRepeat -Principal $principal -Settings $settings -Description "Peritus Threat Defense Agent - Windows Defender Management" | Out-Null
+    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggerStartup,$triggerRepeat -Principal $principal -Settings $settings -Description "Peritus Threat Defence Agent - Windows Defender Management" | Out-Null
 
     try {
         Start-ScheduledTask -TaskName $TaskName -ErrorAction Stop
@@ -1546,7 +1546,7 @@ function Show-StatusForm {
     param([object]$StatusData)
     
     $form = New-Object System.Windows.Forms.Form
-    $form.Text = "Peritus Threat Defense - Status"
+    $form.Text = "Peritus Threat Defence - Status"
     # Use ClientSize (not Size) so DPI/border chrome doesn't clip bottom controls.
     $form.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::Dpi
     $form.ClientSize = New-Object System.Drawing.Size(420, 420)
@@ -1561,7 +1561,7 @@ function Show-StatusForm {
     
     # Header
     $lblTitle = New-Object System.Windows.Forms.Label
-    $lblTitle.Text = "Peritus Threat Defense Agent"
+    $lblTitle.Text = "Peritus Threat Defence Agent"
     $lblTitle.Font = New-Object System.Drawing.Font("Segoe UI", 14, [System.Drawing.FontStyle]::Bold)
     $lblTitle.Location = New-Object System.Drawing.Point(15, $y)
     $lblTitle.Size = New-Object System.Drawing.Size(380, 30)
@@ -1722,7 +1722,7 @@ function Start-TrayApplication {
         Write-Log "Warning: Could not load tray icon" -Level "WARN"
     }
     
-    $script:trayIcon.Text = "Peritus Threat Defense - Protected"
+    $script:trayIcon.Text = "Peritus Threat Defence - Protected"
     $script:trayIcon.Visible = $true
     
     Write-Log "Tray icon visible: $($script:trayIcon.Visible)"
@@ -1749,7 +1749,7 @@ function Start-TrayApplication {
         if (Test-Path $LogFile) {
             Start-Process notepad.exe -ArgumentList $LogFile
         } else {
-            [System.Windows.Forms.MessageBox]::Show("Log file not found.", "Peritus Threat Defense", "OK", "Information")
+            [System.Windows.Forms.MessageBox]::Show("Log file not found.", "Peritus Threat Defence", "OK", "Information")
         }
     })
     $contextMenu.Items.Add($menuLogs) | Out-Null
@@ -1758,14 +1758,14 @@ function Start-TrayApplication {
     $menuSync = New-Object System.Windows.Forms.ToolStripMenuItem
     $menuSync.Text = "Sync Now"
     $menuSync.Add_Click({
-        $script:trayIcon.Text = "Peritus Threat Defense - Syncing..."
+        $script:trayIcon.Text = "Peritus Threat Defence - Syncing..."
         try {
             Send-Heartbeat -AgentToken $AgentToken
-            $script:trayIcon.ShowBalloonTip(3000, "Peritus Threat Defense", "Sync completed successfully", [System.Windows.Forms.ToolTipIcon]::Info)
+            $script:trayIcon.ShowBalloonTip(3000, "Peritus Threat Defence", "Sync completed successfully", [System.Windows.Forms.ToolTipIcon]::Info)
         } catch {
-            $script:trayIcon.ShowBalloonTip(3000, "Peritus Threat Defense", "Sync failed: $_", [System.Windows.Forms.ToolTipIcon]::Warning)
+            $script:trayIcon.ShowBalloonTip(3000, "Peritus Threat Defence", "Sync failed: $_", [System.Windows.Forms.ToolTipIcon]::Warning)
         }
-        $script:trayIcon.Text = "Peritus Threat Defense - Protected"
+        $script:trayIcon.Text = "Peritus Threat Defence - Protected"
     })
     $contextMenu.Items.Add($menuSync) | Out-Null
     
@@ -1799,9 +1799,9 @@ function Start-TrayApplication {
             $status = Get-EndpointStatus -AgentToken $AgentToken
             if ($status -and $status.status) {
                 $script:trayIcon.Text = if ($status.status.realtime_protection) { 
-                    "Peritus Threat Defense - Protected" 
+                    "Peritus Threat Defence - Protected" 
                 } else { 
-                    "Peritus Threat Defense - Warning" 
+                    "Peritus Threat Defence - Warning" 
                 }
             }
         } catch { }
@@ -1850,7 +1850,7 @@ function Ensure-TrayStartupAndLaunch {
 }
 
 Write-Log "=========================================="
-Write-Log "Peritus Threat Defense Agent v2.6.0"
+Write-Log "Peritus Threat Defence Agent v2.6.0"
 Write-Log "=========================================="
 
 if ($Uninstall) { Uninstall-Agent }
@@ -2097,7 +2097,7 @@ const AgentDownload = () => {
           <div>
             <h1 className="text-2xl font-bold">Deploy Agent</h1>
             <p className="text-muted-foreground">
-              Download and install the Peritus Threat Defense agent on your Windows endpoints
+              Download and install the Peritus Threat Defence agent on your Windows endpoints
             </p>
           </div>
           <Alert variant="destructive">
@@ -2119,7 +2119,7 @@ const AgentDownload = () => {
         <div>
           <h1 className="text-2xl font-bold">Deploy Agent</h1>
           <p className="text-muted-foreground">
-            Download and install the Peritus Threat Defense agent on your Windows endpoints
+            Download and install the Peritus Threat Defence agent on your Windows endpoints
           </p>
           {orgName && (
             <p className="text-sm text-muted-foreground mt-1">
