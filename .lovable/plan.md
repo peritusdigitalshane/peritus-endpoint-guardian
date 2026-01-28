@@ -1,215 +1,171 @@
 
-# IOC-Based Threat Hunting Implementation Plan
+
+# VirusTotal API Integration for IOC Library
 
 ## Overview
-Add proactive threat hunting capabilities to Peritus Secure, enabling security teams to search across their telemetry for known Indicators of Compromise (IOCs). This Tier 2 implementation focuses on leveraging existing data from `wdac_discovered_apps`, `endpoint_threats`, and `endpoint_event_logs`.
+
+This plan adds VirusTotal integration to the IOC Library, enabling you to:
+1. **Lookup IOCs** - Enrich file hashes with VirusTotal reputation data (detection count, threat names, file info)
+2. **Auto-import IOCs** - Import related IOCs from VirusTotal analysis (contacted domains, dropped files, etc.)
+3. **Bulk enrichment** - Enrich multiple IOCs from your library with a single action
+
+## How It Works
+
+When you add a file hash (SHA256, SHA1, or MD5) to your IOC Library, you'll be able to click "Lookup on VirusTotal" to retrieve:
+- Detection ratio (e.g., "45/72 engines detected this file")
+- Threat names from AV vendors
+- File metadata (size, type, first/last seen dates)
+- Related IOCs (optional import)
+
+The enrichment data will be stored alongside the IOC for future reference.
 
 ## Architecture
 
 ```text
-+------------------+     +-------------------+     +------------------+
-|   IOC Library    |     |    Hunt Jobs      |     |   Hunt Matches   |
-+------------------+     +-------------------+     +------------------+
-| - file_hash      |---->| - ioc_sweep       |---->| - endpoint_id    |
-| - file_path      |     | - quick_search    |     | - matched_value  |
-| - file_name      |     | - pattern_search  |     | - match_source   |
-| - process_name   |     +-------------------+     | - context (JSON) |
-+------------------+            |                  +------------------+
-                                v
-              +----------------------------------+
-              |    Existing Data Sources         |
-              +----------------------------------+
-              | - wdac_discovered_apps           |
-              | - endpoint_threats               |
-              | - endpoint_event_logs            |
-              +----------------------------------+
++------------------+     +--------------------+     +------------------+
+|   IOC Library    |     |  virustotal-lookup |     |   VirusTotal     |
+|   (Frontend)     |---->|  Edge Function     |---->|   API v3         |
++------------------+     +--------------------+     +------------------+
+| Click "Lookup"   |     | - Auth check       |     | GET /files/{id}  |
+| on hash IOC      |     | - Rate limiting    |     | Returns:         |
+|                  |     | - API call         |     | - detections     |
+|                  |<----|   & response parse |<----| - threat names   |
+| Display results  |     | - Store enrichment |     | - metadata       |
++------------------+     +--------------------+     +------------------+
 ```
 
-## Phase 1: Database Schema
+## Implementation Steps
 
-### New Tables
+### Step 1: Store VirusTotal API Key
 
-**ioc_library** - Store IOC definitions
-| Column | Type | Description |
-|--------|------|-------------|
-| id | UUID | Primary key |
-| organization_id | UUID | FK to organizations |
-| ioc_type | TEXT | file_hash, file_path, file_name, process_name |
-| value | TEXT | The actual IOC value |
-| hash_type | TEXT | md5, sha1, sha256 (for hashes) |
-| threat_name | TEXT | e.g., "Emotet", "Cobalt Strike" |
-| severity | TEXT | low, medium, high, critical |
-| source | TEXT | manual, virustotal, alienvault, misp |
-| description | TEXT | Additional context |
-| is_active | BOOLEAN | Enable/disable IOC |
-| tags | TEXT[] | Categorization tags |
-| created_at | TIMESTAMPTZ | Auto-generated |
-| created_by | UUID | FK to profiles |
+Since API keys should never be in frontend code, I'll add a new platform setting (similar to the existing OpenAI key) to securely store your VirusTotal API key.
 
-**hunt_jobs** - Track hunting operations
-| Column | Type | Description |
-|--------|------|-------------|
-| id | UUID | Primary key |
-| organization_id | UUID | FK to organizations |
-| name | TEXT | Hunt job name |
-| description | TEXT | Optional description |
-| status | TEXT | pending, running, completed, failed |
-| hunt_type | TEXT | ioc_sweep, quick_search, pattern_search |
-| parameters | JSONB | IOC IDs, search values, date range |
-| started_at | TIMESTAMPTZ | When hunt began |
-| completed_at | TIMESTAMPTZ | When hunt finished |
-| total_endpoints | INTEGER | Endpoints scanned |
-| matches_found | INTEGER | Total matches |
-| created_by | UUID | FK to profiles |
-| created_at | TIMESTAMPTZ | Auto-generated |
+- Add `virustotal_api_key` to platform_settings table
+- Add UI in Admin page to configure the key
+- Key is only accessible server-side (edge functions)
 
-**hunt_matches** - Individual match results
-| Column | Type | Description |
-|--------|------|-------------|
-| id | UUID | Primary key |
-| hunt_job_id | UUID | FK to hunt_jobs |
-| ioc_id | UUID | FK to ioc_library (nullable for ad-hoc) |
-| endpoint_id | UUID | FK to endpoints |
-| match_source | TEXT | discovered_apps, threats, event_logs |
-| matched_value | TEXT | The actual matched value |
-| context | JSONB | File path, timestamp, raw data |
-| reviewed | BOOLEAN | Has been triaged |
-| reviewed_by | UUID | FK to profiles |
-| reviewed_at | TIMESTAMPTZ | When reviewed |
-| created_at | TIMESTAMPTZ | Auto-generated |
+### Step 2: Create Edge Function
 
-### RLS Policies
-All three tables will follow the existing pattern using `is_member_of_org()`, `is_super_admin()`, and `is_partner_admin_of_org()` functions for organization-scoped access.
+New edge function: `supabase/functions/virustotal-lookup/index.ts`
 
-## Phase 2: Frontend Components
+Endpoints:
+| Endpoint | Purpose |
+|----------|---------|
+| POST /lookup | Look up a single hash and return enrichment data |
+| POST /bulk-enrich | Enrich multiple IOCs (with rate limiting) |
 
-### New Files
+The function will:
+- Validate user authentication
+- Check for configured API key
+- Call VirusTotal API v3: `GET https://www.virustotal.com/api/v3/files/{hash}`
+- Parse response and return structured data
+- Optionally update the IOC record with enrichment data
 
-**Page: `src/pages/ThreatHunting.tsx`**
-- Main threat hunting page with tabbed interface
-- Tabs: Quick Search | IOC Library | Hunt History
+### Step 3: Update Database Schema
 
-**Hook: `src/hooks/useThreatHunting.ts`**
-- `useIocLibrary()` - CRUD for IOCs
-- `useHuntJobs()` - Hunt job management  
-- `useHuntMatches(jobId)` - Match results
-- `useQuickSearch()` - Instant IOC lookup mutation
+Add enrichment storage to the IOC Library:
 
-**Components: `src/components/hunting/`**
-| Component | Purpose |
-|-----------|---------|
-| QuickIocSearch.tsx | Hero search bar with auto-detect IOC type |
-| IocLibraryManager.tsx | IOC list with CRUD, bulk import |
-| IocImportDialog.tsx | CSV/JSON bulk import modal |
-| HuntJobsList.tsx | Hunt history with status badges |
-| CreateHuntDialog.tsx | New hunt wizard - select IOCs, date range |
-| HuntResultsView.tsx | Match results with endpoint context |
-| IocTypeIcon.tsx | Visual icons per IOC type |
-
-### UI Layout
-
-```text
-+---------------------------------------------------------------+
-|  Threat Hunting                                    [New Hunt]  |
-+---------------------------------------------------------------+
-|  +----------------------------------------------------------+ |
-|  |  Quick Search                                             | |
-|  |  [SHA256, MD5, file path, process name...]  [Hunt]       | |
-|  +----------------------------------------------------------+ |
-|                                                                |
-|  [Quick Search] [IOC Library] [Hunt History]                  |
-|  +----------------------------------------------------------+ |
-|  | Results / Library / History content based on active tab   | |
-|  +----------------------------------------------------------+ |
-+---------------------------------------------------------------+
+```sql
+ALTER TABLE ioc_library ADD COLUMN vt_enrichment JSONB DEFAULT NULL;
+ALTER TABLE ioc_library ADD COLUMN vt_enriched_at TIMESTAMPTZ DEFAULT NULL;
+ALTER TABLE ioc_library ADD COLUMN vt_detection_ratio TEXT DEFAULT NULL;
 ```
 
-## Phase 3: Hunt Execution Logic
+The `vt_enrichment` column stores the full VirusTotal response for detailed views.
 
-### Search Strategy by IOC Type
+### Step 4: Update Frontend Components
 
-| IOC Type | Table | Match Column | Match Logic |
-|----------|-------|--------------|-------------|
-| file_hash | wdac_discovered_apps | file_hash | Exact (case-insensitive) |
-| file_hash | endpoint_threats | resources->path | Extract from JSON, compare |
-| file_path | wdac_discovered_apps | file_path | ILIKE with wildcards |
-| file_path | endpoint_event_logs | message | Text search |
-| file_name | wdac_discovered_apps | file_name | Exact or ILIKE |
-| file_name | endpoint_event_logs | message | Text search |
-| process_name | endpoint_event_logs | message | Text search |
+**IocLibraryManager.tsx changes:**
+- Add "Lookup" button in the actions dropdown for hash-type IOCs
+- Display detection ratio badge in the table (e.g., "45/72" in red/yellow/green)
+- Add loading state during lookup
 
-### Quick Search Flow
-1. User enters IOC value in search bar
-2. Auto-detect type (SHA256 = 64 hex, path = contains `\`, etc.)
-3. Query all relevant tables in parallel
-4. Display matches grouped by source with endpoint details
+**New IocEnrichmentDialog.tsx:**
+- Shows full VirusTotal results when clicking on an enriched IOC
+- Displays vendor detections, file info, related IOCs
+- Option to import related IOCs to your library
 
-### Batch Hunt Flow
-1. User selects IOCs from library or enters custom values
-2. Create `hunt_jobs` record with status `pending`
-3. Execute queries across all data sources
-4. Insert matches into `hunt_matches`
-5. Update job status to `completed` with statistics
+**IocTypeIcon.tsx changes:**
+- Add visual indicator for enriched vs non-enriched IOCs
 
-## Phase 4: Navigation Integration
+### Step 5: Admin Settings UI
 
-### Sidebar Update
-Add "Threat Hunting" to sidebar navigation with Crosshair icon, positioned after "Event Logs":
-
-```text
-- Dashboard
-- Endpoints
-- Groups
-- Threats
-- Event Logs
-- Threat Hunting  <-- NEW
-- Policies
-- ...
-```
-
-### Quick Actions Integration
-Add "Hunt for this hash" to context menus in:
-- DiscoveredApps table rows (file_hash column)
-- ThreatsList threat cards (from resources)
-- EventLogs detail sheet
+Add to the Platform Settings section:
+- VirusTotal API Key input field (password masked)
+- Test connection button
+- Usage/rate limit indicator
 
 ## Files to Create
 
 | File | Purpose |
 |------|---------|
-| `supabase/migrations/xxx_threat_hunting_tables.sql` | Database schema |
-| `src/pages/ThreatHunting.tsx` | Main page |
-| `src/hooks/useThreatHunting.ts` | Data hooks |
-| `src/components/hunting/QuickIocSearch.tsx` | Search component |
-| `src/components/hunting/IocLibraryManager.tsx` | IOC management |
-| `src/components/hunting/IocImportDialog.tsx` | Bulk import |
-| `src/components/hunting/HuntJobsList.tsx` | Hunt history |
-| `src/components/hunting/CreateHuntDialog.tsx` | New hunt form |
-| `src/components/hunting/HuntResultsView.tsx` | Match results |
-| `src/components/hunting/IocTypeIcon.tsx` | Type icons |
+| `supabase/functions/virustotal-lookup/index.ts` | Edge function for VT API calls |
+| `src/components/hunting/IocEnrichmentDialog.tsx` | Display enrichment details |
 
 ## Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/App.tsx` | Add `/threat-hunting` route |
-| `src/components/layout/Sidebar.tsx` | Add navigation item |
-| `src/integrations/supabase/types.ts` | Will auto-update with new tables |
-| `src/components/security/DiscoveredApps.tsx` | Add "Hunt" action to rows |
-| `src/components/dashboard/ThreatsList.tsx` | Add "Hunt" action |
+| `src/components/hunting/IocLibraryManager.tsx` | Add Lookup button, display VT data |
+| `src/components/admin/PlatformSettingsSection.tsx` | Add VT API key configuration |
+| `src/hooks/useThreatHunting.ts` | Add enrichment mutation hook |
+| `supabase/migrations/` | New migration for enrichment columns |
 
-## Technical Considerations
+## Rate Limiting Considerations
 
-1. **Performance**: Index `ioc_library.value` and use batch queries to avoid N+1 issues
-2. **Hash Normalization**: Store all hashes lowercase, normalize on input
-3. **Wildcards**: Support `*` and `?` patterns for file paths using SQL `LIKE`
-4. **Rate Limiting**: Limit hunt job execution to prevent database overload
-5. **Activity Logging**: Log all hunt operations for audit trail
+VirusTotal API has rate limits based on your plan:
+- **Free tier**: 4 requests/minute, 500 requests/day
+- **Premium**: Higher limits based on subscription
+
+The edge function will:
+1. Track request counts per organization
+2. Return appropriate errors when limits are approached
+3. Support bulk operations with automatic pacing
+
+## Technical Details
+
+### VirusTotal API Call Example
+
+```typescript
+const response = await fetch(
+  `https://www.virustotal.com/api/v3/files/${hash}`,
+  {
+    headers: {
+      "x-apikey": vtApiKey,
+      "Accept": "application/json"
+    }
+  }
+);
+
+const data = await response.json();
+// data.data.attributes contains:
+// - last_analysis_stats (malicious, suspicious, harmless, etc.)
+// - popular_threat_classification
+// - meaningful_name
+// - type_description
+// - first_submission_date
+```
+
+### Detection Ratio Display Logic
+
+```text
+0 detections      -> Green badge "Clean"
+1-5 detections    -> Yellow badge "Suspicious"  
+6+ detections     -> Red badge with count "45/72"
+```
+
+## Security Notes
+
+- API key stored in `platform_settings`, never exposed to frontend
+- All VT requests go through authenticated edge function
+- Rate limiting prevents API abuse
+- Only super admins can configure the API key
 
 ## Future Enhancements (Not in Scope)
 
-- Threat intelligence feed integration (VirusTotal, AlienVault OTX)
-- Real-time IOC matching on incoming telemetry
-- Scheduled/automated hunts
-- Network IOCs (IP addresses, domains) - requires agent telemetry expansion
-- YARA rule support
+- URL and domain lookups (requires different VT endpoints)
+- IP address reputation checks
+- Automatic enrichment on IOC import
+- VT Intelligence search integration (premium)
+- Sandbox submission for unknown files
+
