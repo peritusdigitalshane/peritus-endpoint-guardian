@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -10,13 +10,25 @@ import { cn } from "@/lib/utils";
 
 interface QuickIocSearchProps {
   onResultClick?: (result: QuickSearchResult) => void;
+  initialValue?: string;
 }
 
-export function QuickIocSearch({ onResultClick }: QuickIocSearchProps) {
-  const [searchValue, setSearchValue] = useState("");
+export function QuickIocSearch({ onResultClick, initialValue = "" }: QuickIocSearchProps) {
+  const [searchValue, setSearchValue] = useState(initialValue);
   const [results, setResults] = useState<QuickSearchResult[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
   const quickSearch = useQuickSearch();
+
+  // Auto-search when initialValue is provided
+  useEffect(() => {
+    if (initialValue) {
+      setSearchValue(initialValue);
+      quickSearch.mutateAsync(initialValue).then((searchResults) => {
+        setResults(searchResults);
+        setHasSearched(true);
+      });
+    }
+  }, [initialValue]);
 
   const detectedType = searchValue.trim() ? detectIocType(searchValue) : null;
 

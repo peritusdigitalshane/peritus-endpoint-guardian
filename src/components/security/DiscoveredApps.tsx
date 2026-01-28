@@ -18,8 +18,12 @@ import {
   XCircle, 
   Camera,
   Filter,
-  Layers
+  Layers,
+  Crosshair,
+  Copy
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -33,6 +37,17 @@ export function DiscoveredApps({ selectedPolicyId }: DiscoveredAppsProps) {
   const { data: ruleSets } = useRuleSets();
   const { createRule, createBaseline } = useWdacMutations();
   const { addRulesBulk } = useRuleSetMutations();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+
+  const copyToClipboard = (hash: string) => {
+    navigator.clipboard.writeText(hash);
+    toast({ title: "Hash copied to clipboard" });
+  };
+
+  const huntForHash = (hash: string) => {
+    navigate(`/threat-hunting?search=${encodeURIComponent(hash)}`);
+  };
   
   const [search, setSearch] = useState("");
   const [selectedApps, setSelectedApps] = useState<Set<string>>(new Set());
@@ -283,11 +298,12 @@ export function DiscoveredApps({ selectedPolicyId }: DiscoveredAppsProps) {
                     />
                   </TableHead>
                   <TableHead>Application</TableHead>
+                  <TableHead>File Hash</TableHead>
                   <TableHead>Publisher</TableHead>
                   <TableHead>Endpoint</TableHead>
                   <TableHead>Source</TableHead>
                   <TableHead>Last Seen</TableHead>
-                  <TableHead className="text-right">Executions</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -307,6 +323,26 @@ export function DiscoveredApps({ selectedPolicyId }: DiscoveredAppsProps) {
                           {app.file_path}
                         </div>
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      {app.file_hash ? (
+                        <div className="flex items-center gap-1">
+                          <code className="text-xs font-mono text-muted-foreground truncate max-w-[120px]" title={app.file_hash}>
+                            {app.file_hash.substring(0, 16)}...
+                          </code>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => copyToClipboard(app.file_hash!)}
+                            title="Copy hash"
+                          >
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="space-y-1">
@@ -329,8 +365,18 @@ export function DiscoveredApps({ selectedPolicyId }: DiscoveredAppsProps) {
                     <TableCell className="text-sm text-muted-foreground">
                       {format(new Date(app.last_seen_at), "MMM d, HH:mm")}
                     </TableCell>
-                    <TableCell className="text-right font-medium">
-                      {app.execution_count}
+                    <TableCell className="text-right">
+                      {app.file_hash && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => huntForHash(app.file_hash!)}
+                          title="Hunt for this hash"
+                        >
+                          <Crosshair className="h-4 w-4 mr-1" />
+                          Hunt
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
