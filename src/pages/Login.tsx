@@ -27,7 +27,7 @@ const Login = () => {
   const [isValidatingCode, setIsValidatingCode] = useState(false);
   
   // Free trial option
-  const [useFreeTrialSign, setUseFreeTrial] = useState(false);
+  const [useFreeTrial, setUseFreeTrial] = useState(false);
   
   // MFA state
   const [mfaRequired, setMfaRequired] = useState(false);
@@ -84,7 +84,7 @@ const Login = () => {
 
   // Validate code when it changes (debounced) - skip if using free trial
   useEffect(() => {
-    if (!isSignUp || useFreeTrialSign || !enrollmentCode.trim()) {
+    if (!isSignUp || useFreeTrial || !enrollmentCode.trim()) {
       setCodeValidation(null);
       return;
     }
@@ -110,7 +110,7 @@ const Login = () => {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [enrollmentCode, isSignUp, useFreeTrialSign]);
+  }, [enrollmentCode, isSignUp, useFreeTrial]);
 
   const handleMfaVerify = async () => {
     if (!mfaFactorId || mfaCode.length !== 6) return;
@@ -151,7 +151,7 @@ const Login = () => {
     try {
       if (isSignUp) {
         // For free trial, skip enrollment code validation
-        if (!useFreeTrialSign && !codeValidation?.isValid) {
+        if (!useFreeTrial && !codeValidation?.isValid) {
           toast({
             title: "Invalid enrollment code",
             description: "Please enter a valid enrollment code or select 'Start free trial'.",
@@ -169,7 +169,7 @@ const Login = () => {
             data: {
               display_name: displayName,
               // Only include enrollment code if not using free trial
-              ...(useFreeTrialSign ? {} : { enrollment_code: enrollmentCode.trim().toUpperCase() }),
+              ...(useFreeTrial ? {} : { enrollment_code: enrollmentCode.trim().toUpperCase() }),
             },
           },
         });
@@ -215,7 +215,7 @@ const Login = () => {
   };
 
   const canSignUp = isSignUp && displayName.trim() && email.trim() && password.length >= 6 && 
-    (useFreeTrialSign || codeValidation?.isValid);
+    (useFreeTrial || codeValidation?.isValid);
 
   // MFA Challenge Screen
   if (mfaRequired) {
@@ -319,16 +319,16 @@ const Login = () => {
                   {/* Free Trial Option */}
                   <div 
                     className={`p-4 rounded-lg border-2 transition-colors cursor-pointer ${
-                      useFreeTrialSign 
+                      useFreeTrial 
                         ? "border-primary bg-primary/5" 
                         : "border-border hover:border-muted-foreground/50"
                     }`}
-                    onClick={() => setUseFreeTrial(!useFreeTrialSign)}
+                    onClick={() => setUseFreeTrial(!useFreeTrial)}
                   >
                     <div className="flex items-start gap-3">
                       <Checkbox 
                         id="freeTrial"
-                        checked={useFreeTrialSign}
+                        checked={useFreeTrial}
                         onCheckedChange={(checked) => setUseFreeTrial(checked === true)}
                         className="mt-0.5"
                       />
@@ -348,7 +348,7 @@ const Login = () => {
                   </div>
 
                   {/* Enrollment Code - only show if not using free trial */}
-                  {!useFreeTrialSign && (
+                  {!useFreeTrial && (
                     <div className="space-y-2">
                       <Label htmlFor="enrollmentCode">Enrollment Code</Label>
                       <div className="relative">
@@ -360,7 +360,7 @@ const Login = () => {
                           onChange={(e) => setEnrollmentCode(e.target.value.toUpperCase())}
                           className="uppercase font-mono pr-10"
                           maxLength={8}
-                          required={!useFreeTrialSign}
+                          required={!useFreeTrial}
                         />
                         <div className="absolute right-3 top-1/2 -translate-y-1/2">
                           {isValidatingCode && (
