@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Crosshair } from "lucide-react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -6,6 +8,9 @@ import { IocLibraryManager } from "@/components/hunting/IocLibraryManager";
 import { HuntJobsList } from "@/components/hunting/HuntJobsList";
 
 export default function ThreatHunting() {
+  const [searchParams] = useSearchParams();
+  const initialSearch = searchParams.get("search") || "";
+
   return (
     <MainLayout>
       <div className="space-y-6">
@@ -29,7 +34,7 @@ export default function ThreatHunting() {
           </TabsList>
 
           <TabsContent value="search" className="space-y-4">
-            <QuickIocSearch />
+            <QuickIocSearch initialValue={initialSearch} />
           </TabsContent>
 
           <TabsContent value="library" className="space-y-4">
