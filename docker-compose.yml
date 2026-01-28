@@ -16,8 +16,8 @@ services:
       retries: 3
       start_period: 10s
     labels:
-      - "app.name=peritus-secure"
-      - "app.description=Peritus Secure - Windows Defender Management Platform"
+      - "app.name=peritus-threat-defense"
+      - "app.description=Peritus Threat Defense - Windows Defender Management Platform"
 
   # Optional: Add Traefik for HTTPS (uncomment if needed)
   # traefik:
