@@ -62,7 +62,7 @@ export function Sidebar() {
           {!collapsed && (
             <div className="flex flex-col">
               <span className="text-sm font-bold text-foreground">Peritus</span>
-              <span className="text-xs text-primary">Secure</span>
+              <span className="text-xs text-primary">Threat Defense</span>
             </div>
           )}
         </Link>
