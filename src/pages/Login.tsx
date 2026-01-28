@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Shield, Loader2, ArrowLeft, CheckCircle, XCircle, Building2 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Shield, Loader2, ArrowLeft, CheckCircle, XCircle, Building2, Smartphone, Info } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useValidateEnrollmentCode } from "@/hooks/useEnrollmentCodes";
@@ -23,6 +24,13 @@ const Login = () => {
     error: string | null;
   } | null>(null);
   const [isValidatingCode, setIsValidatingCode] = useState(false);
+  
+  // MFA state
+  const [mfaRequired, setMfaRequired] = useState(false);
+  const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
+  const [mfaCode, setMfaCode] = useState("");
+  const [isVerifyingMfa, setIsVerifyingMfa] = useState(false);
+  
   const navigate = useNavigate();
   const { toast } = useToast();
   const validateCode = useValidateEnrollmentCode();
@@ -32,14 +40,37 @@ const Login = () => {
     const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
+        // Check MFA status
+        const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        if (aalData?.currentLevel === "aal1" && aalData?.nextLevel === "aal2") {
+          // User has MFA enabled but hasn't completed it
+          const { data: factors } = await supabase.auth.mfa.listFactors();
+          const totpFactor = factors?.totp?.find(f => f.status === "verified");
+          if (totpFactor) {
+            setMfaRequired(true);
+            setMfaFactorId(totpFactor.id);
+            return;
+          }
+        }
         navigate("/dashboard");
       }
     };
     checkAuth();
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session) {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session && event === "SIGNED_IN") {
+        // Check if MFA is required
+        const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        if (aalData?.currentLevel === "aal1" && aalData?.nextLevel === "aal2") {
+          const { data: factors } = await supabase.auth.mfa.listFactors();
+          const totpFactor = factors?.totp?.find(f => f.status === "verified");
+          if (totpFactor) {
+            setMfaRequired(true);
+            setMfaFactorId(totpFactor.id);
+            return;
+          }
+        }
         navigate("/dashboard");
       }
     });
@@ -77,6 +108,38 @@ const Login = () => {
     return () => clearTimeout(timer);
   }, [enrollmentCode, isSignUp]);
 
+  const handleMfaVerify = async () => {
+    if (!mfaFactorId || mfaCode.length !== 6) return;
+    
+    setIsVerifyingMfa(true);
+    try {
+      const { data: challengeData, error: challengeError } = await supabase.auth.mfa.challenge({
+        factorId: mfaFactorId,
+      });
+      
+      if (challengeError) throw challengeError;
+      
+      const { error: verifyError } = await supabase.auth.mfa.verify({
+        factorId: mfaFactorId,
+        challengeId: challengeData.id,
+        code: mfaCode,
+      });
+      
+      if (verifyError) throw verifyError;
+      
+      navigate("/dashboard");
+    } catch (error: any) {
+      toast({
+        title: "Verification failed",
+        description: error.message,
+        variant: "destructive",
+      });
+      setMfaCode("");
+    } finally {
+      setIsVerifyingMfa(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -113,12 +176,27 @@ const Login = () => {
           description: "We've sent you a confirmation link to complete your signup.",
         });
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
 
         if (error) throw error;
+        
+        // Check if MFA is required after successful password auth
+        if (data.session) {
+          const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+          if (aalData?.currentLevel === "aal1" && aalData?.nextLevel === "aal2") {
+            const { data: factors } = await supabase.auth.mfa.listFactors();
+            const totpFactor = factors?.totp?.find(f => f.status === "verified");
+            if (totpFactor) {
+              setMfaRequired(true);
+              setMfaFactorId(totpFactor.id);
+              setIsLoading(false);
+              return;
+            }
+          }
+        }
       }
     } catch (error: any) {
       toast({
@@ -132,6 +210,75 @@ const Login = () => {
   };
 
   const canSignUp = isSignUp && codeValidation?.isValid && displayName.trim() && email.trim() && password.length >= 6;
+
+  // MFA Challenge Screen
+  if (mfaRequired) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <div className="p-6">
+          <button 
+            onClick={() => {
+              supabase.auth.signOut();
+              setMfaRequired(false);
+              setMfaFactorId(null);
+              setMfaCode("");
+            }}
+            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Cancel and sign out
+          </button>
+        </div>
+
+        <div className="flex-1 flex items-center justify-center px-6 pb-20">
+          <Card className="w-full max-w-md border-border/40">
+            <CardHeader className="text-center pb-8">
+              <div className="mx-auto h-12 w-12 rounded-xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center mb-4">
+                <Smartphone className="h-6 w-6 text-primary-foreground" />
+              </div>
+              <CardTitle className="text-2xl">Two-Factor Authentication</CardTitle>
+              <CardDescription>
+                Enter the 6-digit code from your authenticator app
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  Open your authenticator app (Google Authenticator, Authy, etc.) and enter the current code.
+                </AlertDescription>
+              </Alert>
+              
+              <div className="space-y-2">
+                <Label htmlFor="mfa-code">Authentication Code</Label>
+                <Input
+                  id="mfa-code"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  placeholder="000000"
+                  value={mfaCode}
+                  onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ""))}
+                  className="text-center text-2xl tracking-widest font-mono"
+                  autoFocus
+                />
+              </div>
+
+              <Button 
+                onClick={handleMfaVerify}
+                className="w-full"
+                disabled={mfaCode.length !== 6 || isVerifyingMfa}
+              >
+                {isVerifyingMfa && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Verify
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
