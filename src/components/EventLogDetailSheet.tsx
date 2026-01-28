@@ -1,9 +1,13 @@
+import { useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { formatDistanceToNow } from "date-fns";
-import { AlertCircle, AlertTriangle, Info, FileText, Clock, Monitor, Hash, Tag } from "lucide-react";
+import { AlertCircle, AlertTriangle, Info, FileText, Clock, Monitor, Hash, Tag, ShieldPlus } from "lucide-react";
 import { EndpointEventLog } from "@/hooks/useEventLogs";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { isAsrEvent, parseAsrEventMessage } from "@/lib/event-parser";
+import { EventLogAddExclusionDialog } from "./EventLogAddExclusionDialog";
 
 interface EventLogDetailSheetProps {
   log: EndpointEventLog | null;
@@ -71,11 +75,26 @@ const formatInTimezone = (date: string, timezone: string) => {
 };
 
 export function EventLogDetailSheet({ log, open, onOpenChange, timezone }: EventLogDetailSheetProps) {
+  const [exclusionDialogOpen, setExclusionDialogOpen] = useState(false);
+
   if (!log) return null;
 
+  // Parse ASR event data if applicable
+  const isAsr = isAsrEvent(log.event_id);
+  const asrData = isAsr ? parseAsrEventMessage(log.message) : null;
+  const canAddExclusion = isAsr && asrData !== null;
+
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-lg">
+    <>
+      <EventLogAddExclusionDialog
+        open={exclusionDialogOpen}
+        onOpenChange={setExclusionDialogOpen}
+        asrData={asrData ?? { asrRuleId: "", asrRuleName: "", path: "", processName: "", user: "", detectionTime: "" }}
+        endpointHostname={log.endpoints?.hostname ?? "Unknown"}
+        policyId={log.endpoints?.policy_id ?? null}
+      />
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent className="w-full sm:max-w-lg">
         <SheetHeader className="space-y-4">
           <div className="flex items-center gap-3">
             {getLevelIcon(log.level)}
@@ -88,9 +107,22 @@ export function EventLogDetailSheet({ log, open, onOpenChange, timezone }: Event
             <Badge variant="outline">{getEventCategory(log.event_id)}</Badge>
             <Badge variant="secondary">ID: {log.event_id}</Badge>
           </div>
+
+          {/* Add to Exclusions Button for ASR events */}
+          {canAddExclusion && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => setExclusionDialogOpen(true)}
+            >
+              <ShieldPlus className="mr-2 h-4 w-4" />
+              Add to Policy Exclusions
+            </Button>
+          )}
         </SheetHeader>
 
-        <ScrollArea className="h-[calc(100vh-180px)] mt-6">
+        <ScrollArea className="h-[calc(100vh-220px)] mt-6">
           <div className="space-y-6 pr-4">
             {/* Metadata Grid */}
             <div className="grid grid-cols-2 gap-4">
@@ -186,5 +218,6 @@ export function EventLogDetailSheet({ log, open, onOpenChange, timezone }: Event
         </ScrollArea>
       </SheetContent>
     </Sheet>
+    </>
   );
 }
