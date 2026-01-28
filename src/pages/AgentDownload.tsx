@@ -148,9 +148,9 @@ const generatePowershellScript = (orgId: string, apiBaseUrl: string, trayIconIco
     .\\PeritusSecureAgent.ps1 -TrayMode
     Runs the agent with a system tray icon for status visibility.
 .NOTES
-    Version: 2.6.0
+    Version: 2.7.0
     Requires: Windows 10/11, PowerShell 5.1+, Administrator privileges
-    Changes in 2.6.0: Added system tray icon with status display and policy viewer
+    Changes in 2.7.0: Added Security Event 4688 (process creation) collection for IOC threat hunting
 #>
 
 param(
@@ -553,7 +553,7 @@ function Send-Threats {
     Write-Log "Threats reported: $($response.message)"
 }
 
-# Relevant Windows Defender Event IDs to collect
+# Relevant Windows Event IDs to collect for security monitoring and IOC hunting
 $RelevantEventIds = @{
     # Windows Defender Operational Log (includes ASR/CFA/Network Protection events)
     "Microsoft-Windows-Windows Defender/Operational" = @(
@@ -587,6 +587,12 @@ $RelevantEventIds = @{
         5004, 5007,  # Configuration changed
         5008,        # Engine state changed
         5010, 5012   # Signature/platform outdated
+    )
+    # Security Log - Process creation for IOC threat hunting
+    # NOTE: Requires audit policy enabled: auditpol /set /subcategory:"Process Creation" /success:enable
+    "Security" = @(
+        4688,        # Process creation with command line (essential for IOC hunting)
+        4689         # Process termination (optional context)
     )
 }
 
@@ -640,7 +646,7 @@ function Get-RelevantDefenderLogs {
     
     # Convert UTC back to local time for Get-WinEvent (which expects local time)
     $startTimeLocal = $startTimeUtc.ToLocalTime()
-    Write-Log "Collecting Defender events since: $($startTimeLocal.ToString('o')) (UTC: $($startTimeUtc.ToString('u')))"
+    Write-Log "Collecting security events since: $($startTimeLocal.ToString('o')) (UTC: $($startTimeUtc.ToString('u')))"
     
     foreach ($logName in $RelevantEventIds.Keys) {
         $eventIds = $RelevantEventIds[$logName]
