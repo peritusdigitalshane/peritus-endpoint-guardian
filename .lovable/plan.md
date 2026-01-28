@@ -1,165 +1,310 @@
 
-# One-Click ASR Exclusion from Event Logs
+
+# Firewall Policy Management with Audit Mode
 
 ## Overview
 
-This feature allows you to add processes or paths directly to policy exclusions from ASR audit events in the Event Logs page. When you're running in Audit mode to baseline your environment, you can review the events and click a button to exclude legitimate processes.
+Building on the Service-Access Matrix design, this plan adds **Audit Mode** - allowing you to learn normal traffic patterns before blocking. This mirrors your existing ASR workflow: deploy in audit, tune exceptions, then switch to block.
 
-**Important**: Switching from Audit to Block mode remains a **manual action** in the Policy Editor. This feature only helps you build your exclusion list - you decide when the policy is ready to enforce.
+---
 
-## Workflow
+## How Audit Mode Works
+
+```text
+                     Audit Mode                          Enforce Mode
+              ┌────────────────────────┐         ┌────────────────────────┐
+              │  Rule: Block RDP       │         │  Rule: Block RDP       │
+              │  Mode: AUDIT           │   -->   │  Mode: ENFORCE         │
+              │                        │         │                        │
+              │  Connection logged     │         │  Connection blocked    │
+              │  Traffic allowed       │         │  Traffic denied        │
+              └────────────────────────┘         └────────────────────────┘
+```
+
+The agent creates Windows Firewall rules differently based on mode:
+- **Audit**: Rule set to "Allow" with logging enabled, plus a tracking rule that logs matching traffic
+- **Enforce**: Rule set to "Block" - actually blocks the traffic
+
+---
+
+## Service-Access Matrix with Mode Toggle
+
+The matrix view will show both the access policy AND the current mode:
+
+```text
+                      RDP (3389)       SMB (445)        WinRM (5985)
+              ┌──────────────────┬────────────────┬──────────────────┐
+ Workstations │   Block          │   Block        │   Block          │
+              │   🔍 Auditing    │   🔍 Auditing  │   🔍 Auditing    │
+              ├──────────────────┼────────────────┼──────────────────┤
+ Servers      │   Admin PCs      │   Servers      │   Admin PCs      │
+              │   ⛔ Enforcing   │   🔍 Auditing  │   ⛔ Enforcing   │
+              ├──────────────────┼────────────────┼──────────────────┤
+ Admin PCs    │   Allow All      │   Allow All    │   Allow All      │
+              │   -              │   -            │   -              │
+              └──────────────────┴────────────────┴──────────────────┘
+```
+
+Visual indicators:
+- `🔍 Auditing` - Yellow/amber badge, traffic logged but not blocked
+- `⛔ Enforcing` - Green badge, rules actively blocking traffic
+- `-` for "Allow All" rules (nothing to audit)
+
+---
+
+## Audit Logs View
+
+A new "Audit Logs" tab within the Network section shows what would have been blocked:
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                        ASR TUNING WORKFLOW                              │
+│ Firewall Audit Logs                                      [Learn More]  │
 ├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  1. AUDIT PHASE                                                         │
-│     ┌──────────────┐                                                    │
-│     │ Policy set   │  Events flow into Event Logs                       │
-│     │ to AUDIT     │  ────────────────────────────►                     │
-│     └──────────────┘                                                    │
-│                                                                         │
-│  2. REVIEW & EXCLUDE (This Feature)                                     │
-│     ┌──────────────┐    ┌──────────────┐    ┌──────────────┐           │
-│     │ View Event   │───►│ Click "Add   │───►│ Exclusion    │           │
-│     │ Log Details  │    │ to Exclusion"│    │ Added        │           │
-│     └──────────────┘    └──────────────┘    └──────────────┘           │
-│     Repeat for each legitimate process                                  │
-│                                                                         │
-│  3. BLOCK PHASE (Manual - User Decision)                                │
-│     ┌──────────────┐                                                    │
-│     │ Open Policy  │  User manually changes ASR rule                    │
-│     │ Editor       │  from "Audit" to "Block"                           │
-│     └──────────────┘                                                    │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
+│ Time         │ Endpoint    │ Service │ Source IP     │ Status │ Action │
+├──────────────┼─────────────┼─────────┼───────────────┼────────┼────────┤
+│ 2 min ago    │ DESKTOP-01  │ RDP     │ 10.0.1.50     │ Audit  │ [Add]  │
+│ 5 min ago    │ DESKTOP-02  │ SMB     │ 10.0.1.100    │ Audit  │ [Add]  │
+│ 12 min ago   │ SERVER-01   │ WinRM   │ 10.0.1.5      │ Audit  │ [Add]  │
+└──────────────┴─────────────┴─────────┴───────────────┴────────┴────────┘
 ```
 
-## User Experience
+The "[Add]" button opens a dialog to whitelist that source, similar to your ASR exclusion workflow.
 
-**In the Event Log Detail Sheet (for ASR events):**
+---
 
-When viewing an ASR/Exploit Guard audit event (Event IDs 1121, 1122), an "Add to Exclusions" button appears. Clicking it opens a dialog showing:
+## Database Schema
 
-- The ASR rule name (e.g., "Block credential stealing from LSASS")
-- The process path being excluded (e.g., `C:\Windows\System32\svchost.exe`)
-- The endpoint name and its assigned policy
-- Option to exclude as full path or just the process name
-- Confirmation before saving
+### firewall_policies
+| Column | Type | Description |
+|--------|------|-------------|
+| id | uuid | Primary key |
+| organization_id | uuid | Foreign key to organizations |
+| name | text | Policy name (e.g., "Block Lateral Movement") |
+| description | text | Optional description |
+| is_default | boolean | Default policy for new groups |
+| created_at | timestamp | Creation time |
+| updated_at | timestamp | Last update time |
 
-**Edge Cases:**
-- If the endpoint has no policy assigned → Prompt to assign a policy first
-- If the path is already excluded → Show message "Already in exclusions"
-- If message cannot be parsed → Button is hidden
+### firewall_service_rules
+| Column | Type | Description |
+|--------|------|-------------|
+| id | uuid | Primary key |
+| policy_id | uuid | Foreign key to firewall_policies |
+| endpoint_group_id | uuid | Which group this rule applies to |
+| service_name | text | RDP, SMB, WinRM, Custom |
+| port | text | Port number(s), e.g., "3389" or "445,139" |
+| protocol | text | tcp, udp, or both |
+| action | text | "block", "allow", "allow_from_groups" |
+| allowed_source_groups | uuid[] | Groups allowed to connect (if action = allow_from_groups) |
+| allowed_source_ips | text[] | Specific IPs/CIDRs allowed |
+| mode | text | **"audit" or "enforce"** |
+| enabled | boolean | Rule active or disabled |
+| order_priority | int | Rule processing order |
+| created_at | timestamp | Creation time |
 
-## Implementation Details
+### firewall_audit_logs
+| Column | Type | Description |
+|--------|------|-------------|
+| id | uuid | Primary key |
+| organization_id | uuid | Foreign key |
+| endpoint_id | uuid | Which endpoint logged this |
+| rule_id | uuid | Which rule matched (nullable) |
+| service_name | text | RDP, SMB, etc. |
+| local_port | int | Destination port |
+| remote_address | text | Source IP of connection |
+| remote_port | int | Source port |
+| protocol | text | TCP/UDP |
+| direction | text | inbound/outbound |
+| event_time | timestamp | When the connection occurred |
+| created_at | timestamp | When logged to database |
 
-### Step 1: Event Message Parser
+### firewall_templates
+| Column | Type | Description |
+|--------|------|-------------|
+| id | uuid | Primary key |
+| name | text | Template name |
+| description | text | What it does |
+| category | text | "lateral-movement", "lockdown", "compliance" |
+| rules_json | jsonb | Array of rule definitions |
+| default_mode | text | "audit" or "enforce" |
 
-Create a utility to extract key fields from ASR event messages:
+---
 
-```typescript
-// src/lib/event-parser.ts
-interface AsrEventData {
-  asrRuleId: string;      // GUID like "9E6C4E1F-7D60..."
-  asrRuleName: string;    // Human name from ASR_RULES lookup
-  path: string;           // Triggering process path
-  processName: string;    // Target process (e.g., lsass.exe)
-  user: string;           // User context
-  detectionTime: string;
-}
+## UI Components
 
-function parseAsrEventMessage(message: string): AsrEventData | null
+### 1. Network Page (`src/pages/Network.tsx`)
+Main page with tabs:
+- **Firewall Matrix** - Service-access grid with mode indicators
+- **Audit Logs** - What would be blocked (from agent telemetry)
+- **Connections** (future) - Live network telemetry
+- **Access Requests** (future) - JIT admin elevation
+
+### 2. ServiceAccessMatrix (`src/components/network/ServiceAccessMatrix.tsx`)
+- Rows: Endpoint groups from existing hook
+- Columns: Common services (RDP, SMB, WinRM, SSH, HTTP/S, Custom)
+- Cells show: Access level + mode badge
+- Click cell to edit rules
+- Bulk mode toggle: "Switch all to Enforce"
+
+### 3. ServiceRuleEditor (`src/components/network/ServiceRuleEditor.tsx`)
+Dialog when clicking a cell:
+- Access type: Block All / Allow from Groups / Allow All
+- Group selector (if "Allow from Groups")
+- IP allowlist (optional)
+- **Mode toggle: Audit / Enforce**
+- Estimated impact message
+
+### 4. FirewallAuditLogs (`src/components/network/FirewallAuditLogs.tsx`)
+Table showing audit hits:
+- Time, endpoint, service, source IP
+- Filter by group, service, time range
+- "Add Exception" button per row
+- "Switch to Enforce" button when confident
+
+### 5. TemplateGallery (`src/components/network/TemplateGallery.tsx`)
+Pre-built templates with mode selection:
+- Each template shows rules preview
+- "Deploy in Audit Mode" button (recommended)
+- "Deploy in Enforce Mode" button (advanced)
+
+---
+
+## Pre-Built Templates
+
+| Template | Description | Default Mode |
+|----------|-------------|--------------|
+| Block Lateral Movement | Block SMB/RDP between workstations | Audit |
+| Admin Access Only | Only Admin PCs group can RDP/WinRM | Audit |
+| Isolate IoT Devices | Block all inbound to IoT group | Enforce |
+| Server Lockdown | Servers only accept from Admin PCs | Audit |
+| PCI Compliance Baseline | Restrict access per PCI-DSS | Audit |
+
+---
+
+## Agent Enforcement
+
+The agent translates rules to Windows Firewall commands:
+
+**Audit Mode:**
+```powershell
+# Create logging-only rule (allows but logs)
+Set-NetFirewallProfile -LogBlocked True -LogAllowed True -LogFileName "C:\Windows\System32\LogFiles\Firewall\pfirewall.log"
+
+# Or use Windows Filtering Platform audit (Event ID 5156/5157)
+auditpol /set /subcategory:"Filtering Platform Connection" /success:enable /failure:enable
 ```
 
-### Step 2: Extend Event Logs Query
-
-Modify `useEventLogs` to include the endpoint's `policy_id` so we know which policy to update:
-
-```typescript
-// Current query joins endpoints for hostname
-// Add: policy_id to the select
-endpoints!inner(hostname, organization_id, policy_id)
+**Enforce Mode:**
+```powershell
+New-NetFirewallRule -DisplayName "Peritus: Block SMB Inbound" `
+  -Direction Inbound -Protocol TCP -LocalPort 445 `
+  -Action Block -Enabled True
 ```
 
-### Step 3: Add Exclusion Dialog Component
+The agent collects firewall logs (Event IDs 5156, 5157, 5152, 5153) and reports them to the `firewall_audit_logs` table.
 
-New component `EventLogAddExclusionDialog.tsx`:
+---
 
-| Element | Description |
-|---------|-------------|
-| Rule Name | Shows "Block credential stealing from LSASS" etc. |
-| Process Path | The path to be excluded |
-| Exclusion Type | Radio: "Full Path" or "Process Name Only" |
-| Policy Info | Shows which policy will be updated |
-| Confirm Button | Adds to exclusions and closes |
+## User Workflow
 
-### Step 4: Update EventLogDetailSheet
+### Deploying a New Policy
 
-For ASR audit events, add:
-- Parse message to extract path/process
-- Fetch the endpoint's policy details
-- Render "Add to Exclusions" button
-- Open dialog on click
+1. Navigate to **Network > Firewall Matrix**
+2. Click **Apply Template** 
+3. Select "Block Lateral Movement"
+4. Template defaults to **Audit Mode**
+5. Click Apply - cells update with amber "Auditing" badges
+6. Agent deploys logging rules to all affected endpoints
 
-### Step 5: Policy Exclusion Hook
+### Learning Phase
 
-New hook `useAddPolicyExclusion` in `usePolicies.ts`:
-- Takes policy ID and exclusion value
-- Appends to `exclusion_paths` or `exclusion_processes` array
-- Uses existing `useUpdatePolicy` mutation
-- Logs activity
+1. Wait for normal business activity (1-2 weeks recommended)
+2. Check **Network > Audit Logs** tab
+3. See connections that WOULD have been blocked
+4. For legitimate traffic, click **[Add Exception]**
+   - Adds source group or IP to allowlist
+5. Repeat until audit logs show only suspicious activity
 
-## Files to Create
+### Switching to Enforce
 
-| File | Purpose |
-|------|---------|
-| `src/lib/event-parser.ts` | Parse ASR event messages to extract path, process, rule ID |
-| `src/components/EventLogAddExclusionDialog.tsx` | Confirmation dialog for adding exclusions |
+1. Return to **Firewall Matrix**
+2. Click a cell in Audit mode
+3. Toggle mode from "Audit" to "Enforce"
+4. Confirmation dialog: "This will block traffic. 3 audit events in last 7 days. Continue?"
+5. Click Confirm - badge changes to green "Enforcing"
+6. Agent updates rules to actually block
 
-## Files to Modify
+---
 
-| File | Changes |
-|------|---------|
-| `src/components/EventLogDetailSheet.tsx` | Add exclusion button for ASR events, integrate dialog |
-| `src/hooks/useEventLogs.ts` | Include `policy_id` in endpoints join |
-| `src/hooks/usePolicies.ts` | Add `useAddPolicyExclusion` hook |
+## Sidebar Navigation Update
 
-## Technical Notes
+Add "Network" between "Policies" and "AI Advisor":
 
-### ASR Event Detection
-
-ASR audit events use Event IDs:
-- **1121**: ASR rule audited (would have blocked)
-- **1122**: ASR rule blocked
-
-The feature targets 1121 (audit) events since that's the tuning phase.
-
-### Message Parsing
-
-ASR messages follow this format:
-```
-Microsoft Defender Exploit Guard audited an operation...
-  ID: 9E6C4E1F-7D60-472F-BA1A-A39EF669E4B2
-  Path: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
-  Process Name: C:\Windows\System32\lsass.exe
+```text
+├── Policies
+├── Network          (new)
+│   └── Firewall Matrix (default tab)
+│   └── Audit Logs
+├── AI Advisor
 ```
 
-The parser uses regex to extract each field reliably.
+---
 
-### Rule ID to Name Mapping
+## Implementation Phases
 
-Uses the existing `ASR_RULES` array in `defender-settings.ts` to show human-readable rule names instead of GUIDs.
+### Phase 1: Database and Types
+- Create migration for `firewall_policies`, `firewall_service_rules`, `firewall_audit_logs`, `firewall_templates`
+- Add RLS policies matching existing pattern
+- Create TypeScript interfaces in `src/hooks/useFirewall.ts`
+- Implement React Query hooks for CRUD
 
-## What This Feature Does NOT Do
+### Phase 2: UI Shell
+- Add "Network" to sidebar navigation (`Sidebar.tsx`)
+- Create `Network.tsx` page with tabs structure
+- Add route in `App.tsx`
 
-- **Does NOT auto-switch to Block mode** - That remains a manual decision in the Policy Editor
-- **Does NOT modify the ASR rule settings** - Only adds exclusions
-- **Does NOT affect other endpoints** - Exclusions apply at the policy level (shared by endpoints using that policy)
+### Phase 3: Service Matrix
+- Build `ServiceAccessMatrix.tsx` component
+- Use endpoint groups as rows
+- Define common services as columns
+- Color-coded cells with mode badges
+- Click-to-edit interaction
 
-## Security
+### Phase 4: Rule Editor
+- Build `ServiceRuleEditor.tsx` dialog
+- Access type selector
+- Group/IP allowlist
+- Mode toggle (Audit/Enforce)
+- Template application
 
-- Exclusion updates use existing `useUpdatePolicy` mutation (validates org ownership)
-- Activity logging records who added exclusions and when
-- Only users with policy edit access can add exclusions
+### Phase 5: Audit Logs
+- Build `FirewallAuditLogs.tsx` component
+- Table with filtering
+- "Add Exception" flow
+- "Ready to Enforce" recommendations
+
+### Phase 6: Templates
+- Seed template data in migration
+- Build `TemplateGallery.tsx`
+- One-click apply with mode selection
+
+### Phase 7: Agent Integration (spec only)
+- Document agent API for receiving firewall policies
+- Document expected log collection (Event IDs 5156, 5157)
+- Define `firewall_audit_logs` ingestion endpoint
+
+---
+
+## Summary
+
+This design gives you Zero Networks-style microsegmentation with:
+
+1. **Visual matrix** - Easy to understand at a glance
+2. **Template-based** - One-click security hardening
+3. **Audit mode** - Learn before you block
+4. **Audit logs** - See what would be blocked
+5. **One-click exceptions** - Whitelist legitimate traffic
+6. **Safe transition** - Switch to enforce when ready
+
+The audit-first approach ensures you never accidentally block legitimate business traffic.
+
