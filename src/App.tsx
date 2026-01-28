@@ -22,6 +22,7 @@ import Settings from "./pages/Settings";
 import Recommendations from "./pages/Recommendations";
 import ThreatHunting from "./pages/ThreatHunting";
 import Network from "./pages/Network";
+import Reports from "./pages/Reports";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -147,6 +148,14 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <Network />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/reports"
+                element={
+                  <ProtectedRoute>
+                    <Reports />
                   </ProtectedRoute>
                 }
               />
