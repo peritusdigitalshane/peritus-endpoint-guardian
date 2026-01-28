@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   FolderOpen,
   Sparkles,
+  Crosshair,
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
@@ -26,6 +27,7 @@ const navigation = [
   { name: "Groups", href: "/groups", icon: FolderOpen },
   { name: "Threats", href: "/threats", icon: AlertTriangle },
   { name: "Event Logs", href: "/logs", icon: ScrollText },
+  { name: "Threat Hunting", href: "/threat-hunting", icon: Crosshair },
   { name: "Policies", href: "/policies", icon: FileText },
   { name: "App Control", href: "/security", icon: ShieldCheck },
   { name: "AI Advisor", href: "/recommendations", icon: Sparkles },
