@@ -29,7 +29,7 @@ const Landing = () => {
               <Link to="/login">Sign In</Link>
             </Button>
             <Button asChild>
-              <Link to="/login?mode=signup">Get Started</Link>
+              <Link to="/signup">Get Started</Link>
             </Button>
           </div>
         </div>
@@ -54,7 +54,7 @@ const Landing = () => {
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Button size="lg" className="h-12 px-8 text-base" asChild>
-              <Link to="/login?mode=signup">
+              <Link to="/signup">
                 Start Free Trial
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
@@ -439,7 +439,7 @@ const Landing = () => {
             Start your free 14-day trial today. No credit card required.
           </p>
           <Button size="lg" className="h-12 px-8 text-base" asChild>
-            <Link to="/login?mode=signup">
+            <Link to="/signup">
               Get Started Free
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
