@@ -414,7 +414,7 @@ export function useQuickSearch() {
       if (detection.type === "file_path" || detection.type === "file_name" || detection.type === "process_name") {
         const { data } = await supabase
           .from("endpoint_event_logs")
-          .select("id, endpoint_id, message, event_time, endpoints!inner(hostname, organization_id)")
+          .select("id, endpoint_id, message, event_time, log_source, event_id, raw_data, endpoints!inner(hostname, organization_id)")
           .eq("endpoints.organization_id", orgId)
           .ilike("message", `%${searchValue}%`)
           .limit(100);
@@ -425,7 +425,13 @@ export function useQuickSearch() {
             endpoint_id: log.endpoint_id as string,
             endpoint_hostname: (log.endpoints as Record<string, string>)?.hostname ?? "Unknown",
             matched_value: searchValue,
-            context: { message: log.message, event_time: log.event_time },
+            context: { 
+              message: log.message, 
+              event_time: log.event_time,
+              log_source: log.log_source,
+              event_id: log.event_id,
+              raw_data: log.raw_data,
+            },
           })));
         }
       }
