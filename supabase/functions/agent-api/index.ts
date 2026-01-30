@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// Version for deployment verification
-const VERSION = "v2.4.0";
+// Version for deployment verification - bump to trigger agent updates
+const VERSION = "v2.10.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,6 +13,28 @@ const SUPABASE_URL = "https://njdcyjxgtckgtzgzoctw.supabase.co";
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+
+// Rate limiting for chatty endpoints - prevents duplicate submissions within window
+const rateLimitMap = new Map<string, number>();
+const RATE_LIMIT_MS = 10000; // 10 seconds minimum between heartbeats per endpoint
+
+function checkRateLimit(endpointId: string, action: string): boolean {
+  const key = `${endpointId}:${action}`;
+  const now = Date.now();
+  const lastRequest = rateLimitMap.get(key) || 0;
+  if (now - lastRequest < RATE_LIMIT_MS) {
+    return false; // Rate limited
+  }
+  rateLimitMap.set(key, now);
+  // Clean up old entries periodically (keep map from growing indefinitely)
+  if (rateLimitMap.size > 1000) {
+    const cutoff = now - RATE_LIMIT_MS * 2;
+    for (const [k, v] of rateLimitMap.entries()) {
+      if (v < cutoff) rateLimitMap.delete(k);
+    }
+  }
+  return true;
+}
 
 type ParsedThreatFromEventLog = {
   threat_id: string;
@@ -345,6 +367,14 @@ async function handleHeartbeat(req: Request) {
   const endpoint = await validateAgentToken(req);
   const body = await req.json();
 
+  // Rate limit heartbeats to reduce write pressure
+  if (!checkRateLimit(endpoint.id, "heartbeat")) {
+    return new Response(
+      JSON.stringify({ success: true, message: "Heartbeat rate limited", rate_limited: true }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
   // Update endpoint last seen
   await supabase
     .from("endpoints")
@@ -355,9 +385,10 @@ async function handleHeartbeat(req: Request) {
     })
     .eq("id", endpoint.id);
 
-  // Insert status record with UAC and Windows Update data
+  // Build status data for upsert
   const statusData = {
     endpoint_id: endpoint.id,
+    collected_at: new Date().toISOString(),
     realtime_protection_enabled: body.realtime_protection_enabled,
     antivirus_enabled: body.antivirus_enabled,
     antispyware_enabled: body.antispyware_enabled,
@@ -398,6 +429,8 @@ async function handleHeartbeat(req: Request) {
     wu_restart_pending: body.wu_restart_pending ?? null,
   };
 
+  // Insert status record (we still insert new records for historical tracking,
+  // but rate limiting above prevents excessive writes)
   const { error: statusError } = await supabase.from("endpoint_status").insert(statusData);
 
   if (statusError) {
