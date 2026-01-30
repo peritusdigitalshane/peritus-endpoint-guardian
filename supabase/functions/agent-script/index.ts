@@ -11,7 +11,7 @@ const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 // Current agent version - MUST match the version in agent-api
-const AGENT_VERSION = "2.10.0";
+const AGENT_VERSION = "2.11.0";
 const API_BASE_URL = "https://njdcyjxgtckgtzgzoctw.supabase.co/functions/v1/agent-api";
 
 Deno.serve(async (req) => {
@@ -265,52 +265,52 @@ function Ensure-FirewallTelemetry {
     try {
         Write-Log "Checking Windows Firewall and audit logging prerequisites..."
         
-        \$changed = \$false
-        \$profiles = @("Domain", "Private", "Public")
+        $changed = $false
+        $profiles = @("Domain", "Private", "Public")
         
         # Check each firewall profile
-        foreach (\$profile in \$profiles) {
-            \$fwProfile = Get-NetFirewallProfile -Name \$profile -ErrorAction SilentlyContinue
+        foreach ($profile in $profiles) {
+            $fwProfile = Get-NetFirewallProfile -Name $profile -ErrorAction SilentlyContinue
             
-            if (\$fwProfile) {
+            if ($fwProfile) {
                 # Enable firewall if disabled
-                if (-not \$fwProfile.Enabled) {
-                    Write-Log "Enabling Windows Firewall for \$profile profile..."
-                    Set-NetFirewallProfile -Name \$profile -Enabled True -ErrorAction Stop
-                    \$changed = \$true
+                if (-not $fwProfile.Enabled) {
+                    Write-Log "Enabling Windows Firewall for $profile profile..."
+                    Set-NetFirewallProfile -Name $profile -Enabled True -ErrorAction Stop
+                    $changed = $true
                 }
                 
                 # Enable logging for allowed and blocked connections
-                if (-not \$fwProfile.LogAllowed -or -not \$fwProfile.LogBlocked) {
-                    Write-Log "Enabling firewall logging for \$profile profile..."
-                    Set-NetFirewallProfile -Name \$profile -LogAllowed True -LogBlocked True -ErrorAction Stop
-                    \$changed = \$true
+                if (-not $fwProfile.LogAllowed -or -not $fwProfile.LogBlocked) {
+                    Write-Log "Enabling firewall logging for $profile profile..."
+                    Set-NetFirewallProfile -Name $profile -LogAllowed True -LogBlocked True -ErrorAction Stop
+                    $changed = $true
                 }
             }
         }
         
         # Enable audit policy for Filtering Platform Connection (generates 5156/5157 events)
         try {
-            \$auditResult = auditpol /get /subcategory:"Filtering Platform Connection" 2>\$null
-            if (\$auditResult -notmatch "Success" -or \$auditResult -notmatch "Failure") {
+            $auditResult = auditpol /get /subcategory:"Filtering Platform Connection" 2>$null
+            if ($auditResult -notmatch "Success" -or $auditResult -notmatch "Failure") {
                 Write-Log "Enabling Filtering Platform Connection audit policy..."
-                \$null = auditpol /set /subcategory:"Filtering Platform Connection" /success:enable /failure:enable 2>\$null
-                \$changed = \$true
+                $null = auditpol /set /subcategory:"Filtering Platform Connection" /success:enable /failure:enable 2>$null
+                $changed = $true
             }
         } catch {
-            Write-Log "Could not configure audit policy (may require elevated privileges): \$_" -Level "DEBUG"
+            Write-Log "Could not configure audit policy (may require elevated privileges): $_" -Level "DEBUG"
         }
         
-        if (\$changed) {
+        if ($changed) {
             Write-Log "Firewall telemetry prerequisites configured successfully"
         } else {
             Write-Log "Firewall telemetry prerequisites already configured"
         }
         
-        return \$true
+        return $true
     } catch {
-        Write-Log "Error configuring firewall prerequisites: \$_" -Level "WARN"
-        return \$false
+        Write-Log "Error configuring firewall prerequisites: $_" -Level "WARN"
+        return $false
     }
 }
 
@@ -318,72 +318,72 @@ function Ensure-FirewallTelemetry {
 function Collect-FirewallLogs {
     param([string]$AgentToken)
     
-    \$FirewallLogTimeFile = "\$ConfigPath\\firewall_log_time.txt"
-    \$headers = @{ "Content-Type" = "application/json"; "x-agent-token" = \$AgentToken }
+    $FirewallLogTimeFile = "$ConfigPath\\firewall_log_time.txt"
+    $headers = @{ "Content-Type" = "application/json"; "x-agent-token" = $AgentToken }
     
     try {
         # Get last collection time or default to 60 minutes ago
-        if (Test-Path \$FirewallLogTimeFile) {
-            \$lastTime = [DateTimeOffset]::Parse((Get-Content \$FirewallLogTimeFile -Raw).Trim())
+        if (Test-Path $FirewallLogTimeFile) {
+            $lastTime = [DateTimeOffset]::Parse((Get-Content $FirewallLogTimeFile -Raw).Trim())
         } else {
-            \$lastTime = [DateTimeOffset]::UtcNow.AddMinutes(-60)
+            $lastTime = [DateTimeOffset]::UtcNow.AddMinutes(-60)
         }
         
-        Write-Log "Collecting firewall logs since: \$(\$lastTime.ToString('o'))"
+        Write-Log "Collecting firewall logs since: $($lastTime.ToString('o'))"
         
         # Query Windows Firewall event logs (Security log, Event IDs: 5152=dropped, 5156=allowed, 5157=blocked)
-        \$firewallEvents = @()
+        $firewallEvents = @()
         
         try {
             # Try Security log first for firewall filtering platform events
-            \$events = Get-WinEvent -FilterHashtable @{
+            $events = Get-WinEvent -FilterHashtable @{
                 LogName = 'Security'
                 Id = 5152, 5156, 5157
-                StartTime = \$lastTime.LocalDateTime
+                StartTime = $lastTime.LocalDateTime
             } -MaxEvents 500 -ErrorAction SilentlyContinue
             
-            if (\$events) {
-                \$firewallEvents += \$events
+            if ($events) {
+                $firewallEvents += $events
             }
         } catch {
-            Write-Log "Security log query: \$_" -Level "DEBUG"
+            Write-Log "Security log query: $_" -Level "DEBUG"
         }
         
         try {
             # Also check Windows Firewall with Advanced Security log
-            \$events = Get-WinEvent -FilterHashtable @{
+            $events = Get-WinEvent -FilterHashtable @{
                 LogName = 'Microsoft-Windows-Windows Firewall With Advanced Security/Firewall'
-                StartTime = \$lastTime.LocalDateTime
+                StartTime = $lastTime.LocalDateTime
             } -MaxEvents 500 -ErrorAction SilentlyContinue
             
-            if (\$events) {
-                \$firewallEvents += \$events
+            if ($events) {
+                $firewallEvents += $events
             }
         } catch {
-            Write-Log "Firewall log query: \$_" -Level "DEBUG"
+            Write-Log "Firewall log query: $_" -Level "DEBUG"
         }
         
-        if (\$firewallEvents.Count -eq 0) {
+        if ($firewallEvents.Count -eq 0) {
             Write-Log "No new firewall events found"
             return
         }
         
-        Write-Log "Found \$(\$firewallEvents.Count) firewall events"
+        Write-Log "Found $($firewallEvents.Count) firewall events"
         
-        \$logs = @()
-        foreach (\$event in \$firewallEvents) {
+        $logs = @()
+        foreach ($event in $firewallEvents) {
             try {
-                \$xml = [xml]\$event.ToXml()
-                \$eventData = @{}
+                $xml = [xml]$event.ToXml()
+                $eventData = @{}
                 
                 # Parse event data fields
-                foreach (\$data in \$xml.Event.EventData.Data) {
-                    \$eventData[\$data.Name] = \$data.'#text'
+                foreach ($data in $xml.Event.EventData.Data) {
+                    $eventData[$data.Name] = $data.'#text'
                 }
                 
                 # Map common service ports to names
-                \$port = [int](\$eventData['DestPort'] ?? \$eventData['LocalPort'] ?? 0)
-                \$serviceName = switch (\$port) {
+                $port = [int]($eventData['DestPort'] ?? $eventData['LocalPort'] ?? 0)
+                $serviceName = switch ($port) {
                     22 { "SSH" }
                     80 { "HTTP" }
                     443 { "HTTPS" }
@@ -391,51 +391,51 @@ function Collect-FirewallLogs {
                     3389 { "RDP" }
                     5985 { "WinRM" }
                     5986 { "WinRM-HTTPS" }
-                    default { "Port-\$port" }
+                    default { "Port-$port" }
                 }
                 
-                \$direction = if (\$eventData['Direction'] -eq '%%14592') { 'inbound' } else { 'outbound' }
-                \$action = switch (\$event.Id) {
+                $direction = if ($eventData['Direction'] -eq '%%14592') { 'inbound' } else { 'outbound' }
+                $action = switch ($event.Id) {
                     5152 { "drop" }
                     5156 { "allow" }
                     5157 { "block" }
                     default { "audit" }
                 }
                 
-                \$log = @{
-                    event_time = \$event.TimeCreated.ToUniversalTime().ToString('o')
-                    service_name = \$serviceName
-                    local_port = \$port
-                    remote_address = \$eventData['SourceAddress'] ?? \$eventData['RemoteAddress'] ?? "0.0.0.0"
-                    remote_port = [int](\$eventData['SourcePort'] ?? \$eventData['RemotePort'] ?? 0)
-                    protocol = if (\$eventData['Protocol'] -eq '6') { 'TCP' } elseif (\$eventData['Protocol'] -eq '17') { 'UDP' } else { 'OTHER' }
-                    direction = \$direction
-                    action = \$action
+                $log = @{
+                    event_time = $event.TimeCreated.ToUniversalTime().ToString('o')
+                    service_name = $serviceName
+                    local_port = $port
+                    remote_address = $eventData['SourceAddress'] ?? $eventData['RemoteAddress'] ?? "0.0.0.0"
+                    remote_port = [int]($eventData['SourcePort'] ?? $eventData['RemotePort'] ?? 0)
+                    protocol = if ($eventData['Protocol'] -eq '6') { 'TCP' } elseif ($eventData['Protocol'] -eq '17') { 'UDP' } else { 'OTHER' }
+                    direction = $direction
+                    action = $action
                 }
                 
-                \$logs += \$log
+                $logs += $log
             } catch {
-                Write-Log "Error parsing firewall event: \$_" -Level "DEBUG"
+                Write-Log "Error parsing firewall event: $_" -Level "DEBUG"
             }
         }
         
-        if (\$logs.Count -gt 0) {
-            \$body = @{ logs = \$logs } | ConvertTo-Json -Depth 10 -Compress
-            \$response = Invoke-RestMethod -Uri "\$ApiBaseUrl/firewall-logs" -Method POST -Body \$body -Headers \$headers -TimeoutSec 30
-            Write-Log "Sent \$(\$logs.Count) firewall logs to server (inserted: \$(\$response.count))"
+        if ($logs.Count -gt 0) {
+            $body = @{ logs = $logs } | ConvertTo-Json -Depth 10 -Compress
+            $response = Invoke-RestMethod -Uri "$ApiBaseUrl/firewall-logs" -Method POST -Body $body -Headers $headers -TimeoutSec 30
+            Write-Log "Sent $($logs.Count) firewall logs to server (inserted: $($response.count))"
         }
         
         # Update cursor
-        [DateTimeOffset]::UtcNow.ToString('o') | Set-Content -Path \$FirewallLogTimeFile -Force
+        [DateTimeOffset]::UtcNow.ToString('o') | Set-Content -Path $FirewallLogTimeFile -Force
         
     } catch {
-        Write-Log "Error collecting firewall logs: \$_" -Level "WARN"
+        Write-Log "Error collecting firewall logs: $_" -Level "WARN"
     }
 }
 
 # Ensure firewall telemetry prerequisites before collecting logs
 Ensure-FirewallTelemetry
-Collect-FirewallLogs -AgentToken \$agentToken
+Collect-FirewallLogs -AgentToken $agentToken
 
 Write-Log "Agent run complete"
 `;
