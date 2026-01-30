@@ -11,7 +11,7 @@ const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 // Current agent version - MUST match the version in agent-api
-const AGENT_VERSION = "2.7.0";
+const AGENT_VERSION = "2.8.0";
 const API_BASE_URL = "https://njdcyjxgtckgtzgzoctw.supabase.co/functions/v1/agent-api";
 
 Deno.serve(async (req) => {
@@ -260,6 +260,127 @@ if ($status) {
     Write-Log "Heartbeat sent"
 }
 
-Write-Log "Agent run complete (bootstrap mode - awaiting full update)"
+# Collect and send Firewall audit logs
+function Collect-FirewallLogs {
+    param([string]$AgentToken)
+    
+    $FirewallLogTimeFile = "$ConfigPath\\firewall_log_time.txt"
+    $headers = @{ "Content-Type" = "application/json"; "x-agent-token" = $AgentToken }
+    
+    try {
+        # Get last collection time or default to 60 minutes ago
+        if (Test-Path $FirewallLogTimeFile) {
+            $lastTime = [DateTimeOffset]::Parse((Get-Content $FirewallLogTimeFile -Raw).Trim())
+        } else {
+            $lastTime = [DateTimeOffset]::UtcNow.AddMinutes(-60)
+        }
+        
+        Write-Log "Collecting firewall logs since: \$(\$lastTime.ToString('o'))"
+        
+        # Query Windows Firewall event logs (Security log, Event IDs: 5152=dropped, 5156=allowed, 5157=blocked)
+        \$firewallEvents = @()
+        
+        try {
+            # Try Security log first for firewall filtering platform events
+            \$events = Get-WinEvent -FilterHashtable @{
+                LogName = 'Security'
+                Id = 5152, 5156, 5157
+                StartTime = \$lastTime.LocalDateTime
+            } -MaxEvents 500 -ErrorAction SilentlyContinue
+            
+            if (\$events) {
+                \$firewallEvents += \$events
+            }
+        } catch {
+            Write-Log "Security log query: \$_" -Level "DEBUG"
+        }
+        
+        try {
+            # Also check Windows Firewall with Advanced Security log
+            \$events = Get-WinEvent -FilterHashtable @{
+                LogName = 'Microsoft-Windows-Windows Firewall With Advanced Security/Firewall'
+                StartTime = \$lastTime.LocalDateTime
+            } -MaxEvents 500 -ErrorAction SilentlyContinue
+            
+            if (\$events) {
+                \$firewallEvents += \$events
+            }
+        } catch {
+            Write-Log "Firewall log query: \$_" -Level "DEBUG"
+        }
+        
+        if (\$firewallEvents.Count -eq 0) {
+            Write-Log "No new firewall events found"
+            return
+        }
+        
+        Write-Log "Found \$(\$firewallEvents.Count) firewall events"
+        
+        \$logs = @()
+        foreach (\$event in \$firewallEvents) {
+            try {
+                \$xml = [xml]\$event.ToXml()
+                \$eventData = @{}
+                
+                # Parse event data fields
+                foreach (\$data in \$xml.Event.EventData.Data) {
+                    \$eventData[\$data.Name] = \$data.'#text'
+                }
+                
+                # Map common service ports to names
+                \$port = [int](\$eventData['DestPort'] ?? \$eventData['LocalPort'] ?? 0)
+                \$serviceName = switch (\$port) {
+                    22 { "SSH" }
+                    80 { "HTTP" }
+                    443 { "HTTPS" }
+                    445 { "SMB" }
+                    3389 { "RDP" }
+                    5985 { "WinRM" }
+                    5986 { "WinRM-HTTPS" }
+                    default { "Port-\$port" }
+                }
+                
+                \$direction = if (\$eventData['Direction'] -eq '%%14592') { 'inbound' } else { 'outbound' }
+                \$action = switch (\$event.Id) {
+                    5152 { "drop" }
+                    5156 { "allow" }
+                    5157 { "block" }
+                    default { "audit" }
+                }
+                
+                \$log = @{
+                    event_time = \$event.TimeCreated.ToUniversalTime().ToString('o')
+                    service_name = \$serviceName
+                    local_port = \$port
+                    remote_address = \$eventData['SourceAddress'] ?? \$eventData['RemoteAddress'] ?? "0.0.0.0"
+                    remote_port = [int](\$eventData['SourcePort'] ?? \$eventData['RemotePort'] ?? 0)
+                    protocol = if (\$eventData['Protocol'] -eq '6') { 'TCP' } elseif (\$eventData['Protocol'] -eq '17') { 'UDP' } else { 'OTHER' }
+                    direction = \$direction
+                    action = \$action
+                }
+                
+                \$logs += \$log
+            } catch {
+                Write-Log "Error parsing firewall event: \$_" -Level "DEBUG"
+            }
+        }
+        
+        if (\$logs.Count -gt 0) {
+            \$body = @{ logs = \$logs } | ConvertTo-Json -Depth 10 -Compress
+            \$response = Invoke-RestMethod -Uri "\$ApiBaseUrl/firewall-logs" -Method POST -Body \$body -Headers \$headers -TimeoutSec 30
+            Write-Log "Sent \$(\$logs.Count) firewall logs to server (inserted: \$(\$response.count))"
+        }
+        
+        # Update cursor
+        [DateTimeOffset]::UtcNow.ToString('o') | Set-Content -Path \$FirewallLogTimeFile -Force
+        
+    } catch {
+        Write-Log "Error collecting firewall logs: \$_" -Level "WARN"
+    }
+}
+
+Collect-FirewallLogs -AgentToken \$agentToken
+
+Write-Log "Agent run complete"
 `;
 }
