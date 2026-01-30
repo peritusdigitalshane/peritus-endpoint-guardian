@@ -11,7 +11,7 @@ const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 // Current agent version - MUST match the version in agent-api
-const AGENT_VERSION = "2.8.0";
+const AGENT_VERSION = "2.9.0";
 const API_BASE_URL = "https://njdcyjxgtckgtzgzoctw.supabase.co/functions/v1/agent-api";
 
 Deno.serve(async (req) => {
@@ -260,19 +260,73 @@ if ($status) {
     Write-Log "Heartbeat sent"
 }
 
+# Ensure Windows Firewall and audit logging are enabled for telemetry collection
+function Ensure-FirewallTelemetry {
+    try {
+        Write-Log "Checking Windows Firewall and audit logging prerequisites..."
+        
+        \$changed = \$false
+        \$profiles = @("Domain", "Private", "Public")
+        
+        # Check each firewall profile
+        foreach (\$profile in \$profiles) {
+            \$fwProfile = Get-NetFirewallProfile -Name \$profile -ErrorAction SilentlyContinue
+            
+            if (\$fwProfile) {
+                # Enable firewall if disabled
+                if (-not \$fwProfile.Enabled) {
+                    Write-Log "Enabling Windows Firewall for \$profile profile..."
+                    Set-NetFirewallProfile -Name \$profile -Enabled True -ErrorAction Stop
+                    \$changed = \$true
+                }
+                
+                # Enable logging for allowed and blocked connections
+                if (-not \$fwProfile.LogAllowed -or -not \$fwProfile.LogBlocked) {
+                    Write-Log "Enabling firewall logging for \$profile profile..."
+                    Set-NetFirewallProfile -Name \$profile -LogAllowed True -LogBlocked True -ErrorAction Stop
+                    \$changed = \$true
+                }
+            }
+        }
+        
+        # Enable audit policy for Filtering Platform Connection (generates 5156/5157 events)
+        try {
+            \$auditResult = auditpol /get /subcategory:"Filtering Platform Connection" 2>\$null
+            if (\$auditResult -notmatch "Success" -or \$auditResult -notmatch "Failure") {
+                Write-Log "Enabling Filtering Platform Connection audit policy..."
+                \$null = auditpol /set /subcategory:"Filtering Platform Connection" /success:enable /failure:enable 2>\$null
+                \$changed = \$true
+            }
+        } catch {
+            Write-Log "Could not configure audit policy (may require elevated privileges): \$_" -Level "DEBUG"
+        }
+        
+        if (\$changed) {
+            Write-Log "Firewall telemetry prerequisites configured successfully"
+        } else {
+            Write-Log "Firewall telemetry prerequisites already configured"
+        }
+        
+        return \$true
+    } catch {
+        Write-Log "Error configuring firewall prerequisites: \$_" -Level "WARN"
+        return \$false
+    }
+}
+
 # Collect and send Firewall audit logs
 function Collect-FirewallLogs {
     param([string]$AgentToken)
     
-    $FirewallLogTimeFile = "$ConfigPath\\firewall_log_time.txt"
-    $headers = @{ "Content-Type" = "application/json"; "x-agent-token" = $AgentToken }
+    \$FirewallLogTimeFile = "\$ConfigPath\\firewall_log_time.txt"
+    \$headers = @{ "Content-Type" = "application/json"; "x-agent-token" = \$AgentToken }
     
     try {
         # Get last collection time or default to 60 minutes ago
-        if (Test-Path $FirewallLogTimeFile) {
-            $lastTime = [DateTimeOffset]::Parse((Get-Content $FirewallLogTimeFile -Raw).Trim())
+        if (Test-Path \$FirewallLogTimeFile) {
+            \$lastTime = [DateTimeOffset]::Parse((Get-Content \$FirewallLogTimeFile -Raw).Trim())
         } else {
-            $lastTime = [DateTimeOffset]::UtcNow.AddMinutes(-60)
+            \$lastTime = [DateTimeOffset]::UtcNow.AddMinutes(-60)
         }
         
         Write-Log "Collecting firewall logs since: \$(\$lastTime.ToString('o'))"
@@ -379,6 +433,8 @@ function Collect-FirewallLogs {
     }
 }
 
+# Ensure firewall telemetry prerequisites before collecting logs
+Ensure-FirewallTelemetry
 Collect-FirewallLogs -AgentToken \$agentToken
 
 Write-Log "Agent run complete"
