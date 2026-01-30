@@ -292,7 +292,7 @@ function Ensure-FirewallTelemetry {
         # Enable audit policy for Filtering Platform Connection (generates 5156/5157 events)
         try {
             $auditResult = auditpol /get /subcategory:"Filtering Platform Connection" 2>$null
-            if ($auditResult -notmatch "Success" -or $auditResult -notmatch "Failure") {
+            if ($auditResult -notmatch "Success" -and $auditResult -notmatch "Failure") {
                 Write-Log "Enabling Filtering Platform Connection audit policy..."
                 $null = auditpol /set /subcategory:"Filtering Platform Connection" /success:enable /failure:enable 2>$null
                 $changed = $true
