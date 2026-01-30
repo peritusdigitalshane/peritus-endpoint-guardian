@@ -1427,7 +1427,7 @@ async function handleGetStatus(req: Request) {
 }
 
 // Current agent version - increment when agent script changes
-const AGENT_VERSION = "2.9.0";
+const AGENT_VERSION = "2.11.0";
 
 // GET /agent-update - Check for updates and return new script if needed
 async function handleAgentUpdate(req: Request) {
