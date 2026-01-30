@@ -143,6 +143,16 @@ Deno.serve(async (req) => {
       return await handleApps(req);
     }
 
+    // Route: POST /firewall-logs - Report firewall audit logs
+    if (path === "/firewall-logs" && req.method === "POST") {
+      return await handleFirewallLogs(req);
+    }
+
+    // Route: GET /firewall-policy - Get assigned firewall policy and rules
+    if (path === "/firewall-policy" && req.method === "GET") {
+      return await handleGetFirewallPolicy(req);
+    }
+
     // Route: GET /policy - Get assigned policy
     if (path === "/policy" && req.method === "GET") {
       return await handleGetPolicy(req);
@@ -1440,4 +1450,143 @@ function compareVersions(a: string, b: string): number {
     if (numA < numB) return -1;
   }
   return 0;
+}
+
+// POST /firewall-logs - Report firewall audit logs from agent
+async function handleFirewallLogs(req: Request) {
+  const endpoint = await validateAgentToken(req);
+  const body = await req.json();
+  
+  const logsRaw = (body && typeof body === "object" && "logs" in body) ? (body as any).logs : body;
+  const logs: any[] = Array.isArray(logsRaw) ? logsRaw : logsRaw && typeof logsRaw === "object" ? [logsRaw] : [];
+
+  if (logs.length === 0) {
+    return new Response(
+      JSON.stringify({ success: true, message: "No firewall logs to process", count: 0 }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  let insertedCount = 0;
+
+  for (const log of logs) {
+    if (!log?.service_name || !log?.remote_address) continue;
+
+    // Insert firewall audit log
+    const { error } = await supabase.from("firewall_audit_logs").insert({
+      organization_id: endpoint.organization_id,
+      endpoint_id: endpoint.id,
+      rule_id: log.rule_id || null,
+      service_name: log.service_name,
+      local_port: log.local_port || 0,
+      remote_address: log.remote_address,
+      remote_port: log.remote_port || null,
+      protocol: log.protocol || "tcp",
+      direction: log.direction || "inbound",
+      event_time: log.event_time || new Date().toISOString(),
+    });
+
+    if (!error) insertedCount++;
+  }
+
+  return new Response(
+    JSON.stringify({ success: true, message: "Firewall logs received", count: insertedCount }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+
+// GET /firewall-policy - Get firewall policy and rules for agent
+async function handleGetFirewallPolicy(req: Request) {
+  const endpoint = await validateAgentToken(req);
+
+  // Get endpoint's group memberships
+  const { data: memberships } = await supabase
+    .from("endpoint_group_memberships")
+    .select("group_id")
+    .eq("endpoint_id", endpoint.id);
+
+  const groupIds = memberships?.map((m) => m.group_id) || [];
+
+  if (groupIds.length === 0) {
+    return new Response(
+      JSON.stringify({ success: true, rules: [], message: "No groups assigned" }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  // Get the organization's default firewall policy
+  const { data: policy } = await supabase
+    .from("firewall_policies")
+    .select("id")
+    .eq("organization_id", endpoint.organization_id)
+    .eq("is_default", true)
+    .maybeSingle();
+
+  if (!policy) {
+    return new Response(
+      JSON.stringify({ success: true, rules: [], message: "No firewall policy configured" }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  // Get all rules for this endpoint's groups
+  const { data: rules, error } = await supabase
+    .from("firewall_service_rules")
+    .select(`
+      id,
+      service_name,
+      port,
+      protocol,
+      action,
+      allowed_source_groups,
+      allowed_source_ips,
+      mode,
+      enabled,
+      order_priority
+    `)
+    .eq("policy_id", policy.id)
+    .in("endpoint_group_id", groupIds)
+    .eq("enabled", true)
+    .order("order_priority", { ascending: true });
+
+  if (error) throw error;
+
+  // Resolve source group IPs for allow_from_groups rules
+  const resolvedRules = await Promise.all(
+    (rules || []).map(async (rule) => {
+      let resolvedSourceIps: string[] = [...(rule.allowed_source_ips || [])];
+
+      if (rule.action === "allow_from_groups" && rule.allowed_source_groups?.length) {
+        // Get endpoints in source groups
+        const { data: sourceEndpoints } = await supabase
+          .from("endpoint_group_memberships")
+          .select("endpoint_id, endpoints(id)")
+          .in("group_id", rule.allowed_source_groups);
+
+        // For now, the agent would need to resolve IPs locally
+        // This structure tells the agent which groups are allowed
+      }
+
+      return {
+        id: rule.id,
+        service_name: rule.service_name,
+        port: rule.port,
+        protocol: rule.protocol,
+        action: rule.action,
+        allowed_source_groups: rule.allowed_source_groups || [],
+        allowed_source_ips: rule.allowed_source_ips || [],
+        mode: rule.mode,
+        order_priority: rule.order_priority,
+      };
+    })
+  );
+
+  return new Response(
+    JSON.stringify({
+      success: true,
+      policy_id: policy.id,
+      rules: resolvedRules,
+    }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
 }
