@@ -10,3 +10,6 @@ verify_jwt = false
 
 [functions.virustotal-lookup]
 verify_jwt = false
+
+[functions.cleanup-old-data]
+verify_jwt = false
