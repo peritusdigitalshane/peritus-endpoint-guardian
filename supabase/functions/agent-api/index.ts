@@ -1,5 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// Version for deployment verification
+const VERSION = "v2.4.0";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-agent-token",
@@ -1454,15 +1457,18 @@ function compareVersions(a: string, b: string): number {
 
 // POST /firewall-logs - Report firewall audit logs from agent
 async function handleFirewallLogs(req: Request) {
+  console.log(`[${VERSION}] handleFirewallLogs called`);
   const endpoint = await validateAgentToken(req);
   const body = await req.json();
   
   const logsRaw = (body && typeof body === "object" && "logs" in body) ? (body as any).logs : body;
   const logs: any[] = Array.isArray(logsRaw) ? logsRaw : logsRaw && typeof logsRaw === "object" ? [logsRaw] : [];
 
+  console.log(`[${VERSION}] Firewall logs received: ${logs.length} items for endpoint ${endpoint.hostname}`);
+
   if (logs.length === 0) {
     return new Response(
-      JSON.stringify({ success: true, message: "No firewall logs to process", count: 0 }),
+      JSON.stringify({ success: true, message: "No firewall logs to process", count: 0, _version: VERSION }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
@@ -1489,13 +1495,13 @@ async function handleFirewallLogs(req: Request) {
     if (!error) insertedCount++;
   }
 
+  console.log(`[${VERSION}] Firewall logs inserted: ${insertedCount} of ${logs.length}`);
+
   return new Response(
-    JSON.stringify({ success: true, message: "Firewall logs received", count: insertedCount }),
+    JSON.stringify({ success: true, message: "Firewall logs received", count: insertedCount, _version: VERSION }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
 }
-
-// GET /firewall-policy - Get firewall policy and rules for agent
 async function handleGetFirewallPolicy(req: Request) {
   const endpoint = await validateAgentToken(req);
 
