@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Version for deployment verification - bump to trigger agent updates
-const VERSION = "v2.12.0";
+const VERSION = "v2.13.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -48,6 +48,48 @@ type ParsedThreatFromEventLog = {
   raw_data: unknown;
 };
 
+// Map Windows Defender severity IDs to human-readable values
+// https://learn.microsoft.com/en-us/windows/client-management/mdm/defender-csp
+function mapSeverityFromMessage(msg: string, threatName: string): string {
+  // Try to extract severity from message first
+  const severityMatch = msg.match(/^\s*Severity:\s*(.+)$/mi)?.[1]?.trim();
+  if (severityMatch && severityMatch.toLowerCase() !== "unknown") {
+    return severityMatch;
+  }
+  
+  // Map severity ID if present (Defender uses 1=Low, 2=Moderate, 4=High, 5=Severe)
+  const severityIdMatch = msg.match(/severityid[=:]?\s*(\d+)/i)?.[1];
+  if (severityIdMatch) {
+    const id = parseInt(severityIdMatch, 10);
+    switch (id) {
+      case 1: return "Low";
+      case 2: return "Moderate";
+      case 4: return "High";
+      case 5: return "Severe";
+      default: return "Unknown";
+    }
+  }
+  
+  // Infer severity from well-known threat patterns
+  const nameLower = threatName.toLowerCase();
+  
+  // Test files and PUAs are typically Low severity
+  if (nameLower.includes("eicar") || nameLower.includes("test_file")) return "Low";
+  if (nameLower.includes("pua:") || nameLower.includes("potentially unwanted")) return "Low";
+  
+  // Ransomware, exploits, and trojans are typically Severe
+  if (nameLower.includes("ransom") || nameLower.includes("exploit") || 
+      nameLower.includes("trojan") || nameLower.includes("backdoor")) return "Severe";
+  
+  // Viruses are typically High
+  if (nameLower.includes("virus:")) return "High";
+  
+  // Worms and password stealers are High
+  if (nameLower.includes("worm:") || nameLower.includes("pwstealer")) return "High";
+  
+  return "Unknown";
+}
+
 function parseDefenderThreatFromEventMessage(params: {
   event_id: number;
   event_time: string;
@@ -76,7 +118,7 @@ function parseDefenderThreatFromEventMessage(params: {
 
   if (!threatId) return null;
 
-  const severity = (msg.match(/^\s*Severity:\s*(.+)$/mi)?.[1] || "Unknown").trim();
+  const severity = mapSeverityFromMessage(msg, threatName);
   const category = (msg.match(/^\s*Category:\s*(.+)$/mi)?.[1] || "").trim() || null;
   const path = (msg.match(/^\s*Path:\s*(.+)$/mi)?.[1] || "").trim();
 
@@ -534,8 +576,8 @@ async function handleThreats(req: Request) {
           .eq("id", existing.id);
       }
     } else {
-      // Insert new threat
-      await supabase.from("endpoint_threats").insert({
+      // Insert new threat using upsert to handle race conditions with the unique constraint
+      const { error: upsertError } = await supabase.from("endpoint_threats").upsert({
         endpoint_id: endpoint.id,
         threat_id: threat.threat_id,
         threat_name: threat.threat_name,
@@ -549,15 +591,17 @@ async function handleThreats(req: Request) {
         manual_resolution_active: false,
         manual_resolved_at: null,
         manual_resolved_by: null,
-      });
+      }, { onConflict: "endpoint_id,threat_id" });
 
-      // Log the new threat
-      await supabase.from("endpoint_logs").insert({
-        endpoint_id: endpoint.id,
-        log_type: "threat",
-        message: `Threat detected: ${threat.threat_name}`,
-        details: { threat_id: threat.threat_id, severity: threat.severity },
-      });
+      if (!upsertError) {
+        // Log the new threat
+        await supabase.from("endpoint_logs").insert({
+          endpoint_id: endpoint.id,
+          log_type: "threat",
+          message: `Threat detected: ${threat.threat_name}`,
+          details: { threat_id: threat.threat_id, severity: threat.severity },
+        });
+      }
     }
   }
 
@@ -742,7 +786,8 @@ async function handleLogs(req: Request) {
           })
           .eq("id", existing.id);
       } else {
-        await supabase.from("endpoint_threats").insert({
+        // Insert new threat using upsert to handle race conditions with the unique constraint
+        await supabase.from("endpoint_threats").upsert({
           endpoint_id: endpoint.id,
           threat_id: threat.threat_id,
           threat_name: threat.threat_name,
@@ -756,7 +801,7 @@ async function handleLogs(req: Request) {
           manual_resolution_active: false,
           manual_resolved_at: null,
           manual_resolved_by: null,
-        });
+        }, { onConflict: "endpoint_id,threat_id" });
       }
     }
   } catch (e) {
