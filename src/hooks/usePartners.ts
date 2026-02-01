@@ -25,6 +25,7 @@ interface Customer {
   parent_partner_id: string | null;
   created_at: string;
   endpoint_count?: number;
+  network_module_enabled?: boolean;
 }
 
 // Fetch all partner organizations (super admin only)
