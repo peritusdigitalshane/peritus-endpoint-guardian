@@ -185,6 +185,8 @@ export function useUpdateOrganizationNetworkModule() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-organizations"] });
       queryClient.invalidateQueries({ queryKey: ["admin-organizations-with-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["direct-customers"] });
+      queryClient.invalidateQueries({ queryKey: ["partner-customers"] });
       queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
     },
   });
