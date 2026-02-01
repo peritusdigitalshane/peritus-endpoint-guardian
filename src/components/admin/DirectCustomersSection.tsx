@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useDirectCustomers, usePartners, useAssignCustomerToPartner } from "@/hooks/usePartners";
+import { useUpdateOrganizationNetworkModule } from "@/hooks/useSuperAdmin";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,11 +19,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Building2, Monitor, ChevronRight, Loader2 } from "lucide-react";
+import { Building2, Monitor, ChevronRight, Loader2, Network } from "lucide-react";
 import { toast } from "sonner";
 import { useTenant } from "@/contexts/TenantContext";
 
 export function DirectCustomersSection() {
+  const updateNetworkModule = useUpdateOrganizationNetworkModule();
   const { data: customers, isLoading } = useDirectCustomers();
   const { data: partners } = usePartners();
   const assignToPartner = useAssignCustomerToPartner();
@@ -74,6 +76,7 @@ export function DirectCustomersSection() {
             <TableRow>
               <TableHead>Customer</TableHead>
               <TableHead>Endpoints</TableHead>
+              <TableHead className="text-center">Network</TableHead>
               <TableHead>Created</TableHead>
               <TableHead>Assign to Partner</TableHead>
               <TableHead className="w-[100px]">Actions</TableHead>
@@ -98,6 +101,31 @@ export function DirectCustomersSection() {
                     <Monitor className="h-4 w-4 text-muted-foreground" />
                     <span>{customer.endpoint_count || 0}</span>
                   </div>
+                </TableCell>
+                <TableCell className="text-center">
+                  <Button
+                    variant={customer.network_module_enabled ? "default" : "outline"}
+                    size="sm"
+                    className="text-xs"
+                    onClick={() => {
+                      updateNetworkModule.mutate(
+                        { id: customer.id, networkModuleEnabled: !customer.network_module_enabled },
+                        {
+                          onSuccess: () => {
+                            toast.success(
+                              customer.network_module_enabled 
+                                ? `Network module disabled for ${customer.name}` 
+                                : `Network module enabled for ${customer.name}`
+                            );
+                          },
+                        }
+                      );
+                    }}
+                    disabled={updateNetworkModule.isPending}
+                  >
+                    <Network className="h-3 w-3 mr-1" />
+                    {customer.network_module_enabled ? "Enabled" : "Disabled"}
+                  </Button>
                 </TableCell>
                 <TableCell className="text-muted-foreground">
                   {new Date(customer.created_at).toLocaleDateString()}
@@ -150,7 +178,7 @@ export function DirectCustomersSection() {
             ))}
             {customers?.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                   No direct customers found. All customers are assigned to partners.
                 </TableCell>
               </TableRow>
