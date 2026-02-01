@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Version for deployment verification - bump to trigger agent updates
-const VERSION = "v2.11.0";
+const VERSION = "v2.12.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
