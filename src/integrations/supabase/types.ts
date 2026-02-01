@@ -1328,6 +1328,7 @@ export type Database = {
           event_log_retention_days: number
           id: string
           name: string
+          network_module_enabled: boolean
           organization_type: string
           parent_partner_id: string | null
           slug: string
@@ -1339,6 +1340,7 @@ export type Database = {
           event_log_retention_days?: number
           id?: string
           name: string
+          network_module_enabled?: boolean
           organization_type?: string
           parent_partner_id?: string | null
           slug: string
@@ -1350,6 +1352,7 @@ export type Database = {
           event_log_retention_days?: number
           id?: string
           name?: string
+          network_module_enabled?: boolean
           organization_type?: string
           parent_partner_id?: string | null
           slug?: string

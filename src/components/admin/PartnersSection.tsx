@@ -70,6 +70,7 @@ export function PartnersSection() {
       slug: partner.slug,
       organization_type: partner.organization_type,
       parent_partner_id: null,
+      network_module_enabled: partner.network_module_enabled ?? false,
     });
   };
 
@@ -261,6 +262,7 @@ function PartnerCustomersSheet({
       slug: customer.slug,
       organization_type: customer.organization_type,
       parent_partner_id: customer.parent_partner_id,
+      network_module_enabled: customer.network_module_enabled ?? false,
     });
     onClose();
   };

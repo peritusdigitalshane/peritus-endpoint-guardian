@@ -22,7 +22,7 @@ import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useTenant } from "@/contexts/TenantContext";
 
-const navigation = [
+const baseNavigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Endpoints", href: "/endpoints", icon: Monitor },
   { name: "Groups", href: "/groups", icon: FolderOpen },
@@ -30,7 +30,7 @@ const navigation = [
   { name: "Event Logs", href: "/logs", icon: ScrollText },
   { name: "Threat Hunting", href: "/threat-hunting", icon: Crosshair },
   { name: "Policies", href: "/policies", icon: FileText },
-  { name: "Network", href: "/network", icon: Network },
+  { name: "Network", href: "/network", icon: Network, requiresNetworkModule: true },
   { name: "Reports", href: "/reports", icon: ClipboardList },
   { name: "AI Advisor", href: "/recommendations", icon: Sparkles },
   { name: "Deploy Agent", href: "/deploy", icon: Download },
@@ -125,7 +125,9 @@ export function Sidebar() {
             Tenant
           </p>
         )}
-        {navigation.map((item) => {
+        {baseNavigation
+          .filter((item) => !item.requiresNetworkModule || currentOrganization?.network_module_enabled)
+          .map((item) => {
           const isActive = location.pathname === item.href;
           return (
             <Link

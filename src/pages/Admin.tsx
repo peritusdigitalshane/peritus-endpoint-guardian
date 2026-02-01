@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { useTenant } from "@/contexts/TenantContext";
-import { useOrganizationsWithStats, useCreateOrganization, useUpdateOrganizationRetention } from "@/hooks/useSuperAdmin";
+import { useOrganizationsWithStats, useCreateOrganization, useUpdateOrganizationRetention, useUpdateOrganizationNetworkModule } from "@/hooks/useSuperAdmin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -55,6 +55,7 @@ interface Organization {
   slug: string;
   organization_type: "partner" | "customer";
   parent_partner_id: string | null;
+  network_module_enabled: boolean;
 }
 
 const Admin = () => {
@@ -62,6 +63,7 @@ const Admin = () => {
   const { data: organizations = [], isLoading } = useOrganizationsWithStats();
   const createOrg = useCreateOrganization();
   const updateRetention = useUpdateOrganizationRetention();
+  const updateNetworkModule = useUpdateOrganizationNetworkModule();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -113,13 +115,14 @@ const Admin = () => {
     }
   };
 
-  const handleViewAsTenant = (org: { id: string; name: string; slug: string; organization_type?: string; parent_partner_id?: string | null }) => {
+  const handleViewAsTenant = (org: { id: string; name: string; slug: string; organization_type?: string; parent_partner_id?: string | null; network_module_enabled?: boolean }) => {
     const fullOrg: Organization = {
       id: org.id,
       name: org.name,
       slug: org.slug,
       organization_type: (org.organization_type as "partner" | "customer") || "customer",
       parent_partner_id: org.parent_partner_id ?? null,
+      network_module_enabled: org.network_module_enabled ?? false,
     };
     setImpersonatedOrg(fullOrg);
     toast({
@@ -287,6 +290,7 @@ const Admin = () => {
                     <TableHead>Type</TableHead>
                     <TableHead className="text-center">Endpoints</TableHead>
                     <TableHead className="text-center">Users</TableHead>
+                    <TableHead className="text-center">Network</TableHead>
                     <TableHead className="text-center">Log Retention</TableHead>
                     <TableHead className="text-center">Created</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -314,6 +318,29 @@ const Admin = () => {
                       </TableCell>
                       <TableCell className="text-center">{org.endpoint_count}</TableCell>
                       <TableCell className="text-center">{org.member_count}</TableCell>
+                      <TableCell className="text-center">
+                        <Button
+                          variant={org.network_module_enabled ? "default" : "outline"}
+                          size="sm"
+                          className="text-xs"
+                          onClick={() => {
+                            updateNetworkModule.mutate(
+                              { id: org.id, networkModuleEnabled: !org.network_module_enabled },
+                              {
+                                onSuccess: () => {
+                                  toast({
+                                    title: org.network_module_enabled ? "Network module disabled" : "Network module enabled",
+                                    description: `Network security features ${org.network_module_enabled ? "disabled" : "enabled"} for ${org.name}`,
+                                  });
+                                },
+                              }
+                            );
+                          }}
+                          disabled={updateNetworkModule.isPending}
+                        >
+                          {org.network_module_enabled ? "Enabled" : "Disabled"}
+                        </Button>
+                      </TableCell>
                       <TableCell className="text-center">
                         <Button
                           variant="ghost"
@@ -361,7 +388,7 @@ const Admin = () => {
                     </TableRow>
                     {expandedOrgId === org.id && (
                       <TableRow>
-                        <TableCell colSpan={7} className="bg-muted/30 p-4">
+                        <TableCell colSpan={8} className="bg-muted/30 p-4">
                           <EnrollmentCodesSection 
                             organizationId={org.id} 
                             organizationName={org.name} 

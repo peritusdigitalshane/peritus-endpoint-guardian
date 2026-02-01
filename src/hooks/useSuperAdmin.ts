@@ -10,6 +10,7 @@ interface Organization {
   created_at: string;
   updated_at: string;
   event_log_retention_days: number;
+  network_module_enabled: boolean;
 }
 
 interface OrganizationWithStats extends Organization {
@@ -144,6 +145,38 @@ export function useUpdateOrganizationRetention() {
       if (currentOrganization?.id) {
         await logActivity(currentOrganization.id, "update", "organization_retention", id, { 
           retention_days: retentionDays 
+        });
+      }
+      
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-organizations"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-organizations-with-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
+    },
+  });
+}
+
+export function useUpdateOrganizationNetworkModule() {
+  const queryClient = useQueryClient();
+  const { currentOrganization } = useTenant();
+
+  return useMutation({
+    mutationFn: async ({ id, networkModuleEnabled }: { id: string; networkModuleEnabled: boolean }) => {
+      const { data, error } = await supabase
+        .from("organizations")
+        .update({ network_module_enabled: networkModuleEnabled })
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      // Log activity
+      if (currentOrganization?.id) {
+        await logActivity(currentOrganization.id, "update", "organization_network_module", id, { 
+          network_module_enabled: networkModuleEnabled 
         });
       }
       

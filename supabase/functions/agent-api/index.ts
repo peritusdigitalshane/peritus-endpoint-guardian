@@ -437,8 +437,19 @@ async function handleHeartbeat(req: Request) {
     console.error("Error inserting status:", statusError);
   }
 
+  // Fetch organization settings to inform the agent about enabled modules
+  const { data: org } = await supabase
+    .from("organizations")
+    .select("network_module_enabled")
+    .eq("id", endpoint.organization_id)
+    .single();
+
   return new Response(
-    JSON.stringify({ success: true, message: "Heartbeat received" }),
+    JSON.stringify({ 
+      success: true, 
+      message: "Heartbeat received",
+      network_module_enabled: org?.network_module_enabled ?? false,
+    }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
 }
@@ -1427,7 +1438,7 @@ async function handleGetStatus(req: Request) {
 }
 
 // Current agent version - increment when agent script changes
-const AGENT_VERSION = "2.11.0";
+const AGENT_VERSION = "2.12.0";
 
 // GET /agent-update - Check for updates and return new script if needed
 async function handleAgentUpdate(req: Request) {
@@ -1492,6 +1503,22 @@ function compareVersions(a: string, b: string): number {
 async function handleFirewallLogs(req: Request) {
   console.log(`[${VERSION}] handleFirewallLogs called`);
   const endpoint = await validateAgentToken(req);
+  
+  // Check if network module is enabled for this organization
+  const { data: org } = await supabase
+    .from("organizations")
+    .select("network_module_enabled")
+    .eq("id", endpoint.organization_id)
+    .single();
+  
+  if (!org?.network_module_enabled) {
+    console.log(`[${VERSION}] Network module disabled for org ${endpoint.organization_id}, rejecting firewall logs`);
+    return new Response(
+      JSON.stringify({ success: false, message: "Network module not enabled for this organization", count: 0, _version: VERSION }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+  
   const body = await req.json();
   
   const logsRaw = (body && typeof body === "object" && "logs" in body) ? (body as any).logs : body;
