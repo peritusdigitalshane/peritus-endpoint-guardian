@@ -11,7 +11,7 @@ const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 // Current agent version - MUST match the version in agent-api
-const AGENT_VERSION = "2.11.0";
+const AGENT_VERSION = "2.12.0";
 const API_BASE_URL = "https://njdcyjxgtckgtzgzoctw.supabase.co/functions/v1/agent-api";
 
 Deno.serve(async (req) => {
@@ -245,7 +245,8 @@ if (Test-Path $ConfigFile) {
 # Check for updates - will exit and restart if update found
 Check-AgentUpdate -AgentToken $agentToken
 
-# Send heartbeat
+# Send heartbeat and get org settings
+$script:NetworkModuleEnabled = $false
 $status = Get-MpComputerStatus -ErrorAction SilentlyContinue
 if ($status) {
     $heartbeat = @{
@@ -256,8 +257,16 @@ if ($status) {
     } | ConvertTo-Json
     
     $headers = @{ "Content-Type" = "application/json"; "x-agent-token" = $agentToken }
-    Invoke-RestMethod -Uri "$ApiBaseUrl/heartbeat" -Method POST -Body $heartbeat -Headers $headers | Out-Null
+    $heartbeatResponse = Invoke-RestMethod -Uri "$ApiBaseUrl/heartbeat" -Method POST -Body $heartbeat -Headers $headers
     Write-Log "Heartbeat sent"
+    
+    # Check if network module is enabled for this organization
+    if ($heartbeatResponse.network_module_enabled -eq $true) {
+        $script:NetworkModuleEnabled = $true
+        Write-Log "Network module enabled for this organization"
+    } else {
+        Write-Log "Network module not enabled for this organization - skipping firewall telemetry"
+    }
 }
 
 # Ensure Windows Firewall and audit logging are enabled for telemetry collection
@@ -433,9 +442,11 @@ function Collect-FirewallLogs {
     }
 }
 
-# Ensure firewall telemetry prerequisites before collecting logs
-Ensure-FirewallTelemetry
-Collect-FirewallLogs -AgentToken $agentToken
+# Only collect firewall telemetry if network module is enabled for this organization
+if ($script:NetworkModuleEnabled) {
+    Ensure-FirewallTelemetry
+    Collect-FirewallLogs -AgentToken $agentToken
+}
 
 Write-Log "Agent run complete"
 `;

@@ -47,6 +47,7 @@ export function DirectCustomersSection() {
       slug: customer.slug,
       organization_type: customer.organization_type,
       parent_partner_id: null,
+      network_module_enabled: customer.network_module_enabled ?? false,
     });
   };
 
