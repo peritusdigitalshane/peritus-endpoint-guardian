@@ -1860,7 +1860,7 @@ function Ensure-TrayStartupAndLaunch {
 }
 
 Write-Log "=========================================="
-Write-Log "Peritus Threat Defence Agent v2.6.0"
+Write-Log "Peritus Threat Defence Agent v$AgentVersion"
 Write-Log "=========================================="
 
 if ($Uninstall) { Uninstall-Agent }
