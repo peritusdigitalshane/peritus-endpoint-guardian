@@ -1741,11 +1741,30 @@ function Get-EndpointStatus {
     }
 }
 
+function Get-InstalledAgentVersion {
+    # Read the version from the installed script on disk. This helps when the tray process
+    # is still running an older version even though auto-update replaced the script file.
+    try {
+        if (-not (Test-Path $ScriptPath)) { return $null }
+        $content = Get-Content -Path $ScriptPath -Raw -ErrorAction Stop
+        $m = [regex]::Match($content, '\$AgentVersion\s*=\s*"(?<v>[^"]+)"')
+        if ($m.Success) { return $m.Groups['v'].Value }
+        return $null
+    } catch {
+        return $null
+    }
+}
+
 function Show-StatusForm {
     param([object]$StatusData)
     
     $form = New-Object System.Windows.Forms.Form
-    $form.Text = "Peritus Threat Defence - Status (v$AgentVersion)"
+
+    $runningVersion = $AgentVersion
+    $installedVersion = Get-InstalledAgentVersion
+    $versionForTitle = if ($installedVersion) { $installedVersion } else { $runningVersion }
+
+    $form.Text = "Peritus Threat Defence - Status (v$versionForTitle)"
     # Use ClientSize (not Size) so DPI/border chrome doesn't clip bottom controls.
     $form.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::Dpi
     $form.ClientSize = New-Object System.Drawing.Size(420, 420)
@@ -1767,9 +1786,15 @@ function Show-StatusForm {
     $form.Controls.Add($lblTitle)
     $y += 40
 
-    # Always show the running script version (even if endpoint status fails to load)
+    # Always show versions (even if endpoint status fails to load)
     $lblVersionTop = New-Object System.Windows.Forms.Label
-    $lblVersionTop.Text = "Agent Version: $AgentVersion"
+    if ($installedVersion -and $runningVersion -and ($installedVersion -ne $runningVersion)) {
+        $lblVersionTop.Text = "Agent Version: $runningVersion (update installed: $installedVersion — restart tray)"
+    } elseif ($installedVersion) {
+        $lblVersionTop.Text = "Agent Version: $installedVersion"
+    } else {
+        $lblVersionTop.Text = "Agent Version: $runningVersion"
+    }
     $lblVersionTop.Font = New-Object System.Drawing.Font("Segoe UI", 10)
     $lblVersionTop.ForeColor = [System.Drawing.Color]::FromArgb(150, 150, 150)
     $lblVersionTop.Location = New-Object System.Drawing.Point(15, $y)
