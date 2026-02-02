@@ -167,7 +167,7 @@ $ApiBaseUrl = "${apiBaseUrl}"
 $TaskName = "PeritusSecureAgent"
 $TrayTaskName = "PeritusSecureTray"
 $ServiceName = "Peritus Threat Defence Agent"
- $AgentVersion = "2.16.0"
+ $AgentVersion = "2.17.0"
 
 # Store ForceFullLogSync in script scope so functions can access it
 $script:ForceFullLogSync = $ForceFullLogSync.IsPresent
@@ -817,6 +817,201 @@ function Collect-FirewallLogs {
         [DateTimeOffset]::UtcNow.ToString('o') | Set-Content -Path $FirewallLogTimeFile -Force
     } catch {
         Write-Log "Error collecting firewall logs: $_" -Level "WARN"
+    }
+}
+
+# ==================== FIREWALL POLICY ENFORCEMENT ====================
+
+function Get-FirewallPolicy {
+    param([string]$AgentToken)
+    
+    try {
+        $headers = @{ "Content-Type" = "application/json"; "x-agent-token" = $AgentToken }
+        $response = Invoke-RestMethod -Uri "$ApiBaseUrl/firewall-policy" -Method GET -Headers $headers -TimeoutSec 30
+        
+        if ($response.success -and $response.rules) {
+            Write-Log "Firewall policy retrieved: $($response.rules.Count) rules"
+            return $response
+        } else {
+            Write-Log "No firewall policy configured: $($response.message)" -Level "DEBUG"
+            return $null
+        }
+    } catch {
+        Write-Log "Error fetching firewall policy: $_" -Level "WARN"
+        return $null
+    }
+}
+
+function Apply-FirewallPolicy {
+    param(
+        [Parameter(Mandatory=$true)]$PolicyResponse,
+        [switch]$Force
+    )
+    
+    $RulePrefix = "PeritusSecure_FW_"
+    $rules = $PolicyResponse.rules
+    
+    if (-not $rules -or $rules.Count -eq 0) {
+        Write-Log "No firewall rules to apply"
+        return $false
+    }
+    
+    try {
+        $applied = 0
+        $skipped = 0
+        $enforcedCount = 0
+        $auditCount = 0
+        
+        # Get existing Peritus firewall rules for comparison
+        $existingRules = Get-NetFirewallRule -Name "$RulePrefix*" -ErrorAction SilentlyContinue
+        $existingRuleNames = @{}
+        if ($existingRules) {
+            foreach ($rule in $existingRules) {
+                $existingRuleNames[$rule.Name] = $rule
+            }
+        }
+        
+        $processedRuleNames = @{}
+        
+        foreach ($rule in $rules) {
+            $ruleId = $rule.id
+            $serviceName = $rule.service_name
+            $port = $rule.port
+            $protocol = $rule.protocol
+            $action = $rule.action
+            $mode = $rule.mode
+            $allowedIps = @($rule.allowed_source_ips)
+            
+            # Parse ports (can be comma-separated like "5985,5986")
+            $ports = $port -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -match '^\d+$' }
+            
+            foreach ($singlePort in $ports) {
+                # Build unique rule name
+                $ruleName = "$RulePrefix$($serviceName)_$($singlePort)_$($protocol)"
+                $processedRuleNames[$ruleName] = $true
+                
+                # Determine action based on rule action and mode
+                # Audit mode = Allow (just log), Enforce mode = actual block/allow
+                if ($mode -eq "audit") {
+                    # In audit mode, we allow traffic (logging happens via Windows Firewall audit)
+                    $auditCount++
+                    $fwAction = "Allow"
+                    $displayName = "[AUDIT] Peritus - $serviceName ($singlePort/$protocol)"
+                } else {
+                    # Enforce mode - apply actual blocking/allowing
+                    $enforcedCount++
+                    switch ($action) {
+                        "block" {
+                            $fwAction = "Block"
+                            $displayName = "[BLOCK] Peritus - $serviceName ($singlePort/$protocol)"
+                        }
+                        "allow" {
+                            $fwAction = "Allow"
+                            $displayName = "[ALLOW] Peritus - $serviceName ($singlePort/$protocol)"
+                        }
+                        "allow_from_groups" {
+                            # Allow from specific IPs only - requires a block-all + allow-from-IPs approach
+                            if ($allowedIps.Count -gt 0) {
+                                $fwAction = "Allow"
+                                $displayName = "[ALLOW FROM IPs] Peritus - $serviceName ($singlePort/$protocol)"
+                            } else {
+                                # No IPs configured yet = block all
+                                $fwAction = "Block"
+                                $displayName = "[BLOCK - No IPs] Peritus - $serviceName ($singlePort/$protocol)"
+                            }
+                        }
+                        default {
+                            $fwAction = "Block"
+                            $displayName = "[BLOCK] Peritus - $serviceName ($singlePort/$protocol)"
+                        }
+                    }
+                }
+                
+                # Check if rule already exists with same settings
+                $existingRule = $existingRuleNames[$ruleName]
+                if ($existingRule -and -not $Force) {
+                    # Rule exists - check if it needs updating
+                    $existingAction = $existingRule.Action.ToString()
+                    if ($existingAction -eq $fwAction) {
+                        $skipped++
+                        continue
+                    }
+                }
+                
+                # Remove existing rule if present (to recreate with new settings)
+                if ($existingRule) {
+                    Remove-NetFirewallRule -Name $ruleName -ErrorAction SilentlyContinue
+                }
+                
+                # Create the firewall rule
+                $ruleParams = @{
+                    Name = $ruleName
+                    DisplayName = $displayName
+                    Direction = "Inbound"
+                    Protocol = if ($protocol -eq "both") { "TCP" } else { $protocol.ToUpper() }
+                    LocalPort = $singlePort
+                    Action = $fwAction
+                    Enabled = "True"
+                    Profile = "Any"
+                    Description = "Managed by Peritus Threat Defence. Rule ID: $ruleId"
+                }
+                
+                # Add remote address filter for allow_from_groups with IPs
+                if ($action -eq "allow_from_groups" -and $allowedIps.Count -gt 0 -and $mode -eq "enforce") {
+                    $ruleParams["RemoteAddress"] = $allowedIps
+                }
+                
+                try {
+                    New-NetFirewallRule @ruleParams -ErrorAction Stop | Out-Null
+                    $applied++
+                    Write-Log "Created firewall rule: $displayName" -Level "DEBUG"
+                } catch {
+                    Write-Log "Failed to create firewall rule $ruleName : $_" -Level "WARN"
+                }
+                
+                # For "both" protocol, also create UDP rule
+                if ($protocol -eq "both") {
+                    $udpRuleName = "$RulePrefix$($serviceName)_$($singlePort)_UDP"
+                    $processedRuleNames[$udpRuleName] = $true
+                    
+                    # Remove existing UDP rule if present
+                    Remove-NetFirewallRule -Name $udpRuleName -ErrorAction SilentlyContinue
+                    
+                    $udpRuleParams = $ruleParams.Clone()
+                    $udpRuleParams["Name"] = $udpRuleName
+                    $udpRuleParams["DisplayName"] = $displayName -replace '\)$', '/UDP)'
+                    $udpRuleParams["Protocol"] = "UDP"
+                    
+                    try {
+                        New-NetFirewallRule @udpRuleParams -ErrorAction Stop | Out-Null
+                        $applied++
+                    } catch {
+                        Write-Log "Failed to create UDP firewall rule: $_" -Level "WARN"
+                    }
+                }
+            }
+        }
+        
+        # Clean up orphaned Peritus rules that are no longer in policy
+        $removedCount = 0
+        foreach ($existingName in $existingRuleNames.Keys) {
+            if (-not $processedRuleNames.ContainsKey($existingName)) {
+                try {
+                    Remove-NetFirewallRule -Name $existingName -ErrorAction SilentlyContinue
+                    $removedCount++
+                    Write-Log "Removed orphaned firewall rule: $existingName" -Level "DEBUG"
+                } catch {
+                    Write-Log "Failed to remove orphaned rule $existingName : $_" -Level "WARN"
+                }
+            }
+        }
+        
+        Write-Log "Firewall policy applied: $applied rules created, $skipped unchanged, $removedCount removed (Audit: $auditCount, Enforce: $enforcedCount)"
+        return $true
+        
+    } catch {
+        Write-Log "Error applying firewall policy: $_" -Level "ERROR"
+        return $false
     }
 }
 
@@ -2194,10 +2389,20 @@ Send-Threats -AgentToken $agentToken
 Send-DefenderLogs -AgentToken $agentToken
 Send-DiscoveredApps -AgentToken $agentToken
 
-# Network module telemetry (Firewall enablement + audit logs)
+# Network module (Firewall telemetry + policy enforcement)
 if ($script:NetworkModuleEnabled) {
     Ensure-FirewallTelemetry | Out-Null
     Collect-FirewallLogs -AgentToken $agentToken
+    
+    # Fetch and apply firewall policy (actual Windows Firewall rules)
+    $fwPolicy = Get-FirewallPolicy -AgentToken $agentToken
+    if ($fwPolicy -and $fwPolicy.rules -and $fwPolicy.rules.Count -gt 0) {
+        Write-Log "Firewall policy retrieved: $($fwPolicy.rules.Count) rules"
+        $fwApplied = Apply-FirewallPolicy -PolicyResponse $fwPolicy -Force:$ForcePolicy
+        if ($fwApplied) { Write-Log "Firewall policy enforcement complete" }
+    } else {
+        Write-Log "No firewall rules configured for this endpoint"
+    }
 }
 
 # Fetch and apply Defender policy
