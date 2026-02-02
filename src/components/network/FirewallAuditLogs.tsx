@@ -119,7 +119,7 @@ export function FirewallAuditLogs() {
               <TableBody>
                 {logs.map((log) => (
                   <TableRow key={log.id}>
-                    <TableCell className="text-sm text-muted-foreground">
+                    <TableCell className="text-sm text-muted-foreground" title={new Date(log.event_time).toLocaleString()}>
                       {formatDistanceToNow(new Date(log.event_time), {
                         addSuffix: true,
                       })}
