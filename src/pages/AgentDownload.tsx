@@ -1567,6 +1567,16 @@ function Show-StatusForm {
     $lblTitle.Size = New-Object System.Drawing.Size(380, 30)
     $form.Controls.Add($lblTitle)
     $y += 40
+
+    # Always show the running script version (even if endpoint status fails to load)
+    $lblVersionTop = New-Object System.Windows.Forms.Label
+    $lblVersionTop.Text = "Agent Version: $AgentVersion"
+    $lblVersionTop.Font = New-Object System.Drawing.Font("Segoe UI", 10)
+    $lblVersionTop.ForeColor = [System.Drawing.Color]::FromArgb(150, 150, 150)
+    $lblVersionTop.Location = New-Object System.Drawing.Point(15, $y)
+    $lblVersionTop.Size = New-Object System.Drawing.Size(380, 22)
+    $form.Controls.Add($lblVersionTop)
+    $y += 25
     
     if ($StatusData -and $StatusData.endpoint) {
         # Endpoint info
@@ -1576,16 +1586,6 @@ function Show-StatusForm {
         $lblHost.Location = New-Object System.Drawing.Point(15, $y)
         $lblHost.Size = New-Object System.Drawing.Size(380, 22)
         $form.Controls.Add($lblHost)
-        $y += 25
-        
-        # Agent Version
-        $lblVersion = New-Object System.Windows.Forms.Label
-        $lblVersion.Text = "Agent Version: $AgentVersion"
-        $lblVersion.Font = New-Object System.Drawing.Font("Segoe UI", 10)
-        $lblVersion.ForeColor = [System.Drawing.Color]::FromArgb(150, 150, 150)
-        $lblVersion.Location = New-Object System.Drawing.Point(15, $y)
-        $lblVersion.Size = New-Object System.Drawing.Size(380, 22)
-        $form.Controls.Add($lblVersion)
         $y += 25
         
         $lblLastSeen = New-Object System.Windows.Forms.Label
