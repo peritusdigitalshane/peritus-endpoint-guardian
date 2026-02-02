@@ -148,9 +148,9 @@ const generatePowershellScript = (orgId: string, apiBaseUrl: string, trayIconIco
     .\\PeritusSecureAgent.ps1 -TrayMode
     Runs the agent with a system tray icon for status visibility.
 .NOTES
-    Version: 2.7.0
+    Version: 2.14.0
     Requires: Windows 10/11, PowerShell 5.1+, Administrator privileges
-    Changes in 2.7.0: Added Security Event 4688 (process creation) collection for IOC threat hunting
+    Changes in 2.14.0: Added agent version display to status window
 #>
 
 param(
@@ -167,7 +167,7 @@ $ApiBaseUrl = "${apiBaseUrl}"
 $TaskName = "PeritusSecureAgent"
 $TrayTaskName = "PeritusSecureTray"
 $ServiceName = "Peritus Threat Defence Agent"
-$AgentVersion = "2.7.0"
+$AgentVersion = "2.14.0"
 
 # Store ForceFullLogSync in script scope so functions can access it
 $script:ForceFullLogSync = $ForceFullLogSync.IsPresent
@@ -1576,6 +1576,16 @@ function Show-StatusForm {
         $lblHost.Location = New-Object System.Drawing.Point(15, $y)
         $lblHost.Size = New-Object System.Drawing.Size(380, 22)
         $form.Controls.Add($lblHost)
+        $y += 25
+        
+        # Agent Version
+        $lblVersion = New-Object System.Windows.Forms.Label
+        $lblVersion.Text = "Agent Version: $AgentVersion"
+        $lblVersion.Font = New-Object System.Drawing.Font("Segoe UI", 10)
+        $lblVersion.ForeColor = [System.Drawing.Color]::FromArgb(150, 150, 150)
+        $lblVersion.Location = New-Object System.Drawing.Point(15, $y)
+        $lblVersion.Size = New-Object System.Drawing.Size(380, 22)
+        $form.Controls.Add($lblVersion)
         $y += 25
         
         $lblLastSeen = New-Object System.Windows.Forms.Label
