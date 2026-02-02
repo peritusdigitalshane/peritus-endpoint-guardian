@@ -394,39 +394,41 @@ function Collect-FirewallLogs {
                 $port = [int]($eventData['DestPort'] ?? $eventData['LocalPort'] ?? 0)
                 
                 # Skip noisy ports (mDNS, etc.) to save storage
-                if ($port -eq 5353) { continue }
-                
-                $serviceName = switch ($port) {
-                    22 { "SSH" }
-                    80 { "HTTP" }
-                    443 { "HTTPS" }
-                    445 { "SMB" }
-                    3389 { "RDP" }
-                    5985 { "WinRM" }
-                    5986 { "WinRM-HTTPS" }
-                    default { "Port-$port" }
+                if ($port -eq 5353) {
+                    # Skip mDNS traffic - too noisy
+                } else {
+                    $serviceName = switch ($port) {
+                        22 { "SSH" }
+                        80 { "HTTP" }
+                        443 { "HTTPS" }
+                        445 { "SMB" }
+                        3389 { "RDP" }
+                        5985 { "WinRM" }
+                        5986 { "WinRM-HTTPS" }
+                        default { "Port-$port" }
+                    }
+                    
+                    $direction = if ($eventData['Direction'] -eq '%%14592') { 'inbound' } else { 'outbound' }
+                    $action = switch ($event.Id) {
+                        5152 { "drop" }
+                        5156 { "allow" }
+                        5157 { "block" }
+                        default { "audit" }
+                    }
+                    
+                    $log = @{
+                        event_time = $event.TimeCreated.ToUniversalTime().ToString('o')
+                        service_name = $serviceName
+                        local_port = $port
+                        remote_address = $eventData['SourceAddress'] ?? $eventData['RemoteAddress'] ?? "0.0.0.0"
+                        remote_port = [int]($eventData['SourcePort'] ?? $eventData['RemotePort'] ?? 0)
+                        protocol = if ($eventData['Protocol'] -eq '6') { 'TCP' } elseif ($eventData['Protocol'] -eq '17') { 'UDP' } else { 'OTHER' }
+                        direction = $direction
+                        action = $action
+                    }
+                    
+                    $logs += $log
                 }
-                
-                $direction = if ($eventData['Direction'] -eq '%%14592') { 'inbound' } else { 'outbound' }
-                $action = switch ($event.Id) {
-                    5152 { "drop" }
-                    5156 { "allow" }
-                    5157 { "block" }
-                    default { "audit" }
-                }
-                
-                $log = @{
-                    event_time = $event.TimeCreated.ToUniversalTime().ToString('o')
-                    service_name = $serviceName
-                    local_port = $port
-                    remote_address = $eventData['SourceAddress'] ?? $eventData['RemoteAddress'] ?? "0.0.0.0"
-                    remote_port = [int]($eventData['SourcePort'] ?? $eventData['RemotePort'] ?? 0)
-                    protocol = if ($eventData['Protocol'] -eq '6') { 'TCP' } elseif ($eventData['Protocol'] -eq '17') { 'UDP' } else { 'OTHER' }
-                    direction = $direction
-                    action = $action
-                }
-                
-                $logs += $log
             } catch {
                 Write-Log "Error parsing firewall event: $_" -Level "DEBUG"
             }
