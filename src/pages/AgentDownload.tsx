@@ -167,7 +167,7 @@ $ApiBaseUrl = "${apiBaseUrl}"
 $TaskName = "PeritusSecureAgent"
 $TrayTaskName = "PeritusSecureTray"
 $ServiceName = "Peritus Threat Defence Agent"
-$AgentVersion = "2.14.0"
+ $AgentVersion = "2.15.0"
 
 # Store ForceFullLogSync in script scope so functions can access it
 $script:ForceFullLogSync = $ForceFullLogSync.IsPresent
@@ -615,7 +615,206 @@ function Send-Heartbeat {
     if (-not $status) { Write-Log "Could not get Defender status, skipping heartbeat" -Level "WARN"; return }
     Write-Log "Sending heartbeat..."
     $response = Invoke-ApiRequest -Endpoint "/heartbeat" -Body $status -AgentToken $AgentToken
+
+    # Network module opt-in (used to gate firewall telemetry/config)
+    try {
+        if ($response -and $response.network_module_enabled -eq $true) {
+            $script:NetworkModuleEnabled = $true
+            Write-Log "Network module enabled for this organization"
+        } else {
+            $script:NetworkModuleEnabled = $false
+            Write-Log "Network module not enabled for this organization - skipping firewall telemetry"
+        }
+    } catch {
+        # Don't fail heartbeat if response parsing changes
+        $script:NetworkModuleEnabled = $false
+    }
+
     Write-Log "Heartbeat sent successfully"
+}
+
+# ==================== FIREWALL TELEMETRY (Network Module) ====================
+
+function Ensure-FirewallTelemetry {
+    try {
+        Write-Log "Checking Windows Firewall and audit logging prerequisites..."
+
+        $changed = $false
+        $profiles = @("Domain", "Private", "Public")
+
+        foreach ($profile in $profiles) {
+            $fwProfile = Get-NetFirewallProfile -Name $profile -ErrorAction SilentlyContinue
+            if (-not $fwProfile) { continue }
+
+            if (-not $fwProfile.Enabled) {
+                Write-Log "Enabling Windows Firewall for $profile profile..."
+                Set-NetFirewallProfile -Name $profile -Enabled True -ErrorAction Stop
+                $changed = $true
+            }
+
+            # Enable logging for allowed and blocked connections
+            if (-not $fwProfile.LogAllowed -or -not $fwProfile.LogBlocked) {
+                Write-Log "Enabling firewall logging for $profile profile..."
+                Set-NetFirewallProfile -Name $profile -LogAllowed True -LogBlocked True -ErrorAction Stop
+                $changed = $true
+            }
+        }
+
+        # Enable audit policy for Filtering Platform Connection (generates 5156/5157 events)
+        try {
+            $auditResult = auditpol /get /subcategory:"Filtering Platform Connection" 2>$null
+            if ($auditResult -and ($auditResult -notmatch "Success" -and $auditResult -notmatch "Failure")) {
+                Write-Log "Enabling Filtering Platform Connection audit policy..."
+                $null = auditpol /set /subcategory:"Filtering Platform Connection" /success:enable /failure:enable 2>$null
+                $changed = $true
+            }
+        } catch {
+            Write-Log "Could not configure audit policy: $_" -Level "DEBUG"
+        }
+
+        if ($changed) {
+            Write-Log "Firewall telemetry prerequisites configured successfully"
+        } else {
+            Write-Log "Firewall telemetry prerequisites already configured"
+        }
+
+        return $true
+    } catch {
+        Write-Log "Error configuring firewall prerequisites: $_" -Level "WARN"
+        return $false
+    }
+}
+
+function Collect-FirewallLogs {
+    param([string]$AgentToken)
+
+    $FirewallLogTimeFile = "$ConfigPath\\firewall_log_time.txt"
+    $headers = @{ "Content-Type" = "application/json"; "x-agent-token" = $AgentToken }
+
+    try {
+        if (Test-Path $FirewallLogTimeFile) {
+            try {
+                $lastTime = [DateTimeOffset]::Parse((Get-Content $FirewallLogTimeFile -Raw).Trim())
+            } catch {
+                $lastTime = [DateTimeOffset]::UtcNow.AddMinutes(-60)
+            }
+        } else {
+            $lastTime = [DateTimeOffset]::UtcNow.AddMinutes(-60)
+        }
+
+        Write-Log "Collecting firewall logs since: $($lastTime.ToString('o'))"
+
+        $firewallEvents = @()
+
+        # Security log filtering platform events
+        try {
+            $events = Get-WinEvent -FilterHashtable @{
+                LogName = 'Security'
+                Id = 5152, 5156, 5157
+                StartTime = $lastTime.LocalDateTime
+            } -MaxEvents 500 -ErrorAction SilentlyContinue
+            if ($events) { $firewallEvents += @($events) }
+        } catch {
+            Write-Log "Security log query error: $_" -Level "DEBUG"
+        }
+
+        # Firewall log channel (optional)
+        try {
+            $events = Get-WinEvent -FilterHashtable @{
+                LogName = 'Microsoft-Windows-Windows Firewall With Advanced Security/Firewall'
+                StartTime = $lastTime.LocalDateTime
+            } -MaxEvents 500 -ErrorAction SilentlyContinue
+            if ($events) { $firewallEvents += @($events) }
+        } catch {
+            Write-Log "Firewall channel query error: $_" -Level "DEBUG"
+        }
+
+        if (-not $firewallEvents -or $firewallEvents.Count -eq 0) {
+            Write-Log "No new firewall events found"
+            return
+        }
+
+        Write-Log "Found $($firewallEvents.Count) firewall events"
+
+        $logs = @()
+
+        foreach ($event in $firewallEvents) {
+            try {
+                $xml = [xml]$event.ToXml()
+                $eventData = @{}
+                foreach ($data in $xml.Event.EventData.Data) {
+                    $eventData[$data.Name] = $data.'#text'
+                }
+
+                $portValue = $null
+                if ($eventData.ContainsKey('DestPort') -and $eventData['DestPort']) { $portValue = $eventData['DestPort'] }
+                elseif ($eventData.ContainsKey('LocalPort') -and $eventData['LocalPort']) { $portValue = $eventData['LocalPort'] }
+                $port = 0
+                if ($portValue) {
+                    try { $port = [int]$portValue } catch { $port = 0 }
+                }
+
+                $serviceName = "Port-$port"
+                switch ($port) {
+                    22 { $serviceName = "SSH" }
+                    80 { $serviceName = "HTTP" }
+                    443 { $serviceName = "HTTPS" }
+                    445 { $serviceName = "SMB" }
+                    3389 { $serviceName = "RDP" }
+                    5985 { $serviceName = "WinRM" }
+                    5986 { $serviceName = "WinRM-HTTPS" }
+                }
+
+                $remoteAddress = "0.0.0.0"
+                if ($eventData.ContainsKey('SourceAddress') -and $eventData['SourceAddress']) { $remoteAddress = $eventData['SourceAddress'] }
+                elseif ($eventData.ContainsKey('RemoteAddress') -and $eventData['RemoteAddress']) { $remoteAddress = $eventData['RemoteAddress'] }
+
+                $remotePort = $null
+                if ($eventData.ContainsKey('SourcePort') -and $eventData['SourcePort']) { $remotePort = $eventData['SourcePort'] }
+                elseif ($eventData.ContainsKey('RemotePort') -and $eventData['RemotePort']) { $remotePort = $eventData['RemotePort'] }
+                $remotePortInt = 0
+                if ($remotePort) {
+                    try { $remotePortInt = [int]$remotePort } catch { $remotePortInt = 0 }
+                }
+
+                $proto = "OTHER"
+                if ($eventData.ContainsKey('Protocol') -and $eventData['Protocol']) {
+                    if ($eventData['Protocol'] -eq '6') { $proto = 'TCP' }
+                    elseif ($eventData['Protocol'] -eq '17') { $proto = 'UDP' }
+                }
+
+                $direction = 'inbound'
+                if ($eventData.ContainsKey('Direction') -and $eventData['Direction']) {
+                    # Many builds encode inbound as %%14592
+                    if ($eventData['Direction'] -ne '%%14592') { $direction = 'outbound' }
+                }
+
+                $log = @{
+                    event_time = $event.TimeCreated.ToUniversalTime().ToString('o')
+                    service_name = $serviceName
+                    local_port = $port
+                    remote_address = $remoteAddress
+                    remote_port = $remotePortInt
+                    protocol = $proto
+                    direction = $direction
+                }
+
+                $logs += $log
+            } catch {
+                Write-Log "Error parsing firewall event: $_" -Level "DEBUG"
+            }
+        }
+
+        if ($logs.Count -gt 0) {
+            $body = @{ logs = @($logs) } | ConvertTo-Json -Depth 10 -Compress
+            $response = Invoke-RestMethod -Uri "$ApiBaseUrl/firewall-logs" -Method POST -Body $body -Headers $headers -TimeoutSec 30
+            Write-Log "Sent $($logs.Count) firewall logs to server (inserted: $($response.count))"
+        }
+
+        [DateTimeOffset]::UtcNow.ToString('o') | Set-Content -Path $FirewallLogTimeFile -Force
+    } catch {
+        Write-Log "Error collecting firewall logs: $_" -Level "WARN"
+    }
 }
 
 function Send-Threats {
@@ -1546,7 +1745,7 @@ function Show-StatusForm {
     param([object]$StatusData)
     
     $form = New-Object System.Windows.Forms.Form
-    $form.Text = "Peritus Threat Defence - Status"
+    $form.Text = "Peritus Threat Defence - Status (v$AgentVersion)"
     # Use ClientSize (not Size) so DPI/border chrome doesn't clip bottom controls.
     $form.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::Dpi
     $form.ClientSize = New-Object System.Drawing.Size(420, 420)
@@ -1868,6 +2067,9 @@ if ($Uninstall) { Uninstall-Agent }
 $agentToken = $null
 $isFirstRun = $true
 
+# Network module flag (set during heartbeat)
+$script:NetworkModuleEnabled = $false
+
 if (Test-Path $ConfigFile) {
     $config = Get-Content $ConfigFile | ConvertFrom-Json
     $agentToken = $config.agent_token
@@ -1963,6 +2165,12 @@ Send-Heartbeat -AgentToken $agentToken
 Send-Threats -AgentToken $agentToken
 Send-DefenderLogs -AgentToken $agentToken
 Send-DiscoveredApps -AgentToken $agentToken
+
+# Network module telemetry (Firewall enablement + audit logs)
+if ($script:NetworkModuleEnabled) {
+    Ensure-FirewallTelemetry | Out-Null
+    Collect-FirewallLogs -AgentToken $agentToken
+}
 
 # Fetch and apply Defender policy
 $policy = Get-AssignedPolicy -AgentToken $agentToken
