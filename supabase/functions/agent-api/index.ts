@@ -341,6 +341,7 @@ async function handleRegister(req: Request) {
         os_version,
         os_build,
         defender_version,
+        agent_version: body.agent_version || null,
         last_seen_at: new Date().toISOString(),
         is_online: true,
       })
@@ -377,6 +378,7 @@ async function handleRegister(req: Request) {
       os_version,
       os_build,
       defender_version,
+      agent_version: body.agent_version || null,
       last_seen_at: new Date().toISOString(),
       is_online: true,
     })
@@ -424,6 +426,7 @@ async function handleHeartbeat(req: Request) {
       last_seen_at: new Date().toISOString(),
       is_online: true,
       defender_version: body.defender_version || endpoint.defender_version,
+      agent_version: body.agent_version || endpoint.agent_version,
     })
     .eq("id", endpoint.id);
 

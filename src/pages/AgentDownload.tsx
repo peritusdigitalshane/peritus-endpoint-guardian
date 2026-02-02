@@ -363,6 +363,7 @@ function Get-SystemInfo {
         os_version = $os.Caption
         os_build = $os.BuildNumber
         defender_version = if ($defender) { $defender.AMProductVersion } else { "Unknown" }
+        agent_version = $AgentVersion
     }
 }
 
@@ -504,6 +505,7 @@ function Get-DefenderStatus {
             computer_state = Convert-Int32Safe $status.ComputerState
             am_running_mode = $status.AMRunningMode
             defender_version = $status.AMProductVersion
+            agent_version = $AgentVersion
             raw_status = $status | ConvertTo-Json -Depth 3 | ConvertFrom-Json
         }
 

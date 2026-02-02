@@ -8,6 +8,7 @@ export interface Endpoint {
   os_version: string | null;
   os_build: string | null;
   defender_version: string | null;
+  agent_version: string | null;
   is_online: boolean;
   last_seen_at: string | null;
   created_at: string;

@@ -136,6 +136,9 @@ export function EndpointsTable() {
                   Operating System
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  Agent Version
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Defender Version
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -181,6 +184,11 @@ export function EndpointsTable() {
                       <span className="text-sm text-foreground">
                         {endpoint.os_version || "Unknown"}
                       </span>
+                    </td>
+                    <td className="px-4 py-4">
+                      <code className="rounded bg-secondary px-2 py-1 text-xs text-muted-foreground">
+                        {endpoint.agent_version ? `v${endpoint.agent_version}` : "Unknown"}
+                      </code>
                     </td>
                     <td className="px-4 py-4">
                       <code className="rounded bg-secondary px-2 py-1 text-xs text-muted-foreground">
