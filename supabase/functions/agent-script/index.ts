@@ -228,6 +228,7 @@ if (Test-Path $ConfigFile) {
         os_version = (Get-CimInstance Win32_OperatingSystem).Caption
         os_build = (Get-CimInstance Win32_OperatingSystem).BuildNumber
         defender_version = (Get-MpComputerStatus -ErrorAction SilentlyContinue).AMProductVersion
+        agent_version = $AgentVersion
     } | ConvertTo-Json
     
     $response = Invoke-RestMethod -Uri "$ApiBaseUrl/register" -Method POST -Body $body -ContentType "application/json"

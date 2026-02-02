@@ -677,6 +677,7 @@ export type Database = {
       endpoints: {
         Row: {
           agent_token: string
+          agent_version: string | null
           created_at: string
           defender_version: string | null
           hostname: string
@@ -694,6 +695,7 @@ export type Database = {
         }
         Insert: {
           agent_token: string
+          agent_version?: string | null
           created_at?: string
           defender_version?: string | null
           hostname: string
@@ -711,6 +713,7 @@ export type Database = {
         }
         Update: {
           agent_token?: string
+          agent_version?: string | null
           created_at?: string
           defender_version?: string | null
           hostname?: string
