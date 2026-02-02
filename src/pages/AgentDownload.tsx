@@ -167,7 +167,7 @@ $ApiBaseUrl = "${apiBaseUrl}"
 $TaskName = "PeritusSecureAgent"
 $TrayTaskName = "PeritusSecureTray"
 $ServiceName = "Peritus Threat Defence Agent"
- $AgentVersion = "2.15.0"
+ $AgentVersion = "2.16.0"
 
 # Store ForceFullLogSync in script scope so functions can access it
 $script:ForceFullLogSync = $ForceFullLogSync.IsPresent
@@ -753,6 +753,9 @@ function Collect-FirewallLogs {
                 if ($portValue) {
                     try { $port = [int]$portValue } catch { $port = 0 }
                 }
+
+                # Skip noisy ports (mDNS, etc.) to save storage
+                if ($port -eq 5353) { continue }
 
                 $serviceName = "Port-$port"
                 switch ($port) {

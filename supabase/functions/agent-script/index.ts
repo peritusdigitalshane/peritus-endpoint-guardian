@@ -11,7 +11,7 @@ const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 // Current agent version - MUST match the version in agent-api
-const AGENT_VERSION = "2.15.0";
+const AGENT_VERSION = "2.16.0";
 const API_BASE_URL = "https://njdcyjxgtckgtzgzoctw.supabase.co/functions/v1/agent-api";
 
 Deno.serve(async (req) => {
@@ -392,6 +392,10 @@ function Collect-FirewallLogs {
                 
                 # Map common service ports to names
                 $port = [int]($eventData['DestPort'] ?? $eventData['LocalPort'] ?? 0)
+                
+                # Skip noisy ports (mDNS, etc.) to save storage
+                if ($port -eq 5353) { continue }
+                
                 $serviceName = switch ($port) {
                     22 { "SSH" }
                     80 { "HTTP" }
