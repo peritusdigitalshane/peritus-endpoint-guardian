@@ -28,6 +28,10 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const startTime = Date.now();
+    const MAX_RUNTIME_MS = 50_000; // 50 seconds max to stay within edge function timeout
+    const shouldContinue = () => Date.now() - startTime < MAX_RUNTIME_MS;
+
     const results = {
       endpoint_status_deleted: 0,
       endpoint_event_logs_deleted: 0,
@@ -38,14 +42,13 @@ Deno.serve(async (req) => {
     // 1. Clean up old endpoint_status records
     // Keep last 24 hours of status records, but always keep at least the latest per endpoint
     try {
-      // First, get the IDs of the latest status record per endpoint (to preserve)
+      // First, get the latest status record ID per endpoint (to preserve)
       const { data: latestRecords } = await supabase
         .from("endpoint_status")
         .select("id, endpoint_id, collected_at")
         .order("endpoint_id")
         .order("collected_at", { ascending: false });
 
-      // Get unique latest IDs per endpoint
       const latestPerEndpoint = new Map<string, string>();
       for (const record of latestRecords || []) {
         if (!latestPerEndpoint.has(record.endpoint_id)) {
@@ -54,27 +57,34 @@ Deno.serve(async (req) => {
       }
       const preserveIds = Array.from(latestPerEndpoint.values());
 
-      // Delete old records (older than 24 hours) except the latest per endpoint
       const cutoffTime = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       
-      const { data: toDelete } = await supabase
-        .from("endpoint_status")
-        .select("id")
-        .lt("collected_at", cutoffTime)
-        .not("id", "in", `(${preserveIds.join(",")})`);
+      let hasMore = true;
+      while (hasMore && shouldContinue()) {
+        const { data: toDelete } = await supabase
+          .from("endpoint_status")
+          .select("id")
+          .lt("collected_at", cutoffTime)
+          .not("id", "in", `(${preserveIds.join(",")})`)
+          .limit(500);
 
-      if (toDelete && toDelete.length > 0) {
+        if (!toDelete || toDelete.length === 0) {
+          hasMore = false;
+          break;
+        }
+
         const deleteIds = toDelete.map((r) => r.id);
-        // Delete in batches of 500 to avoid timeout
-        for (let i = 0; i < deleteIds.length; i += 500) {
-          const batch = deleteIds.slice(i, i + 500);
+        for (let i = 0; i < deleteIds.length; i += 100) {
+          const batch = deleteIds.slice(i, i + 100);
           const { error } = await supabase
             .from("endpoint_status")
             .delete()
             .in("id", batch);
-          
+
           if (error) {
             results.errors.push(`endpoint_status batch delete error: ${error.message}`);
+            hasMore = false;
+            break;
           } else {
             results.endpoint_status_deleted += batch.length;
           }
@@ -135,23 +145,34 @@ Deno.serve(async (req) => {
     try {
       const cutoffTime = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       
-      const { data: toDelete } = await supabase
-        .from("endpoint_logs")
-        .select("id")
-        .lt("created_at", cutoffTime)
-        .limit(1000);
-
-      if (toDelete && toDelete.length > 0) {
-        const deleteIds = toDelete.map((r) => r.id);
-        const { error } = await supabase
+      let hasMore = true;
+      while (hasMore && shouldContinue()) {
+        const { data: toDelete } = await supabase
           .from("endpoint_logs")
-          .delete()
-          .in("id", deleteIds);
+          .select("id")
+          .lt("created_at", cutoffTime)
+          .limit(500);
 
-        if (error) {
-          results.errors.push(`endpoint_logs delete error: ${error.message}`);
-        } else {
-          results.endpoint_logs_deleted += deleteIds.length;
+        if (!toDelete || toDelete.length === 0) {
+          hasMore = false;
+          break;
+        }
+
+        const deleteIds = toDelete.map((r) => r.id);
+        for (let i = 0; i < deleteIds.length; i += 100) {
+          const batch = deleteIds.slice(i, i + 100);
+          const { error } = await supabase
+            .from("endpoint_logs")
+            .delete()
+            .in("id", batch);
+
+          if (error) {
+            results.errors.push(`endpoint_logs batch delete error: ${error.message}`);
+            hasMore = false;
+            break;
+          } else {
+            results.endpoint_logs_deleted += batch.length;
+          }
         }
       }
     } catch (e) {
