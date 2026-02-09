@@ -264,6 +264,45 @@ export function ApplicationControl() {
     });
   };
 
+  // Trust All Publishers - creates a baseline by allowing every known publisher
+  const handleTrustAllPublishers = (ruleSetId: string) => {
+    const knownPublishers = publisherGroups
+      .filter(g => g.publisher !== "Unknown Publisher")
+      .map(g => g.publisher);
+    
+    if (!knownPublishers.length) {
+      toast({ title: "No known publishers to trust", variant: "destructive" });
+      return;
+    }
+
+    // Filter out publishers already allowed in this rule set
+    const ruleSet = ruleSets?.find(rs => rs.id === ruleSetId);
+    const existingAllowed = new Set(
+      (allRules || [])
+        .filter(r => r.rule_set_id === ruleSetId && r.rule_type === "publisher" && r.action === "allow")
+        .map(r => r.value.toLowerCase())
+    );
+    const newPublishers = knownPublishers.filter(p => !existingAllowed.has(p.toLowerCase()));
+
+    if (!newPublishers.length) {
+      toast({ title: "All publishers are already trusted in this rule set" });
+      return;
+    }
+
+    const rules = newPublishers.map(publisher => ({
+      rule_set_id: ruleSetId,
+      rule_type: "publisher" as const,
+      action: "allow" as const,
+      value: publisher,
+      publisher_name: publisher,
+      product_name: null,
+      file_version_min: null,
+      description: `Baseline: Trust ${publisher}`,
+    }));
+
+    addRulesBulk.mutate(rules);
+  };
+
   const copyHash = (hash: string) => {
     navigator.clipboard.writeText(hash);
     toast({ title: "Hash copied to clipboard" });
@@ -581,9 +620,37 @@ export function ApplicationControl() {
 
         {/* ============ DISCOVERED APPS TAB ============ */}
         <TabsContent value="apps" className="space-y-4 mt-4">
-          <div className="relative max-w-sm">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Search by name, path, publisher..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
+          <div className="flex items-center justify-between gap-4">
+            <div className="relative max-w-sm flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input placeholder="Search by name, path, publisher..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
+            </div>
+            {ruleSets && ruleSets.length > 0 && publisherGroups.length > 0 && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <ShieldCheck className="h-4 w-4 mr-2" />
+                    Trust All Publishers
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64" align="end">
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Create Baseline</p>
+                    <p className="text-xs text-muted-foreground">
+                      Trust all {publisherGroups.filter(g => g.publisher !== "Unknown Publisher").length} known publishers in a rule set. You can then selectively block individual publishers afterward.
+                    </p>
+                    {ruleSets.map(rs => (
+                      <Button key={rs.id} variant="ghost" size="sm" className="w-full justify-start text-sm"
+                        onClick={() => handleTrustAllPublishers(rs.id)}
+                        disabled={addRulesBulk.isPending}>
+                        {addRulesBulk.isPending ? <Loader2 className="h-3 w-3 mr-2 animate-spin" /> : <Layers className="h-3 w-3 mr-2" />}
+                        {rs.name}
+                      </Button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
           </div>
 
           {!publisherGroups.length ? (
