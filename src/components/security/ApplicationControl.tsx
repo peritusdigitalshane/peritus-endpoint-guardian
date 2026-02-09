@@ -36,6 +36,7 @@ import {
   ArrowLeft,
   Building2,
   Info,
+  Eye,
 } from "lucide-react";
 
 interface PublisherGroup {
@@ -73,7 +74,7 @@ export function ApplicationControl() {
   // Dialogs
   const [showRuleSetEditor, setShowRuleSetEditor] = useState(false);
   const [editingRuleSet, setEditingRuleSet] = useState<RuleSet | null>(null);
-  const [ruleSetForm, setRuleSetForm] = useState({ name: "", description: "" });
+  const [ruleSetForm, setRuleSetForm] = useState({ name: "", description: "", mode: "audit" as "audit" | "enforced" });
 
   const [showAddRule, setShowAddRule] = useState(false);
   const [ruleForm, setRuleForm] = useState({
@@ -311,14 +312,14 @@ export function ApplicationControl() {
   // Rule Set CRUD
   const handleCreateRuleSet = () => {
     setEditingRuleSet(null);
-    setRuleSetForm({ name: "", description: "" });
+    setRuleSetForm({ name: "", description: "", mode: "audit" });
     setShowRuleSetEditor(true);
   };
 
   const handleEditRuleSet = (rs: RuleSet, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingRuleSet(rs);
-    setRuleSetForm({ name: rs.name, description: rs.description || "" });
+    setRuleSetForm({ name: rs.name, description: rs.description || "", mode: rs.mode || "audit" });
     setShowRuleSetEditor(true);
   };
 
@@ -387,7 +388,24 @@ export function ApplicationControl() {
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div>
-              <h2 className="text-lg font-semibold">{selectedRuleSet.name}</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-semibold">{selectedRuleSet.name}</h2>
+                <Badge
+                  variant={selectedRuleSet.mode === "enforced" ? "default" : "secondary"}
+                  className={
+                    selectedRuleSet.mode === "enforced"
+                      ? "bg-destructive/10 text-destructive border-destructive/30"
+                      : "bg-amber-500/10 text-amber-600 border-amber-500/30"
+                  }
+                >
+                  {selectedRuleSet.mode === "enforced" ? (
+                    <ShieldCheck className="h-3 w-3 mr-1" />
+                  ) : (
+                    <Eye className="h-3 w-3 mr-1" />
+                  )}
+                  {selectedRuleSet.mode === "enforced" ? "Enforced" : "Audit"}
+                </Badge>
+              </div>
               <p className="text-sm text-muted-foreground">
                 {selectedRuleSet.description || "No description"} • {selectedRules?.length || 0} rules
               </p>
@@ -914,11 +932,28 @@ export function ApplicationControl() {
                 <Card key={rs.id} className="cursor-pointer transition-all hover:border-primary/50" onClick={() => setSelectedRuleSetId(rs.id)}>
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
-                      <div className="space-y-1 flex-1 min-w-0">
+                     <div className="space-y-1 flex-1 min-w-0">
                         <CardTitle className="text-base truncate">{rs.name}</CardTitle>
                         <CardDescription className="line-clamp-2">{rs.description || "No description"}</CardDescription>
                       </div>
-                      <Badge variant="secondary" className="ml-2 shrink-0">{rs.rule_count || 0} rules</Badge>
+                      <div className="flex flex-col items-end gap-1 ml-2 shrink-0">
+                        <Badge
+                          variant={rs.mode === "enforced" ? "default" : "secondary"}
+                          className={
+                            rs.mode === "enforced"
+                              ? "bg-destructive/10 text-destructive border-destructive/30"
+                              : "bg-amber-500/10 text-amber-600 border-amber-500/30"
+                          }
+                        >
+                          {rs.mode === "enforced" ? (
+                            <ShieldCheck className="h-3 w-3 mr-1" />
+                          ) : (
+                            <Eye className="h-3 w-3 mr-1" />
+                          )}
+                          {rs.mode === "enforced" ? "Enforced" : "Audit"}
+                        </Badge>
+                        <Badge variant="secondary">{rs.rule_count || 0} rules</Badge>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -952,6 +987,36 @@ export function ApplicationControl() {
             <div className="space-y-2">
               <Label>Description</Label>
               <Textarea value={ruleSetForm.description} onChange={(e) => setRuleSetForm({ ...ruleSetForm, description: e.target.value })} placeholder="What applications does this rule set cover?" />
+            </div>
+            <div className="space-y-2">
+              <Label>Mode</Label>
+              <Select
+                value={ruleSetForm.mode}
+                onValueChange={(v: "audit" | "enforced") => setRuleSetForm({ ...ruleSetForm, mode: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="audit">
+                    <div className="flex items-center gap-2">
+                      <Eye className="h-4 w-4 text-amber-500" />
+                      <span>Audit (Log Only)</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="enforced">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="h-4 w-4 text-destructive" />
+                      <span>Enforced (Block Unauthorized)</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {ruleSetForm.mode === "audit"
+                  ? "Audit mode logs blocked applications without actually blocking them. Use this to discover and baseline applications."
+                  : "Enforced mode actively blocks any application not in the allow list. Make sure you've reviewed all discovered apps first!"}
+              </p>
             </div>
           </div>
           <DialogFooter>

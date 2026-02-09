@@ -9,6 +9,7 @@ export interface RuleSet {
   organization_id: string;
   name: string;
   description: string | null;
+  mode: "audit" | "enforced";
   created_at: string;
   updated_at: string;
   created_by: string | null;
@@ -183,13 +184,14 @@ export function useRuleSetMutations() {
   const { currentOrganization } = useTenant();
 
   const createRuleSet = useMutation({
-    mutationFn: async (data: { name: string; description?: string }) => {
+    mutationFn: async (data: { name: string; description?: string; mode?: "audit" | "enforced" }) => {
       const { data: result, error } = await supabase
         .from("wdac_rule_sets")
         .insert({
           organization_id: currentOrganization!.id,
           name: data.name,
           description: data.description,
+          mode: data.mode || "audit",
         })
         .select()
         .single();
@@ -210,7 +212,7 @@ export function useRuleSetMutations() {
   });
 
   const updateRuleSet = useMutation({
-    mutationFn: async ({ id, ...updates }: { id: string; name?: string; description?: string }) => {
+    mutationFn: async ({ id, ...updates }: { id: string; name?: string; description?: string; mode?: "audit" | "enforced" }) => {
       const { data, error } = await supabase
         .from("wdac_rule_sets")
         .update(updates)
