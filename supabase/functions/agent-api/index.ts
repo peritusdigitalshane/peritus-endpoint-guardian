@@ -930,6 +930,7 @@ async function handleGetWdacPolicy(req: Request) {
     description?: string;
     source: string;
     source_id: string;
+    mode: string;
   }> = [];
 
   // 1. Legacy WDAC policy rules (if assigned)
@@ -961,6 +962,7 @@ async function handleGetWdacPolicy(req: Request) {
           description: rule.description,
           source: "wdac_policy",
           source_id: endpoint.wdac_policy_id,
+          mode: legacyPolicy?.mode || "audit",
         });
       }
     }
@@ -999,11 +1001,12 @@ async function handleGetWdacPolicy(req: Request) {
   if (allRuleSetIds.length > 0) {
     const { data: ruleSetRules } = await supabase
       .from("wdac_rule_set_rules")
-      .select("*, wdac_rule_sets!inner(name)")
+      .select("*, wdac_rule_sets!inner(name, mode)")
       .in("rule_set_id", allRuleSetIds);
 
     if (ruleSetRules) {
       for (const rule of ruleSetRules) {
+        const ruleSet = rule.wdac_rule_sets as unknown as { name: string; mode: string };
         allRules.push({
           id: rule.id,
           rule_type: rule.rule_type,
@@ -1015,6 +1018,7 @@ async function handleGetWdacPolicy(req: Request) {
           description: rule.description,
           source: directRuleSetIds.includes(rule.rule_set_id) ? "endpoint_rule_set" : "group_rule_set",
           source_id: rule.rule_set_id,
+          mode: ruleSet?.mode || "audit",
         });
       }
     }
@@ -1055,6 +1059,7 @@ async function handleGetRuleSets(req: Request) {
         id,
         name,
         description,
+        mode,
         updated_at
       )
     `)
@@ -1086,7 +1091,7 @@ async function handleGetRuleSets(req: Request) {
         rule_set_id,
         priority,
         endpoint_groups (name),
-        wdac_rule_sets (id, name)
+        wdac_rule_sets (id, name, mode)
       `)
       .in("group_id", groupIds)
       .order("priority", { ascending: false });
@@ -1094,12 +1099,13 @@ async function handleGetRuleSets(req: Request) {
     if (gAssignments) {
       groupAssignments = gAssignments.map(a => {
         const endpointGroup = a.endpoint_groups as unknown as { name: string } | null;
-        const ruleSet = a.wdac_rule_sets as unknown as { id: string; name: string } | null;
+        const ruleSet = a.wdac_rule_sets as unknown as { id: string; name: string; mode: string } | null;
         return {
           group_id: a.group_id,
           group_name: endpointGroup?.name || "",
           rule_set_id: a.rule_set_id,
           rule_set_name: ruleSet?.name || "",
+          rule_set_mode: ruleSet?.mode || "audit",
           priority: a.priority,
         };
       });
@@ -1486,7 +1492,7 @@ async function handleGetStatus(req: Request) {
 }
 
 // Current agent version - increment when agent script changes
-const AGENT_VERSION = "2.17.0";
+const AGENT_VERSION = "2.18.0";
 
 // GET /agent-update - Check for updates and return new script if needed
 async function handleAgentUpdate(req: Request) {
