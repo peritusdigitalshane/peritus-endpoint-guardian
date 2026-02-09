@@ -11,7 +11,7 @@ const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 // Current agent version - MUST match the version in agent-api
-const AGENT_VERSION = "2.17.0";
+const AGENT_VERSION = "2.18.0";
 const API_BASE_URL = "https://njdcyjxgtckgtzgzoctw.supabase.co/functions/v1/agent-api";
 
 Deno.serve(async (req) => {
@@ -447,6 +447,294 @@ function Collect-FirewallLogs {
     } catch {
         Write-Log "Error collecting firewall logs: $_" -Level "WARN"
     }
+}
+
+# ==================== WDAC / APPLICATION CONTROL ENFORCEMENT ====================
+
+$WdacHashFile = "$ConfigPath\\wdac_rules_hash.txt"
+
+function Get-WdacRules {
+    param([string]$AgentToken)
+    
+    try {
+        $headers = @{ "Content-Type" = "application/json"; "x-agent-token" = $AgentToken }
+        $response = Invoke-RestMethod -Uri "$ApiBaseUrl/wdac-policy" -Method GET -Headers $headers -TimeoutSec 30
+        
+        if ($response.success) {
+            Write-Log "WDAC policy retrieved: $($response.rules_count) rules"
+            return $response
+        } else {
+            Write-Log "No WDAC policy configured" -Level "DEBUG"
+            return $null
+        }
+    } catch {
+        Write-Log "Error fetching WDAC policy: $_" -Level "WARN"
+        return $null
+    }
+}
+
+function Apply-WdacRules {
+    param(
+        [Parameter(Mandatory=$true)]$PolicyResponse,
+        [string]$AgentToken
+    )
+    
+    $rules = $PolicyResponse.rules
+    $newHash = $PolicyResponse.rules_hash
+    
+    if (-not $rules -or $rules.Count -eq 0) {
+        Write-Log "No WDAC rules to apply"
+        # If no rules, remove any existing WDAC CI policy we created
+        Remove-WdacCiPolicy
+        return
+    }
+    
+    # Check if rules have changed
+    $currentHash = ""
+    if (Test-Path $WdacHashFile) {
+        $currentHash = (Get-Content $WdacHashFile -Raw).Trim()
+    }
+    
+    if ($currentHash -eq $newHash) {
+        Write-Log "WDAC rules unchanged (hash: $newHash) - skipping enforcement"
+        return
+    }
+    
+    Write-Log "WDAC rules changed (old: $currentHash, new: $newHash) - applying enforcement"
+    
+    # Separate enforced vs audit rules
+    $enforcedBlockRules = @($rules | Where-Object { $_.mode -eq "enforced" -and $_.action -eq "block" })
+    $enforcedAllowRules = @($rules | Where-Object { $_.mode -eq "enforced" -and $_.action -eq "allow" })
+    $auditRules = @($rules | Where-Object { $_.mode -eq "audit" })
+    
+    Write-Log "Rules breakdown: $($enforcedBlockRules.Count) enforced-block, $($enforcedAllowRules.Count) enforced-allow, $($auditRules.Count) audit"
+    
+    # Build and apply WDAC CI policy XML
+    try {
+        $policyPath = "$ConfigPath\\PeritusWdacPolicy.xml"
+        $binaryPolicyPath = "$ConfigPath\\PeritusWdacPolicy.bin"
+        $cipPath = "$env:windir\\System32\\CodeIntegrity\\CiPolicies\\Active\\{A244370E-44C9-4C06-B551-F6016E563076}.cip"
+        
+        # Generate WDAC policy XML
+        $policyXml = Build-WdacPolicyXml -EnforcedBlockRules $enforcedBlockRules -EnforcedAllowRules $enforcedAllowRules -AuditRules $auditRules
+        
+        $policyXml | Set-Content -Path $policyPath -Force -Encoding UTF8
+        Write-Log "WDAC policy XML written to: $policyPath"
+        
+        # Try to compile and deploy the policy using CiTool (Win11 22H2+) or ConvertFrom-CIPolicy
+        $deployed = $false
+        
+        # Method 1: ConvertFrom-CIPolicy + CiTool
+        try {
+            if (Get-Command ConvertFrom-CIPolicy -ErrorAction SilentlyContinue) {
+                ConvertFrom-CIPolicy -XmlFilePath $policyPath -BinaryFilePath $binaryPolicyPath -ErrorAction Stop
+                Write-Log "WDAC policy compiled to binary"
+                
+                if (Get-Command CiTool -ErrorAction SilentlyContinue) {
+                    $result = CiTool --update-policy $binaryPolicyPath 2>&1
+                    Write-Log "CiTool result: $result"
+                    $deployed = $true
+                } else {
+                    # Fall back to copying to CiPolicies directory
+                    $cipDir = Split-Path $cipPath -Parent
+                    if (-not (Test-Path $cipDir)) { New-Item -ItemType Directory -Path $cipDir -Force | Out-Null }
+                    Copy-Item $binaryPolicyPath $cipPath -Force
+                    Write-Log "WDAC binary policy deployed to CiPolicies directory"
+                    $deployed = $true
+                }
+            }
+        } catch {
+            Write-Log "WDAC policy compilation/deployment failed: $_" -Level "WARN"
+        }
+        
+        if (-not $deployed) {
+            Write-Log "WDAC policy could not be deployed (ConvertFrom-CIPolicy not available). Policy saved to: $policyPath" -Level "WARN"
+            Write-Log "Manual deployment required: ConvertFrom-CIPolicy or Windows 11 22H2+ with CiTool" -Level "WARN"
+        }
+        
+        # Save the hash to track changes
+        $newHash | Set-Content -Path $WdacHashFile -Force
+        Write-Log "WDAC enforcement complete"
+        
+    } catch {
+        Write-Log "Error applying WDAC policy: $_" -Level "ERROR"
+    }
+}
+
+function Remove-WdacCiPolicy {
+    try {
+        $cipPath = "$env:windir\\System32\\CodeIntegrity\\CiPolicies\\Active\\{A244370E-44C9-4C06-B551-F6016E563076}.cip"
+        if (Test-Path $cipPath) {
+            if (Get-Command CiTool -ErrorAction SilentlyContinue) {
+                CiTool --remove-policy "{A244370E-44C9-4C06-B551-F6016E563076}" 2>&1 | Out-Null
+            } else {
+                Remove-Item $cipPath -Force -ErrorAction SilentlyContinue
+            }
+            Write-Log "Removed Peritus WDAC CI policy"
+        }
+        if (Test-Path $WdacHashFile) { Remove-Item $WdacHashFile -Force -ErrorAction SilentlyContinue }
+    } catch {
+        Write-Log "Error removing WDAC CI policy: $_" -Level "WARN"
+    }
+}
+
+function Build-WdacPolicyXml {
+    param(
+        [array]$EnforcedBlockRules,
+        [array]$EnforcedAllowRules,
+        [array]$AuditRules
+    )
+    
+    # Determine overall policy mode
+    # If any enforced rules exist, policy is in Enforce mode
+    # Audit-only rules still generate Allow rules but with audit flag
+    $hasEnforced = ($EnforcedBlockRules.Count -gt 0) -or ($EnforcedAllowRules.Count -gt 0)
+    
+    $denyRulesXml = ""
+    $allowRulesXml = ""
+    $signersXml = ""
+    $fileRulesXml = ""
+    $ruleIdx = 0
+    $q = '"'
+    
+    # Process block rules (enforced)
+    foreach ($rule in $EnforcedBlockRules) {
+        $ruleIdx++
+        $escaped = [System.Security.SecurityElement]::Escape($(if ($rule.description) { $rule.description } else { $rule.value }))
+        $escapedVal = [System.Security.SecurityElement]::Escape($rule.value)
+        switch ($rule.rule_type) {
+            "hash" {
+                $fileRulesXml += "      <Deny ID=${q}ID_DENY_$ruleIdx${q} FriendlyName=${q}$escaped${q} Hash=${q}$($rule.value)${q} />" + [Environment]::NewLine
+                $denyRulesXml += "        <FileRuleRef RuleID=${q}ID_DENY_$ruleIdx${q} />" + [Environment]::NewLine
+            }
+            "path" {
+                $fileRulesXml += "      <Deny ID=${q}ID_DENY_$ruleIdx${q} FriendlyName=${q}$escaped${q} FilePath=${q}$escapedVal${q} />" + [Environment]::NewLine
+                $denyRulesXml += "        <FileRuleRef RuleID=${q}ID_DENY_$ruleIdx${q} />" + [Environment]::NewLine
+            }
+            "file_name" {
+                $fileRulesXml += "      <Deny ID=${q}ID_DENY_$ruleIdx${q} FriendlyName=${q}$escaped${q} FileName=${q}$escapedVal${q} MinimumFileVersion=${q}0.0.0.0${q} />" + [Environment]::NewLine
+                $denyRulesXml += "        <FileRuleRef RuleID=${q}ID_DENY_$ruleIdx${q} />" + [Environment]::NewLine
+            }
+            "publisher" {
+                $ruleIdx++
+                $pubEscaped = [System.Security.SecurityElement]::Escape($(if ($rule.publisher_name) { $rule.publisher_name } else { $rule.value }))
+                $signerXml = "      <Signer ID=${q}ID_SIGNER_DENY_$ruleIdx${q} Name=${q}$pubEscaped${q}>" + [Environment]::NewLine
+                $signerXml += "        <CertRoot Type=${q}TBS${q} Value=${q}*${q} />" + [Environment]::NewLine
+                if ($rule.product_name) {
+                    $prodEscaped = [System.Security.SecurityElement]::Escape($rule.product_name)
+                    $signerXml += "        <FileAttribRef RuleID=${q}ID_FILEATTRIB_$ruleIdx${q} />" + [Environment]::NewLine
+                    $fileRulesXml += "      <FileAttrib ID=${q}ID_FILEATTRIB_$ruleIdx${q} ProductName=${q}$prodEscaped${q} "
+                    if ($rule.file_version_min) {
+                        $fileRulesXml += "MinimumFileVersion=${q}$($rule.file_version_min)${q} "
+                    }
+                    $fileRulesXml += "/>" + [Environment]::NewLine
+                }
+                $signerXml += "      </Signer>" + [Environment]::NewLine
+                $signersXml += $signerXml
+                $denyRulesXml += "        <FileRuleRef RuleID=${q}ID_SIGNER_DENY_$ruleIdx${q} />" + [Environment]::NewLine
+            }
+        }
+    }
+    
+    # Process allow rules (enforced + audit)
+    $allAllowRules = @($EnforcedAllowRules) + @($AuditRules)
+    foreach ($rule in $allAllowRules) {
+        $ruleIdx++
+        $escaped = [System.Security.SecurityElement]::Escape($(if ($rule.description) { $rule.description } else { $rule.value }))
+        $escapedVal = [System.Security.SecurityElement]::Escape($rule.value)
+        switch ($rule.rule_type) {
+            "hash" {
+                $fileRulesXml += "      <Allow ID=${q}ID_ALLOW_$ruleIdx${q} FriendlyName=${q}$escaped${q} Hash=${q}$($rule.value)${q} />" + [Environment]::NewLine
+                $allowRulesXml += "        <FileRuleRef RuleID=${q}ID_ALLOW_$ruleIdx${q} />" + [Environment]::NewLine
+            }
+            "path" {
+                $fileRulesXml += "      <Allow ID=${q}ID_ALLOW_$ruleIdx${q} FriendlyName=${q}$escaped${q} FilePath=${q}$escapedVal${q} />" + [Environment]::NewLine
+                $allowRulesXml += "        <FileRuleRef RuleID=${q}ID_ALLOW_$ruleIdx${q} />" + [Environment]::NewLine
+            }
+            "file_name" {
+                $fileRulesXml += "      <Allow ID=${q}ID_ALLOW_$ruleIdx${q} FriendlyName=${q}$escaped${q} FileName=${q}$escapedVal${q} MinimumFileVersion=${q}0.0.0.0${q} />" + [Environment]::NewLine
+                $allowRulesXml += "        <FileRuleRef RuleID=${q}ID_ALLOW_$ruleIdx${q} />" + [Environment]::NewLine
+            }
+            "publisher" {
+                $ruleIdx++
+                $pubEscaped = [System.Security.SecurityElement]::Escape($(if ($rule.publisher_name) { $rule.publisher_name } else { $rule.value }))
+                $signerXml = "      <Signer ID=${q}ID_SIGNER_ALLOW_$ruleIdx${q} Name=${q}$pubEscaped${q}>" + [Environment]::NewLine
+                $signerXml += "        <CertRoot Type=${q}TBS${q} Value=${q}*${q} />" + [Environment]::NewLine
+                if ($rule.product_name) {
+                    $prodEscaped = [System.Security.SecurityElement]::Escape($rule.product_name)
+                    $signerXml += "        <FileAttribRef RuleID=${q}ID_FILEATTRIB_$ruleIdx${q} />" + [Environment]::NewLine
+                    $fileRulesXml += "      <FileAttrib ID=${q}ID_FILEATTRIB_$ruleIdx${q} ProductName=${q}$prodEscaped${q} "
+                    if ($rule.file_version_min) {
+                        $fileRulesXml += "MinimumFileVersion=${q}$($rule.file_version_min)${q} "
+                    }
+                    $fileRulesXml += "/>" + [Environment]::NewLine
+                }
+                $signerXml += "      </Signer>" + [Environment]::NewLine
+                $signersXml += $signerXml
+                $allowRulesXml += "        <FileRuleRef RuleID=${q}ID_SIGNER_ALLOW_$ruleIdx${q} />" + [Environment]::NewLine
+            }
+        }
+    }
+    
+    # Build the options based on enforcement mode
+    $optionsXml = ""
+    if (-not $hasEnforced) {
+        # Audit-only mode
+        $optionsXml += "      <Rule><Option>Enabled:Audit Mode</Option></Rule>" + [Environment]::NewLine
+    }
+    # Always include these standard options
+    $optionsXml += "      <Rule><Option>Enabled:Unsigned System Integrity Policy</Option></Rule>" + [Environment]::NewLine
+    $optionsXml += "      <Rule><Option>Enabled:Advanced Boot Options Menu</Option></Rule>" + [Environment]::NewLine
+    $optionsXml += "      <Rule><Option>Enabled:UMCI</Option></Rule>" + [Environment]::NewLine
+    
+    $policyGuid = "A244370E-44C9-4C06-B551-F6016E563076"
+    
+    return @"
+<?xml version="1.0" encoding="utf-8"?>
+<SiPolicy xmlns="urn:schemas-microsoft-com:sipolicy" PolicyType="Base Policy">
+  <VersionEx>1.0.0.0</VersionEx>
+  <PlatformID>{2E07F7E4-194C-4D20-B7C9-6F44A6C5A234}</PlatformID>
+  <PolicyID>{$policyGuid}</PolicyID>
+  <BasePolicyID>{$policyGuid}</BasePolicyID>
+  <Rules>
+$optionsXml  </Rules>
+  <EKUs />
+  <FileRules>
+$fileRulesXml  </FileRules>
+  <Signers>
+$signersXml  </Signers>
+  <SigningScenarios>
+    <SigningScenario Value="131" ID="ID_SIGNINGSCENARIO_DRIVERS" FriendlyName="Drivers">
+      <ProductSigners />
+    </SigningScenario>
+    <SigningScenario Value="12" ID="ID_SIGNINGSCENARIO_USERMODE" FriendlyName="User Mode">
+      <ProductSigners>
+        <DeniedSigners>
+$denyRulesXml        </DeniedSigners>
+        <AllowedSigners>
+$allowRulesXml        </AllowedSigners>
+      </ProductSigners>
+    </SigningScenario>
+  </SigningScenarios>
+  <UpdatePolicySigners />
+  <CiSigners />
+  <HvciOptions>0</HvciOptions>
+</SiPolicy>
+"@
+}
+
+# ==================== WDAC ENFORCEMENT EXECUTION ====================
+
+try {
+    $wdacResponse = Get-WdacRules -AgentToken $agentToken
+    if ($wdacResponse -and $wdacResponse.rules -and $wdacResponse.rules.Count -gt 0) {
+        Apply-WdacRules -PolicyResponse $wdacResponse -AgentToken $agentToken
+    } elseif ($wdacResponse -and $wdacResponse.rules_count -eq 0) {
+        # No rules assigned - clean up any existing policy
+        Remove-WdacCiPolicy
+    }
+} catch {
+    Write-Log "WDAC enforcement error: $_" -Level "WARN"
 }
 
 # ==================== FIREWALL POLICY ENFORCEMENT ====================
