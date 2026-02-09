@@ -13,10 +13,8 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useCreatePolicy, usePolicies, useUpdatePolicy } from "@/hooks/usePolicies";
 
 // Import security components
-import { WdacPolicies } from "@/components/security/WdacPolicies";
-import { DiscoveredApps } from "@/components/security/DiscoveredApps";
+import { ApplicationControl } from "@/components/security/ApplicationControl";
 import { EndpointWdacList } from "@/components/security/EndpointWdacList";
-import { RuleSetsManager } from "@/components/security/RuleSetsManager";
 import { UacPoliciesManager } from "@/components/security/UacPoliciesManager";
 import { EndpointUacList } from "@/components/security/EndpointUacList";
 import { WindowsUpdatePoliciesManager } from "@/components/security/WindowsUpdatePoliciesManager";
@@ -25,8 +23,7 @@ import { EndpointWindowsUpdateList } from "@/components/security/EndpointWindows
 const Policies = () => {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingPolicy, setEditingPolicy] = useState<DefenderPolicy | undefined>();
-  const [selectedWdacPolicyId, setSelectedWdacPolicyId] = useState<string | null>(null);
-  const [selectedRuleSetId, setSelectedRuleSetId] = useState<string | null>(null);
+  
   const { toast } = useToast();
   const { user, isLoading: authLoading } = useAuth();
   const { currentOrganization, isLoading: tenantLoading } = useTenant();
@@ -135,21 +132,13 @@ const Policies = () => {
               <Shield className="h-4 w-4" />
               <span className="hidden sm:inline">Defender Policies</span>
             </TabsTrigger>
-            <TabsTrigger value="rulesets" className="flex items-center gap-2">
+            <TabsTrigger value="app-control" className="flex items-center gap-2">
               <Layers className="h-4 w-4" />
-              <span className="hidden sm:inline">WDAC Rule Sets</span>
+              <span className="hidden sm:inline">Application Control</span>
             </TabsTrigger>
-            <TabsTrigger value="wdac-endpoints" className="flex items-center gap-2">
+            <TabsTrigger value="app-control-endpoints" className="flex items-center gap-2">
               <Monitor className="h-4 w-4" />
-              <span className="hidden sm:inline">WDAC Endpoints</span>
-            </TabsTrigger>
-            <TabsTrigger value="apps" className="flex items-center gap-2">
-              <Shield className="h-4 w-4" />
-              <span className="hidden sm:inline">Discovered Apps</span>
-            </TabsTrigger>
-            <TabsTrigger value="wdac-policies" className="flex items-center gap-2">
-              <Shield className="h-4 w-4" />
-              <span className="hidden sm:inline">WDAC Policies (Legacy)</span>
+              <span className="hidden sm:inline">App Control Endpoints</span>
             </TabsTrigger>
             <TabsTrigger value="uac-policies" className="flex items-center gap-2">
               <ShieldCheck className="h-4 w-4" />
@@ -231,30 +220,14 @@ const Policies = () => {
             </div>
           </TabsContent>
 
-          {/* WDAC Rule Sets Tab */}
-          <TabsContent value="rulesets">
-            <RuleSetsManager 
-              selectedRuleSetId={selectedRuleSetId}
-              onSelectRuleSet={setSelectedRuleSetId}
-            />
+          {/* Application Control Tab */}
+          <TabsContent value="app-control">
+            <ApplicationControl />
           </TabsContent>
 
-          {/* WDAC Endpoints Tab */}
-          <TabsContent value="wdac-endpoints">
+          {/* App Control Endpoints Tab */}
+          <TabsContent value="app-control-endpoints">
             <EndpointWdacList />
-          </TabsContent>
-
-          {/* Discovered Apps Tab */}
-          <TabsContent value="apps">
-            <DiscoveredApps selectedPolicyId={selectedWdacPolicyId} />
-          </TabsContent>
-
-          {/* WDAC Policies Tab */}
-          <TabsContent value="wdac-policies">
-            <WdacPolicies 
-              onSelectPolicy={setSelectedWdacPolicyId} 
-              selectedPolicyId={selectedWdacPolicyId}
-            />
           </TabsContent>
 
           {/* UAC Policies Tab */}
