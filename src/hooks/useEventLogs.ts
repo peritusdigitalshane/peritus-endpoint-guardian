@@ -47,6 +47,8 @@ export function useEventLogs(limit = 100) {
       return (data ?? []) as EndpointEventLog[];
     },
     enabled: !!currentOrganization?.id,
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
+    staleTime: 10000,
   });
 }
