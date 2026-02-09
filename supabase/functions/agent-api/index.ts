@@ -708,7 +708,7 @@ async function handleLogs(req: Request) {
 
   const { error: insertError } = await supabase
     .from("endpoint_event_logs")
-    .insert(logsToInsert);
+    .upsert(logsToInsert, { onConflict: "endpoint_id,event_id,event_time", ignoreDuplicates: true });
 
   if (insertError) {
     console.error("Error inserting logs:", insertError);
