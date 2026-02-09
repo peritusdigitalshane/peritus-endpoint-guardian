@@ -8,7 +8,10 @@ import {
   Users, 
   Pencil, 
   Trash2,
-  Loader2
+  Loader2,
+  MonitorCog,
+  RefreshCw,
+  Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,6 +43,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -55,13 +59,18 @@ import {
   useDeleteEndpointGroup,
 } from "@/hooks/useEndpointGroups";
 import { usePolicyOptions } from "@/hooks/usePolicies";
-import { useWdacPolicies } from "@/hooks/useWdac";
+import { useUacPolicies } from "@/hooks/useUacPolicies";
+import { useWindowsUpdatePolicies } from "@/hooks/useWindowsUpdatePolicies";
+import { useRuleSets, useGroupRuleSetAssignments, useRuleSetMutations } from "@/hooks/useRuleSets";
 import { GroupMembersDialog } from "./GroupMembersDialog";
 
 export function EndpointGroupsManager() {
   const { data: groups = [], isLoading } = useEndpointGroups();
   const { data: defenderPolicies = [] } = usePolicyOptions();
-  const { data: wdacPolicies = [] } = useWdacPolicies();
+  const { data: uacPolicies = [] } = useUacPolicies();
+  const { data: windowsUpdatePolicies = [] } = useWindowsUpdatePolicies();
+  const { data: ruleSets = [] } = useRuleSets();
+  const { assignToGroup, removeFromGroup } = useRuleSetMutations();
   const createGroup = useCreateEndpointGroup();
   const updateGroup = useUpdateEndpointGroup();
   const deleteGroup = useDeleteEndpointGroup();
@@ -75,8 +84,14 @@ export function EndpointGroupsManager() {
     name: "",
     description: "",
     defender_policy_id: "",
-    wdac_policy_id: "",
+    uac_policy_id: "",
+    windows_update_policy_id: "",
   });
+  // Rule sets selected for assignment (used during create/edit)
+  const [selectedRuleSetIds, setSelectedRuleSetIds] = useState<Set<string>>(new Set());
+
+  // Fetch rule set assignments for the editing group
+  const { data: editingGroupAssignments } = useGroupRuleSetAssignments(editingGroup?.id || null);
 
   const handleOpenCreate = () => {
     setEditingGroup(null);
@@ -84,8 +99,10 @@ export function EndpointGroupsManager() {
       name: "",
       description: "",
       defender_policy_id: "",
-      wdac_policy_id: "",
+      uac_policy_id: "",
+      windows_update_policy_id: "",
     });
+    setSelectedRuleSetIds(new Set());
     setDialogOpen(true);
   };
 
@@ -95,10 +112,21 @@ export function EndpointGroupsManager() {
       name: group.name,
       description: group.description || "",
       defender_policy_id: group.defender_policy_id || "",
-      wdac_policy_id: group.wdac_policy_id || "",
+      uac_policy_id: (group as any).uac_policy_id || "",
+      windows_update_policy_id: (group as any).windows_update_policy_id || "",
     });
+    // We'll load existing rule set assignments via the hook
+    setSelectedRuleSetIds(new Set());
     setDialogOpen(true);
   };
+
+  // Sync selected rule sets when editing group assignments load
+  const syncedEditingGroupId = editingGroup?.id;
+  const [lastSyncedGroupId, setLastSyncedGroupId] = useState<string | null>(null);
+  if (syncedEditingGroupId && editingGroupAssignments && syncedEditingGroupId !== lastSyncedGroupId) {
+    setSelectedRuleSetIds(new Set(editingGroupAssignments.map(a => a.rule_set_id)));
+    setLastSyncedGroupId(syncedEditingGroupId);
+  }
 
   const handleOpenDelete = (group: EndpointGroup) => {
     setSelectedGroup(group);
@@ -111,22 +139,47 @@ export function EndpointGroupsManager() {
   };
 
   const handleSave = async () => {
+    let groupId: string;
     if (editingGroup) {
       await updateGroup.mutateAsync({
         id: editingGroup.id,
         name: formData.name,
         description: formData.description || null,
         defender_policy_id: formData.defender_policy_id || null,
-        wdac_policy_id: formData.wdac_policy_id || null,
+        wdac_policy_id: null, // Clear legacy WDAC
+        uac_policy_id: formData.uac_policy_id || null,
+        windows_update_policy_id: formData.windows_update_policy_id || null,
       });
+      groupId = editingGroup.id;
+
+      // Sync rule set assignments
+      const currentIds = new Set(editingGroupAssignments?.map(a => a.rule_set_id) || []);
+      const toAdd = [...selectedRuleSetIds].filter(id => !currentIds.has(id));
+      const toRemove = [...currentIds].filter(id => !selectedRuleSetIds.has(id));
+      
+      for (const ruleSetId of toAdd) {
+        await assignToGroup.mutateAsync({ groupId, ruleSetId });
+      }
+      for (const ruleSetId of toRemove) {
+        await removeFromGroup.mutateAsync({ groupId, ruleSetId });
+      }
     } else {
-      await createGroup.mutateAsync({
+      const result = await createGroup.mutateAsync({
         name: formData.name,
         description: formData.description || undefined,
         defender_policy_id: formData.defender_policy_id || null,
-        wdac_policy_id: formData.wdac_policy_id || null,
+        wdac_policy_id: null,
+        uac_policy_id: formData.uac_policy_id || null,
+        windows_update_policy_id: formData.windows_update_policy_id || null,
       });
+      groupId = result.id;
+
+      // Assign selected rule sets
+      for (const ruleSetId of selectedRuleSetIds) {
+        await assignToGroup.mutateAsync({ groupId, ruleSetId });
+      }
     }
+    setLastSyncedGroupId(null);
     setDialogOpen(false);
   };
 
@@ -136,6 +189,15 @@ export function EndpointGroupsManager() {
       setDeleteDialogOpen(false);
       setSelectedGroup(null);
     }
+  };
+
+  const toggleRuleSet = (ruleSetId: string) => {
+    setSelectedRuleSetIds(prev => {
+      const next = new Set(prev);
+      if (next.has(ruleSetId)) next.delete(ruleSetId);
+      else next.add(ruleSetId);
+      return next;
+    });
   };
 
   if (isLoading) {
@@ -181,109 +243,20 @@ export function EndpointGroupsManager() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {groups.map((group) => (
-            <Card key={group.id} className="relative">
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                      <FolderOpen className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-base">{group.name}</CardTitle>
-                      {group.description && (
-                        <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
-                          {group.description}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleOpenMembers(group)}>
-                        <Users className="mr-2 h-4 w-4" />
-                        Manage Members
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleOpenEdit(group)}>
-                        <Pencil className="mr-2 h-4 w-4" />
-                        Edit Group
-                      </DropdownMenuItem>
-                      <DropdownMenuItem 
-                        onClick={() => handleOpenDelete(group)}
-                        className="text-destructive"
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Delete Group
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {/* Endpoint count */}
-                <div className="flex items-center gap-2 text-sm">
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">
-                    {group.endpoint_count} endpoint{group.endpoint_count !== 1 ? "s" : ""}
-                  </span>
-                </div>
-
-                {/* Policies */}
-                <div className="flex flex-wrap gap-2">
-                  {group.defender_policy ? (
-                    <Badge variant="secondary" className="text-xs">
-                      <Shield className="mr-1 h-3 w-3" />
-                      {group.defender_policy.name}
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-xs text-muted-foreground">
-                      <Shield className="mr-1 h-3 w-3" />
-                      No Defender policy
-                    </Badge>
-                  )}
-                  {group.wdac_policy ? (
-                    <Badge 
-                      variant="secondary" 
-                      className={`text-xs ${
-                        group.wdac_policy.mode === "enforced" 
-                          ? "bg-destructive/10 text-destructive" 
-                          : "bg-warning/10 text-warning"
-                      }`}
-                    >
-                      <AppWindow className="mr-1 h-3 w-3" />
-                      {group.wdac_policy.name} ({group.wdac_policy.mode})
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-xs text-muted-foreground">
-                      <AppWindow className="mr-1 h-3 w-3" />
-                      No WDAC policy
-                    </Badge>
-                  )}
-                </div>
-
-                {/* Quick action */}
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="w-full mt-2"
-                  onClick={() => handleOpenMembers(group)}
-                >
-                  <Users className="mr-2 h-4 w-4" />
-                  Manage Members
-                </Button>
-              </CardContent>
-            </Card>
+            <GroupCard
+              key={group.id}
+              group={group}
+              onEdit={handleOpenEdit}
+              onDelete={handleOpenDelete}
+              onMembers={handleOpenMembers}
+            />
           ))}
         </div>
       )}
 
       {/* Create/Edit Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md">
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setLastSyncedGroupId(null); }}>
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingGroup ? "Edit Group" : "Create Group"}
@@ -338,28 +311,72 @@ export function EndpointGroupsManager() {
             </div>
 
             <div className="space-y-2">
-              <Label>WDAC Policy</Label>
+              <Label>UAC Policy</Label>
               <Select
-                value={formData.wdac_policy_id}
-                onValueChange={(v) => setFormData({ ...formData, wdac_policy_id: v === "none" ? "" : v })}
+                value={formData.uac_policy_id}
+                onValueChange={(v) => setFormData({ ...formData, uac_policy_id: v === "none" ? "" : v })}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a policy..." />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">No policy</SelectItem>
-                  {wdacPolicies.map((policy) => (
+                  {uacPolicies.map((policy) => (
                     <SelectItem key={policy.id} value={policy.id}>
-                      {policy.name} ({policy.mode})
+                      {policy.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="space-y-2">
+              <Label>Windows Update Policy</Label>
+              <Select
+                value={formData.windows_update_policy_id}
+                onValueChange={(v) => setFormData({ ...formData, windows_update_policy_id: v === "none" ? "" : v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a policy..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No policy</SelectItem>
+                  {windowsUpdatePolicies.map((policy) => (
+                    <SelectItem key={policy.id} value={policy.id}>
+                      {policy.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>App Control Rule Sets</Label>
+              <p className="text-xs text-muted-foreground">Select rule sets to assign to this group</p>
+              {ruleSets.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">No rule sets available. Create one in Application Control first.</p>
+              ) : (
+                <div className="space-y-2 rounded-md border p-3">
+                  {ruleSets.map((rs) => (
+                    <div key={rs.id} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`rs-${rs.id}`}
+                        checked={selectedRuleSetIds.has(rs.id)}
+                        onCheckedChange={() => toggleRuleSet(rs.id)}
+                      />
+                      <label htmlFor={`rs-${rs.id}`} className="text-sm cursor-pointer flex-1">
+                        {rs.name}
+                        <span className="text-xs text-muted-foreground ml-2">({rs.rule_count || 0} rules)</span>
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+            <Button variant="outline" onClick={() => { setDialogOpen(false); setLastSyncedGroupId(null); }}>
               Cancel
             </Button>
             <Button 
@@ -406,5 +423,112 @@ export function EndpointGroupsManager() {
         />
       )}
     </div>
+  );
+}
+
+// Extracted group card to keep main component cleaner
+function GroupCard({ group, onEdit, onDelete, onMembers }: {
+  group: EndpointGroup;
+  onEdit: (g: EndpointGroup) => void;
+  onDelete: (g: EndpointGroup) => void;
+  onMembers: (g: EndpointGroup) => void;
+}) {
+  const { data: ruleSetAssignments } = useGroupRuleSetAssignments(group.id);
+
+  return (
+    <Card className="relative">
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+              <FolderOpen className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <CardTitle className="text-base">{group.name}</CardTitle>
+              {group.description && (
+                <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
+                  {group.description}
+                </p>
+              )}
+            </div>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => onMembers(group)}>
+                <Users className="mr-2 h-4 w-4" />
+                Manage Members
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onEdit(group)}>
+                <Pencil className="mr-2 h-4 w-4" />
+                Edit Group
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={() => onDelete(group)}
+                className="text-destructive"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete Group
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {/* Endpoint count */}
+        <div className="flex items-center gap-2 text-sm">
+          <Users className="h-4 w-4 text-muted-foreground" />
+          <span className="text-muted-foreground">
+            {group.endpoint_count} endpoint{group.endpoint_count !== 1 ? "s" : ""}
+          </span>
+        </div>
+
+        {/* Policies */}
+        <div className="flex flex-wrap gap-1.5">
+          {group.defender_policy ? (
+            <Badge variant="secondary" className="text-xs">
+              <Shield className="mr-1 h-3 w-3" />
+              {group.defender_policy.name}
+            </Badge>
+          ) : null}
+          {(group as any).uac_policy ? (
+            <Badge variant="secondary" className="text-xs">
+              <MonitorCog className="mr-1 h-3 w-3" />
+              {(group as any).uac_policy.name}
+            </Badge>
+          ) : null}
+          {(group as any).windows_update_policy ? (
+            <Badge variant="secondary" className="text-xs">
+              <RefreshCw className="mr-1 h-3 w-3" />
+              {(group as any).windows_update_policy.name}
+            </Badge>
+          ) : null}
+          {ruleSetAssignments?.map(a => (
+            <Badge key={a.id} variant="secondary" className="text-xs">
+              <Layers className="mr-1 h-3 w-3" />
+              {a.rule_set?.name || "Rule Set"}
+            </Badge>
+          ))}
+          {!group.defender_policy && !(group as any).uac_policy && !(group as any).windows_update_policy && (!ruleSetAssignments || ruleSetAssignments.length === 0) && (
+            <span className="text-xs text-muted-foreground">No policies assigned</span>
+          )}
+        </div>
+
+        {/* Quick action */}
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="w-full mt-2"
+          onClick={() => onMembers(group)}
+        >
+          <Users className="mr-2 h-4 w-4" />
+          Manage Members
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
