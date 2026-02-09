@@ -276,10 +276,17 @@ function Uninstall-Agent {
         Write-Log "Scheduled task removed"
     }
     
-    # Remove tray startup registry entry
+    # Remove tray scheduled task
+    $existingTrayTask = Get-ScheduledTask -TaskName $TrayTaskName -ErrorAction SilentlyContinue
+    if ($existingTrayTask) {
+        Unregister-ScheduledTask -TaskName $TrayTaskName -Confirm:$false -ErrorAction SilentlyContinue
+        Write-Log "Tray scheduled task removed"
+    }
+    
+    # Remove tray startup registry entry (legacy cleanup)
     try {
         Remove-ItemProperty -Path "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" -Name "PeritusSecureTray" -ErrorAction SilentlyContinue
-        Write-Log "Tray startup entry removed"
+        Write-Log "Tray startup registry entry removed"
     } catch { }
     
     # Kill any running tray process
@@ -2263,11 +2270,24 @@ function Ensure-TrayStartupAndLaunch {
         if (-not [Environment]::UserInteractive) { return }
     } catch { }
 
-    # Register tray application to start at user login (best effort)
+    # Register tray as a scheduled task with AtLogOn trigger (more reliable than Run key)
     try {
-        $trayCommand = "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File \`"$ScriptPath\`" -TrayMode"
-        Set-ItemProperty -Path "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" -Name "PeritusSecureTray" -Value $trayCommand -Force
-    } catch { }
+        $existingTrayTask = Get-ScheduledTask -TaskName $TrayTaskName -ErrorAction SilentlyContinue
+        if (-not $existingTrayTask) {
+            $trayAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-WindowStyle Hidden -ExecutionPolicy Bypass -File \`"$ScriptPath\`" -TrayMode"
+            $trayTrigger = New-ScheduledTaskTrigger -AtLogOn
+            $traySettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+            Register-ScheduledTask -TaskName $TrayTaskName -Action $trayAction -Trigger $trayTrigger -Settings $traySettings -Description "Peritus Secure - System Tray Application" -Force | Out-Null
+            Write-Log "Tray scheduled task '$TrayTaskName' created with AtLogOn trigger"
+        }
+    } catch {
+        # Fallback to HKLM Run key
+        try {
+            $trayCommand = "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File \`"$ScriptPath\`" -TrayMode"
+            Set-ItemProperty -Path "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" -Name "PeritusSecureTray" -Value $trayCommand -Force
+            Write-Log "Tray registered via Run key (scheduled task fallback)"
+        } catch { }
+    }
 
     # Avoid launching duplicates
     try {
@@ -2350,13 +2370,26 @@ if ($isFirstRun) {
         Write-Log "Could not create tray icon during install: $_ - will use fallback" -Level "WARN"
     }
     
-    # Register tray application to start at user login
+    # Register tray application as a scheduled task with AtLogOn trigger
     try {
-        $trayCommand = "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File \`"$ScriptPath\`" -TrayMode"
-        Set-ItemProperty -Path "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" -Name "PeritusSecureTray" -Value $trayCommand -Force
-        Write-Log "Tray application registered for user login"
+        $existingTrayTask = Get-ScheduledTask -TaskName $TrayTaskName -ErrorAction SilentlyContinue
+        if ($existingTrayTask) {
+            Unregister-ScheduledTask -TaskName $TrayTaskName -Confirm:$false -ErrorAction SilentlyContinue
+        }
+        $trayAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-WindowStyle Hidden -ExecutionPolicy Bypass -File \`"$ScriptPath\`" -TrayMode"
+        $trayTrigger = New-ScheduledTaskTrigger -AtLogOn
+        $traySettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+        Register-ScheduledTask -TaskName $TrayTaskName -Action $trayAction -Trigger $trayTrigger -Settings $traySettings -Description "Peritus Secure - System Tray Application" -Force | Out-Null
+        Write-Log "Tray scheduled task '$TrayTaskName' registered for user login"
     } catch {
-        Write-Log "Could not register tray startup: $_" -Level "WARN"
+        # Fallback to HKLM Run key
+        try {
+            $trayCommand = "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File \`"$ScriptPath\`" -TrayMode"
+            Set-ItemProperty -Path "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" -Name "PeritusSecureTray" -Value $trayCommand -Force
+            Write-Log "Tray registered via Run key (scheduled task fallback)"
+        } catch {
+            Write-Log "Could not register tray startup: $_" -Level "WARN"
+        }
     }
     
     Write-Log ""
