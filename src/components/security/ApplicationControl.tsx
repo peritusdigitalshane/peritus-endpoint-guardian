@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useWdacDiscoveredApps, WdacDiscoveredApp } from "@/hooks/useWdac";
-import { useRuleSets, useRuleSetRules, useRuleSetMutations, RuleSet, RuleSetRule } from "@/hooks/useRuleSets";
+import { useRuleSets, useRuleSetRules, useRuleSetMutations, useAllRuleSetRules, RuleSet, RuleSetRule } from "@/hooks/useRuleSets";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -44,10 +44,21 @@ interface PublisherGroup {
   hasRules: boolean;
 }
 
+interface RuleStatus {
+  ruleSetName: string;
+  action: "allow" | "block";
+  ruleType: string;
+}
+
 export function ApplicationControl() {
   const { data: apps, isLoading: appsLoading } = useWdacDiscoveredApps();
   const { data: ruleSets, isLoading: ruleSetsLoading } = useRuleSets();
   const { createRuleSet, addRule, addRulesBulk, deleteRule: deleteRuleSetRule, updateRuleSet, deleteRuleSet } = useRuleSetMutations();
+  
+  // Fetch all rules across all rule sets for status indicators
+  const ruleSetIds = useMemo(() => (ruleSets || []).map(rs => rs.id), [ruleSets]);
+  const { data: allRules } = useAllRuleSetRules(ruleSetIds);
+  
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -74,12 +85,33 @@ export function ApplicationControl() {
     description: "",
   });
 
-  // Collect all existing rule values for "already whitelisted" indication
-  const allRuleSetRuleValues = useMemo(() => {
-    // We can't fetch all rules from all rule sets easily, so we'll just use the selected one
-    // This is a simplified approach
-    return new Set<string>();
-  }, []);
+  // Build lookup maps for rule statuses
+  const publisherRuleStatuses = useMemo(() => {
+    const map = new Map<string, RuleStatus[]>();
+    if (!allRules) return map;
+    allRules.forEach(rule => {
+      if (rule.rule_type === "publisher" && rule.value) {
+        const key = rule.value.toLowerCase();
+        const existing = map.get(key) || [];
+        existing.push({ ruleSetName: rule.rule_set_name, action: rule.action as "allow" | "block", ruleType: rule.rule_type });
+        map.set(key, existing);
+      }
+    });
+    return map;
+  }, [allRules]);
+
+  const appRuleStatuses = useMemo(() => {
+    const map = new Map<string, RuleStatus[]>(); // keyed by file_name, file_path, or file_hash
+    if (!allRules) return map;
+    allRules.forEach(rule => {
+      const key = rule.value?.toLowerCase();
+      if (!key) return;
+      const existing = map.get(key) || [];
+      existing.push({ ruleSetName: rule.rule_set_name, action: rule.action as "allow" | "block", ruleType: rule.rule_type });
+      map.set(key, existing);
+    });
+    return map;
+  }, [allRules]);
 
   // Group apps by publisher
   const publisherGroups = useMemo((): PublisherGroup[] => {
@@ -118,6 +150,49 @@ export function ApplicationControl() {
     if (next.has(publisher)) next.delete(publisher);
     else next.add(publisher);
     setExpandedPublishers(next);
+  };
+
+  // Get rule statuses for a publisher
+  const getPublisherStatuses = (publisher: string): RuleStatus[] => {
+    return publisherRuleStatuses.get(publisher.toLowerCase()) || [];
+  };
+
+  // Get rule statuses for an app (checks file_name, path, hash, and publisher)
+  const getAppStatuses = (app: WdacDiscoveredApp): RuleStatus[] => {
+    const statuses: RuleStatus[] = [];
+    const seen = new Set<string>();
+    const addUnique = (items: RuleStatus[]) => {
+      items.forEach(s => {
+        const key = `${s.ruleSetName}-${s.action}-${s.ruleType}`;
+        if (!seen.has(key)) { seen.add(key); statuses.push(s); }
+      });
+    };
+    addUnique(appRuleStatuses.get(app.file_name.toLowerCase()) || []);
+    addUnique(appRuleStatuses.get(app.file_path.toLowerCase()) || []);
+    if (app.file_hash) addUnique(appRuleStatuses.get(app.file_hash.toLowerCase()) || []);
+    if (app.publisher) addUnique(publisherRuleStatuses.get(app.publisher.toLowerCase()) || []);
+    return statuses;
+  };
+
+  const renderStatusBadges = (statuses: RuleStatus[]) => {
+    if (!statuses.length) return null;
+    return (
+      <div className="flex flex-wrap gap-1">
+        {statuses.map((s, i) => (
+          <Badge
+            key={i}
+            variant="outline"
+            className={s.action === "allow" 
+              ? "border-status-healthy/50 text-status-healthy bg-status-healthy/10 text-xs" 
+              : "border-status-critical/50 text-status-critical bg-status-critical/10 text-xs"
+            }
+          >
+            {s.action === "allow" ? <CheckCircle2 className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
+            {s.ruleSetName}
+          </Badge>
+        ))}
+      </div>
+    );
   };
 
   // Quick actions
@@ -533,7 +608,10 @@ export function ApplicationControl() {
                         </CollapsibleTrigger>
                         <Building2 className="h-4 w-4 text-muted-foreground" />
                         <div>
-                          <div className="font-medium">{group.publisher}</div>
+                          <div className="font-medium flex items-center gap-2">
+                            {group.publisher}
+                            {renderStatusBadges(getPublisherStatuses(group.publisher))}
+                          </div>
                           <div className="text-xs text-muted-foreground">{group.apps.length} application{group.apps.length !== 1 ? "s" : ""}</div>
                         </div>
                       </div>
@@ -604,10 +682,13 @@ export function ApplicationControl() {
                             {group.apps.map((app) => (
                               <TableRow key={app.id}>
                                 <TableCell>
-                                  <div className="space-y-0.5">
-                                    <div className="font-medium text-sm">{app.file_name}</div>
-                                    <div className="text-xs text-muted-foreground truncate max-w-[250px]">{app.file_path}</div>
-                                    {app.product_name && <div className="text-xs text-muted-foreground">{app.product_name} {app.file_version || ""}</div>}
+                                  <div className="space-y-1">
+                                    <div className="space-y-0.5">
+                                      <div className="font-medium text-sm">{app.file_name}</div>
+                                      <div className="text-xs text-muted-foreground truncate max-w-[250px]">{app.file_path}</div>
+                                      {app.product_name && <div className="text-xs text-muted-foreground">{app.product_name} {app.file_version || ""}</div>}
+                                    </div>
+                                    {renderStatusBadges(getAppStatuses(app))}
                                   </div>
                                 </TableCell>
                                 <TableCell>

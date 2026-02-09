@@ -82,6 +82,28 @@ export function useRuleSets() {
   });
 }
 
+// Fetch all rules across all rule sets for an organization (for status indicators)
+export function useAllRuleSetRules(ruleSetIds: string[]) {
+  return useQuery({
+    queryKey: ["all-rule-set-rules", ruleSetIds],
+    queryFn: async () => {
+      if (!ruleSetIds.length) return [];
+      
+      const { data, error } = await supabase
+        .from("wdac_rule_set_rules")
+        .select("*, wdac_rule_sets(name)")
+        .in("rule_set_id", ruleSetIds);
+
+      if (error) throw error;
+      return (data || []).map(r => ({
+        ...r,
+        rule_set_name: (r as any).wdac_rule_sets?.name || "Unknown",
+      }));
+    },
+    enabled: ruleSetIds.length > 0,
+  });
+}
+
 // Fetch rules for a specific rule set
 export function useRuleSetRules(ruleSetId: string | null) {
   return useQuery({
