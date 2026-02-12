@@ -241,6 +241,62 @@ export function useDirectCustomers() {
   });
 }
 
+// Rename an organization (customer or partner)
+export function useRenameOrganization() {
+  const queryClient = useQueryClient();
+  const { currentOrganization } = useTenant();
+
+  return useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      const slug = name.toLowerCase().replace(/\s+/g, "-");
+      const { data, error } = await supabase
+        .from("organizations")
+        .update({ name, slug })
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw error;
+      if (currentOrganization?.id) {
+        await logActivity(currentOrganization.id, "update", "organization", id, { name, slug });
+      }
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["partner-customers"] });
+      queryClient.invalidateQueries({ queryKey: ["direct-customers"] });
+      queryClient.invalidateQueries({ queryKey: ["partners-with-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-organizations"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
+    },
+  });
+}
+
+// Delete an organization (customer)
+export function useDeleteOrganization() {
+  const queryClient = useQueryClient();
+  const { currentOrganization } = useTenant();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("organizations")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+      if (currentOrganization?.id) {
+        await logActivity(currentOrganization.id, "delete", "organization", id, {});
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["partner-customers"] });
+      queryClient.invalidateQueries({ queryKey: ["direct-customers"] });
+      queryClient.invalidateQueries({ queryKey: ["partners-with-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-organizations"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
+    },
+  });
+}
+
 // Assign a direct customer to a partner
 export function useAssignCustomerToPartner() {
   const queryClient = useQueryClient();

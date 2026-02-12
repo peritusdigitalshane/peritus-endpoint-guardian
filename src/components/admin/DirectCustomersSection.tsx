@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { useDirectCustomers, usePartners, useAssignCustomerToPartner } from "@/hooks/usePartners";
+import { useDirectCustomers, usePartners, useAssignCustomerToPartner, useRenameOrganization, useDeleteOrganization } from "@/hooks/usePartners";
 import { useUpdateOrganizationNetworkModule } from "@/hooks/useSuperAdmin";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -19,7 +20,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Building2, Monitor, ChevronRight, Loader2, Network } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Building2, Monitor, ChevronRight, Loader2, Network, Pencil, Trash2, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { useTenant } from "@/contexts/TenantContext";
 
@@ -28,9 +39,36 @@ export function DirectCustomersSection() {
   const { data: customers, isLoading } = useDirectCustomers();
   const { data: partners } = usePartners();
   const assignToPartner = useAssignCustomerToPartner();
+  const renameOrg = useRenameOrganization();
+  const deleteOrg = useDeleteOrganization();
   const { setImpersonatedOrg } = useTenant();
 
   const [assigningId, setAssigningId] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+
+  const handleRename = async (id: string) => {
+    if (!renameValue.trim()) return;
+    try {
+      await renameOrg.mutateAsync({ id, name: renameValue.trim() });
+      toast.success("Customer renamed");
+      setRenamingId(null);
+    } catch (e: any) {
+      toast.error(e.message || "Failed to rename");
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteOrg.mutateAsync(deleteTarget.id);
+      toast.success(`${deleteTarget.name} deleted`);
+      setDeleteTarget(null);
+    } catch (e: any) {
+      toast.error(e.message || "Failed to delete");
+    }
+  };
 
   const handleAssign = async (customerId: string, partnerId: string) => {
     try {
@@ -90,10 +128,28 @@ export function DirectCustomersSection() {
                     <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary">
                       <Building2 className="h-4 w-4" />
                     </div>
-                    <div>
-                      <div className="font-medium">{customer.name}</div>
-                      <div className="text-sm text-muted-foreground">{customer.slug}</div>
-                    </div>
+                    {renamingId === customer.id ? (
+                      <div className="flex items-center gap-1">
+                        <Input
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          className="h-8 w-40"
+                          onKeyDown={(e) => e.key === "Enter" && handleRename(customer.id)}
+                          autoFocus
+                        />
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => handleRename(customer.id)} disabled={renameOrg.isPending}>
+                          <Check className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setRenamingId(null)}>
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="font-medium">{customer.name}</div>
+                        <div className="text-sm text-muted-foreground">{customer.slug}</div>
+                      </div>
+                    )}
                   </div>
                 </TableCell>
                 <TableCell>
@@ -165,14 +221,18 @@ export function DirectCustomersSection() {
                   )}
                 </TableCell>
                 <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleViewAs(customer)}
-                  >
-                    View as
-                    <ChevronRight className="h-4 w-4 ml-1" />
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => { setRenamingId(customer.id); setRenameValue(customer.name); }}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeleteTarget({ id: customer.id, name: customer.name })}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => handleViewAs(customer)}>
+                      View as
+                      <ChevronRight className="h-4 w-4 ml-1" />
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
@@ -186,6 +246,23 @@ export function DirectCustomersSection() {
           </TableBody>
         </Table>
       </Card>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {deleteTarget?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this customer organization and all associated data. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
