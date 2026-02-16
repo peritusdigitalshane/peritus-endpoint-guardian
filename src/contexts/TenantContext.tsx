@@ -9,6 +9,7 @@ interface Organization {
   organization_type: "partner" | "customer";
   parent_partner_id: string | null;
   network_module_enabled: boolean;
+  router_module_enabled: boolean;
 }
 
 interface TenantContextType {
@@ -112,7 +113,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
         if (membershipData) {
           const { data: orgData } = await supabase
             .from("organizations")
-            .select("id, name, slug, organization_type, parent_partner_id, network_module_enabled")
+            .select("id, name, slug, organization_type, parent_partner_id, network_module_enabled, router_module_enabled")
             .eq("id", membershipData.organization_id)
             .single();
 
@@ -125,7 +126,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
         if (isAdmin) {
           const { data: allOrgs, error: orgsError } = await supabase
             .from("organizations")
-            .select("id, name, slug, organization_type, parent_partner_id, network_module_enabled")
+            .select("id, name, slug, organization_type, parent_partner_id, network_module_enabled, router_module_enabled")
             .order("name");
 
           if (orgsError) throw orgsError;
@@ -143,7 +144,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
           if (customerOrgs && customerOrgs.length > 0) {
             const { data: customers } = await supabase
               .from("organizations")
-              .select("id, name, slug, organization_type, parent_partner_id, network_module_enabled")
+              .select("id, name, slug, organization_type, parent_partner_id, network_module_enabled, router_module_enabled")
               .in("id", customerOrgs)
               .order("name");
 

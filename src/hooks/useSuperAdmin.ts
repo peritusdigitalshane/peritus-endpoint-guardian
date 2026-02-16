@@ -11,6 +11,7 @@ interface Organization {
   updated_at: string;
   event_log_retention_days: number;
   network_module_enabled: boolean;
+  router_module_enabled: boolean;
 }
 
 interface OrganizationWithStats extends Organization {
@@ -177,6 +178,39 @@ export function useUpdateOrganizationNetworkModule() {
       if (currentOrganization?.id) {
         await logActivity(currentOrganization.id, "update", "organization_network_module", id, { 
           network_module_enabled: networkModuleEnabled 
+        });
+      }
+      
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-organizations"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-organizations-with-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["direct-customers"] });
+      queryClient.invalidateQueries({ queryKey: ["partner-customers"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
+    },
+  });
+}
+
+export function useUpdateOrganizationRouterModule() {
+  const queryClient = useQueryClient();
+  const { currentOrganization } = useTenant();
+
+  return useMutation({
+    mutationFn: async ({ id, routerModuleEnabled }: { id: string; routerModuleEnabled: boolean }) => {
+      const { data, error } = await supabase
+        .from("organizations")
+        .update({ router_module_enabled: routerModuleEnabled } as any)
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      if (currentOrganization?.id) {
+        await logActivity(currentOrganization.id, "update", "organization_router_module", id, { 
+          router_module_enabled: routerModuleEnabled 
         });
       }
       

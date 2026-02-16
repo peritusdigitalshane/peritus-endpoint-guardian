@@ -1334,6 +1334,7 @@ export type Database = {
           network_module_enabled: boolean
           organization_type: string
           parent_partner_id: string | null
+          router_module_enabled: boolean
           slug: string
           subscription_plan: Database["public"]["Enums"]["subscription_plan"]
           updated_at: string
@@ -1346,6 +1347,7 @@ export type Database = {
           network_module_enabled?: boolean
           organization_type?: string
           parent_partner_id?: string | null
+          router_module_enabled?: boolean
           slug: string
           subscription_plan?: Database["public"]["Enums"]["subscription_plan"]
           updated_at?: string
@@ -1358,6 +1360,7 @@ export type Database = {
           network_module_enabled?: boolean
           organization_type?: string
           parent_partner_id?: string | null
+          router_module_enabled?: boolean
           slug?: string
           subscription_plan?: Database["public"]["Enums"]["subscription_plan"]
           updated_at?: string
@@ -1470,6 +1473,329 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      router_dns_records: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: string
+          priority: number | null
+          record_name: string
+          record_type: string
+          record_value: string
+          ttl: number
+          zone_id: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          priority?: number | null
+          record_name: string
+          record_type?: string
+          record_value: string
+          ttl?: number
+          zone_id: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          priority?: number | null
+          record_name?: string
+          record_type?: string
+          record_value?: string
+          ttl?: number
+          zone_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "router_dns_records_zone_id_fkey"
+            columns: ["zone_id"]
+            isOneToOne: false
+            referencedRelation: "router_dns_zones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      router_dns_zones: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: string
+          organization_id: string
+          router_id: string
+          updated_at: string
+          upstream_servers: string[] | null
+          zone_name: string
+          zone_type: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          organization_id: string
+          router_id: string
+          updated_at?: string
+          upstream_servers?: string[] | null
+          zone_name: string
+          zone_type?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          organization_id?: string
+          router_id?: string
+          updated_at?: string
+          upstream_servers?: string[] | null
+          zone_name?: string
+          zone_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "router_dns_zones_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "router_dns_zones_router_id_fkey"
+            columns: ["router_id"]
+            isOneToOne: false
+            referencedRelation: "routers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      router_firewall_rules: {
+        Row: {
+          action: string
+          created_at: string
+          destination_address: string | null
+          destination_port: string | null
+          direction: string
+          enabled: boolean
+          id: string
+          interface: string | null
+          log_enabled: boolean
+          name: string
+          order_priority: number
+          organization_id: string
+          protocol: string | null
+          router_id: string
+          source_address: string | null
+          source_port: string | null
+          updated_at: string
+        }
+        Insert: {
+          action?: string
+          created_at?: string
+          destination_address?: string | null
+          destination_port?: string | null
+          direction?: string
+          enabled?: boolean
+          id?: string
+          interface?: string | null
+          log_enabled?: boolean
+          name: string
+          order_priority?: number
+          organization_id: string
+          protocol?: string | null
+          router_id: string
+          source_address?: string | null
+          source_port?: string | null
+          updated_at?: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          destination_address?: string | null
+          destination_port?: string | null
+          direction?: string
+          enabled?: boolean
+          id?: string
+          interface?: string | null
+          log_enabled?: boolean
+          name?: string
+          order_priority?: number
+          organization_id?: string
+          protocol?: string | null
+          router_id?: string
+          source_address?: string | null
+          source_port?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "router_firewall_rules_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "router_firewall_rules_router_id_fkey"
+            columns: ["router_id"]
+            isOneToOne: false
+            referencedRelation: "routers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      router_tunnels: {
+        Row: {
+          config_data: Json | null
+          created_at: string
+          enabled: boolean
+          encryption: string | null
+          id: string
+          name: string
+          organization_id: string
+          psk_hint: string | null
+          router_a_endpoint: string | null
+          router_a_id: string
+          router_a_subnet: string | null
+          router_b_endpoint: string | null
+          router_b_id: string | null
+          router_b_subnet: string | null
+          status: string
+          tunnel_type: string
+          updated_at: string
+        }
+        Insert: {
+          config_data?: Json | null
+          created_at?: string
+          enabled?: boolean
+          encryption?: string | null
+          id?: string
+          name: string
+          organization_id: string
+          psk_hint?: string | null
+          router_a_endpoint?: string | null
+          router_a_id: string
+          router_a_subnet?: string | null
+          router_b_endpoint?: string | null
+          router_b_id?: string | null
+          router_b_subnet?: string | null
+          status?: string
+          tunnel_type?: string
+          updated_at?: string
+        }
+        Update: {
+          config_data?: Json | null
+          created_at?: string
+          enabled?: boolean
+          encryption?: string | null
+          id?: string
+          name?: string
+          organization_id?: string
+          psk_hint?: string | null
+          router_a_endpoint?: string | null
+          router_a_id?: string
+          router_a_subnet?: string | null
+          router_b_endpoint?: string | null
+          router_b_id?: string | null
+          router_b_subnet?: string | null
+          status?: string
+          tunnel_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "router_tunnels_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "router_tunnels_router_a_id_fkey"
+            columns: ["router_a_id"]
+            isOneToOne: false
+            referencedRelation: "routers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "router_tunnels_router_b_id_fkey"
+            columns: ["router_b_id"]
+            isOneToOne: false
+            referencedRelation: "routers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      routers: {
+        Row: {
+          config_profile: Json | null
+          created_at: string
+          firmware_version: string | null
+          hostname: string
+          id: string
+          is_online: boolean
+          lan_subnets: string[] | null
+          last_seen_at: string | null
+          location: string | null
+          management_ip: string | null
+          model: string | null
+          notes: string | null
+          organization_id: string
+          serial_number: string | null
+          site_name: string | null
+          updated_at: string
+          vendor: string
+          wan_ip: string | null
+        }
+        Insert: {
+          config_profile?: Json | null
+          created_at?: string
+          firmware_version?: string | null
+          hostname: string
+          id?: string
+          is_online?: boolean
+          lan_subnets?: string[] | null
+          last_seen_at?: string | null
+          location?: string | null
+          management_ip?: string | null
+          model?: string | null
+          notes?: string | null
+          organization_id: string
+          serial_number?: string | null
+          site_name?: string | null
+          updated_at?: string
+          vendor: string
+          wan_ip?: string | null
+        }
+        Update: {
+          config_profile?: Json | null
+          created_at?: string
+          firmware_version?: string | null
+          hostname?: string
+          id?: string
+          is_online?: boolean
+          lan_subnets?: string[] | null
+          last_seen_at?: string | null
+          location?: string | null
+          management_ip?: string | null
+          model?: string | null
+          notes?: string | null
+          organization_id?: string
+          serial_number?: string | null
+          site_name?: string | null
+          updated_at?: string
+          vendor?: string
+          wan_ip?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "routers_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       security_reports: {
         Row: {
