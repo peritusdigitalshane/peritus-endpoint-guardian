@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   useRouterEnrollmentTokens,
   useCreateRouterEnrollmentToken,
@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, Trash2, Copy, Key, Terminal, Loader2, Check } from "lucide-react";
+import { Plus, Trash2, Copy, Key, Terminal, Loader2, Check, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 
 const CHECKIN_URL = "https://njdcyjxgtckgtzgzoctw.supabase.co/functions/v1/router-checkin";
@@ -44,6 +44,8 @@ export function RouterOnboarding() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [form, setForm] = useState({ label: "", max_uses: "" });
   const [selectedToken, setSelectedToken] = useState<string | null>(null);
+  const [justCreated, setJustCreated] = useState(false);
+  const scriptsRef = useRef<HTMLDivElement>(null);
 
   const handleCreate = async () => {
     if (!form.label) return;
@@ -52,8 +54,13 @@ export function RouterOnboarding() {
       max_uses: form.max_uses ? parseInt(form.max_uses) : undefined,
     });
     setSelectedToken(result.token);
+    setJustCreated(true);
     setOpen(false);
     setForm({ label: "", max_uses: "" });
+    // Scroll to scripts after a tick
+    setTimeout(() => {
+      scriptsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
   };
 
   const activeToken = selectedToken || tokens?.[0]?.token;
@@ -205,16 +212,25 @@ curl -s -X POST "$API" \\
       </Card>
 
       {/* Onboarding Scripts */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Terminal className="h-5 w-5" />
-            Onboarding Scripts
-          </CardTitle>
-          <CardDescription>
-            Run these scripts on your router to register it with the platform
-          </CardDescription>
-        </CardHeader>
+      <div ref={scriptsRef}>
+        <Card className={justCreated ? "ring-2 ring-primary" : ""}>
+          <CardHeader>
+            {justCreated && (
+              <div className="flex items-center gap-2 text-sm text-primary mb-2">
+                <CheckCircle2 className="h-4 w-4" />
+                Token created! Copy the script below and run it on your router.
+              </div>
+            )}
+            <CardTitle className="flex items-center gap-2">
+              <Terminal className="h-5 w-5" />
+              Onboarding Scripts
+            </CardTitle>
+            <CardDescription>
+              {activeToken
+                ? "These scripts are pre-filled with your enrollment token — just copy and run."
+                : "Create an enrollment token above first, then the scripts will be ready to copy."}
+            </CardDescription>
+          </CardHeader>
         <CardContent>
           <Tabs defaultValue="curl">
             <TabsList>
@@ -243,6 +259,7 @@ curl -s -X POST "$API" \\
           </Tabs>
         </CardContent>
       </Card>
+      </div>
 
       <AlertDialog open={!!deleteTarget} onOpenChange={o => !o && setDeleteTarget(null)}>
         <AlertDialogContent>
