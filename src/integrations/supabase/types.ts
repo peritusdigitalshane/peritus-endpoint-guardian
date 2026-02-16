@@ -1773,6 +1773,48 @@ export type Database = {
           },
         ]
       }
+      router_uptime_logs: {
+        Row: {
+          created_at: string
+          event_time: string
+          event_type: string
+          id: string
+          organization_id: string
+          router_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_time?: string
+          event_type: string
+          id?: string
+          organization_id: string
+          router_id: string
+        }
+        Update: {
+          created_at?: string
+          event_time?: string
+          event_type?: string
+          id?: string
+          organization_id?: string
+          router_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "router_uptime_logs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "router_uptime_logs_router_id_fkey"
+            columns: ["router_id"]
+            isOneToOne: false
+            referencedRelation: "routers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       routers: {
         Row: {
           agent_token: string | null
@@ -2345,6 +2387,16 @@ export type Database = {
       get_partner_customer_org_ids: {
         Args: { _user_id: string }
         Returns: string[]
+      }
+      get_router_uptime_stats: {
+        Args: { _days?: number; _router_id: string }
+        Returns: {
+          current_session_start: string
+          last_offline_at: string
+          last_online_at: string
+          total_downtime_minutes: number
+          uptime_percent: number
+        }[]
       }
       get_user_org_ids: { Args: { _user_id: string }; Returns: string[] }
       is_admin_of_org: {
