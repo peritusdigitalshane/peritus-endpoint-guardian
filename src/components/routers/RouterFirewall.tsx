@@ -49,10 +49,10 @@ export function RouterFirewall() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Select value={selectedRouter} onValueChange={setSelectedRouter}>
+           <Select value={selectedRouter || "all"} onValueChange={v => setSelectedRouter(v === "all" ? "" : v)}>
             <SelectTrigger className="w-[220px]"><SelectValue placeholder="All routers" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Routers</SelectItem>
+              <SelectItem value="all">All Routers</SelectItem>
               {routers?.map(r => <SelectItem key={r.id} value={r.id}>{r.hostname}</SelectItem>)}
             </SelectContent>
           </Select>

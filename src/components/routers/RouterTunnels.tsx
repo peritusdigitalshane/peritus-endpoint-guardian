@@ -90,10 +90,10 @@ export function RouterTunnels() {
                 </div>
                 <div className="space-y-2">
                   <Label>Router B</Label>
-                  <Select value={form.router_b_id} onValueChange={v => setForm(f => ({ ...f, router_b_id: v }))}>
+                  <Select value={form.router_b_id || "external"} onValueChange={v => setForm(f => ({ ...f, router_b_id: v === "external" ? "" : v }))}>
                     <SelectTrigger><SelectValue placeholder="External peer" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">External Peer</SelectItem>
+                      <SelectItem value="external">External Peer</SelectItem>
                       {routers?.filter(r => r.id !== form.router_a_id).map(r => <SelectItem key={r.id} value={r.id}>{r.hostname}</SelectItem>)}
                     </SelectContent>
                   </Select>
