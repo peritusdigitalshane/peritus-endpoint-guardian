@@ -92,7 +92,10 @@ export interface RouterFirewallRule {
 export const VENDOR_OPTIONS = [
   { value: "cisco", label: "Cisco" },
   { value: "vyos", label: "VyOS" },
-  { value: "edge", label: "Edge Router" },
+  { value: "ubiquiti-udm", label: "Ubiquiti Dream Machine" },
+  { value: "ubiquiti-edgerouter", label: "Ubiquiti EdgeRouter" },
+  { value: "ubiquiti-usg", label: "Ubiquiti USG" },
+  { value: "ubiquiti-switch", label: "Ubiquiti Switch" },
   { value: "mikrotik", label: "MikroTik" },
   { value: "fortinet", label: "Fortinet" },
   { value: "pfsense", label: "pfSense" },

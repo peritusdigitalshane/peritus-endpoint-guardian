@@ -4,7 +4,8 @@ import { RouterInventory } from "@/components/routers/RouterInventory";
 import { RouterDnsManager } from "@/components/routers/RouterDnsManager";
 import { RouterTunnels } from "@/components/routers/RouterTunnels";
 import { RouterFirewall } from "@/components/routers/RouterFirewall";
-import { Router, Globe, ArrowLeftRight, ShieldCheck } from "lucide-react";
+import { RouterOnboarding } from "@/components/routers/RouterOnboarding";
+import { Router, Globe, ArrowLeftRight, ShieldCheck, KeyRound } from "lucide-react";
 
 export default function Routers() {
   return (
@@ -23,6 +24,10 @@ export default function Routers() {
               <Router className="h-4 w-4" />
               Inventory
             </TabsTrigger>
+            <TabsTrigger value="onboarding" className="flex items-center gap-2">
+              <KeyRound className="h-4 w-4" />
+              Onboarding
+            </TabsTrigger>
             <TabsTrigger value="dns" className="flex items-center gap-2">
               <Globe className="h-4 w-4" />
               DNS
@@ -39,6 +44,10 @@ export default function Routers() {
 
           <TabsContent value="inventory" className="space-y-6">
             <RouterInventory />
+          </TabsContent>
+
+          <TabsContent value="onboarding" className="space-y-6">
+            <RouterOnboarding />
           </TabsContent>
 
           <TabsContent value="dns" className="space-y-6">
