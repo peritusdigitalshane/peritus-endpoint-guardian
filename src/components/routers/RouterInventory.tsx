@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useRouters, useCreateRouter, useDeleteRouter, VENDOR_OPTIONS } from "@/hooks/useRouters";
+import { useRouters, useCreateRouter, useDeleteRouter, useDnsZones, VENDOR_OPTIONS } from "@/hooks/useRouters";
 import { useRouterUptimeBatch, RouterUptimeStats } from "@/hooks/useRouterUptime";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Trash2, Wifi, WifiOff, Loader2, Clock, ArrowUpCircle } from "lucide-react";
+import { Plus, Trash2, Wifi, WifiOff, Loader2, Clock, ArrowUpCircle, Globe } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 function formatDowntime(minutes: number | null): string {
@@ -25,10 +25,8 @@ function formatDowntime(minutes: number | null): string {
 
 function UptimeCell({ stats }: { stats: RouterUptimeStats | undefined }) {
   if (!stats) return <span className="text-muted-foreground text-xs">—</span>;
-
   const pct = stats.uptime_percent ?? 0;
   const color = pct >= 99.5 ? "text-green-500" : pct >= 95 ? "text-yellow-500" : "text-destructive";
-
   return (
     <TooltipProvider>
       <Tooltip>
@@ -73,8 +71,51 @@ function LastSeenCell({ lastSeen, isOnline, sessionStart }: { lastSeen: string |
   return <span className="text-xs text-muted-foreground">Never</span>;
 }
 
+interface DnsInfo {
+  zones: string[];
+  forwarders: string[];
+}
+
+function DnsCell({ info }: { info: DnsInfo | undefined }) {
+  if (!info || (info.zones.length === 0 && info.forwarders.length === 0)) {
+    return <span className="text-xs text-muted-foreground">None</span>;
+  }
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="flex items-center gap-1.5 max-w-[180px]">
+            <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <span className="text-xs truncate">
+              {info.forwarders.length > 0
+                ? info.forwarders.slice(0, 2).join(", ") + (info.forwarders.length > 2 ? ` +${info.forwarders.length - 2}` : "")
+                : `${info.zones.length} zone${info.zones.length !== 1 ? "s" : ""}`}
+            </span>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="text-xs space-y-2 max-w-[280px]">
+          {info.zones.length > 0 && (
+            <div>
+              <p className="font-semibold mb-1">DNS Zones ({info.zones.length})</p>
+              {info.zones.map(z => <p key={z} className="font-mono">{z}</p>)}
+            </div>
+          )}
+          {info.forwarders.length > 0 && (
+            <div>
+              <p className="font-semibold mb-1">Forwarders</p>
+              {info.forwarders.map(f => <p key={f} className="font-mono">{f}</p>)}
+            </div>
+          )}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 export function RouterInventory() {
   const { data: routers, isLoading } = useRouters();
+  const { data: dnsZones } = useDnsZones();
   const createRouter = useCreateRouter();
   const deleteRouter = useDeleteRouter();
   const [open, setOpen] = useState(false);
@@ -83,6 +124,24 @@ export function RouterInventory() {
 
   const routerIds = routers?.map(r => r.id) ?? [];
   const { data: uptimeMap } = useRouterUptimeBatch(routerIds);
+
+  // Build DNS info map per router
+  const dnsMap: Record<string, DnsInfo> = {};
+  if (dnsZones) {
+    for (const zone of dnsZones) {
+      if (!dnsMap[zone.router_id]) {
+        dnsMap[zone.router_id] = { zones: [], forwarders: [] };
+      }
+      dnsMap[zone.router_id].zones.push(zone.zone_name);
+      if (zone.upstream_servers) {
+        for (const srv of zone.upstream_servers) {
+          if (!dnsMap[zone.router_id].forwarders.includes(srv)) {
+            dnsMap[zone.router_id].forwarders.push(srv);
+          }
+        }
+      }
+    }
+  }
 
   const handleCreate = async () => {
     if (!form.hostname || !form.vendor) return;
@@ -150,6 +209,7 @@ export function RouterInventory() {
               <TableHead>Hostname</TableHead>
               <TableHead>Uptime (30d)</TableHead>
               <TableHead>Last Seen</TableHead>
+              <TableHead>DNS / Forwarders</TableHead>
               <TableHead>Vendor</TableHead>
               <TableHead>Model</TableHead>
               <TableHead>WAN IP</TableHead>
@@ -172,6 +232,7 @@ export function RouterInventory() {
                   <TableCell>
                     <LastSeenCell lastSeen={r.last_seen_at} isOnline={r.is_online} sessionStart={stats?.current_session_start ?? null} />
                   </TableCell>
+                  <TableCell><DnsCell info={dnsMap[r.id]} /></TableCell>
                   <TableCell><Badge variant="outline">{VENDOR_OPTIONS.find(v => v.value === r.vendor)?.label || r.vendor}</Badge></TableCell>
                   <TableCell className="text-muted-foreground">{r.model || "—"}</TableCell>
                   <TableCell className="font-mono text-sm">{r.wan_ip || "—"}</TableCell>
@@ -185,7 +246,7 @@ export function RouterInventory() {
               );
             })}
             {!routers?.length && (
-              <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">No routers registered yet</TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">No routers registered yet</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
