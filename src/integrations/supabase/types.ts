@@ -1569,6 +1569,53 @@ export type Database = {
           },
         ]
       }
+      router_enrollment_tokens: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          label: string
+          max_uses: number | null
+          organization_id: string
+          token: string
+          use_count: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          label?: string
+          max_uses?: number | null
+          organization_id: string
+          token?: string
+          use_count?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          label?: string
+          max_uses?: number | null
+          organization_id?: string
+          token?: string
+          use_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "router_enrollment_tokens_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       router_firewall_rules: {
         Row: {
           action: string
@@ -1728,6 +1775,7 @@ export type Database = {
       }
       routers: {
         Row: {
+          agent_token: string | null
           config_profile: Json | null
           created_at: string
           firmware_version: string | null
@@ -1748,6 +1796,7 @@ export type Database = {
           wan_ip: string | null
         }
         Insert: {
+          agent_token?: string | null
           config_profile?: Json | null
           created_at?: string
           firmware_version?: string | null
@@ -1768,6 +1817,7 @@ export type Database = {
           wan_ip?: string | null
         }
         Update: {
+          agent_token?: string | null
           config_profile?: Json | null
           created_at?: string
           firmware_version?: string | null
