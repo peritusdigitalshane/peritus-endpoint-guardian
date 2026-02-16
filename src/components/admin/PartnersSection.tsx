@@ -81,6 +81,7 @@ export function PartnersSection() {
       organization_type: partner.organization_type,
       parent_partner_id: null,
       network_module_enabled: partner.network_module_enabled ?? false,
+      router_module_enabled: partner.router_module_enabled ?? false,
     });
   };
 
@@ -300,6 +301,7 @@ function PartnerCustomersSheet({
       organization_type: customer.organization_type,
       parent_partner_id: customer.parent_partner_id,
       network_module_enabled: customer.network_module_enabled ?? false,
+      router_module_enabled: customer.router_module_enabled ?? false,
     });
     onClose();
   };

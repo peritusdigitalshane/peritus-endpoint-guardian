@@ -22,6 +22,7 @@ import Settings from "./pages/Settings";
 import Recommendations from "./pages/Recommendations";
 import ThreatHunting from "./pages/ThreatHunting";
 import Network from "./pages/Network";
+import Routers from "./pages/Routers";
 import Reports from "./pages/Reports";
 import NotFound from "./pages/NotFound";
 
@@ -148,6 +149,14 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <Network />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/routers"
+                element={
+                  <ProtectedRoute>
+                    <Routers />
                   </ProtectedRoute>
                 }
               />

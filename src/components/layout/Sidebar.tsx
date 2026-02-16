@@ -17,6 +17,7 @@ import {
   Crosshair,
   Network,
   ClipboardList,
+  Router,
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
@@ -31,6 +32,7 @@ const baseNavigation = [
   { name: "Threat Hunting", href: "/threat-hunting", icon: Crosshair },
   { name: "Policies", href: "/policies", icon: FileText },
   { name: "Network", href: "/network", icon: Network, requiresNetworkModule: true },
+  { name: "Routers", href: "/routers", icon: Router, requiresRouterModule: true },
   { name: "Reports", href: "/reports", icon: ClipboardList },
   { name: "AI Advisor", href: "/recommendations", icon: Sparkles },
   { name: "Deploy Agent", href: "/deploy", icon: Download },
@@ -127,6 +129,7 @@ export function Sidebar() {
         )}
         {baseNavigation
           .filter((item) => !item.requiresNetworkModule || currentOrganization?.network_module_enabled)
+          .filter((item) => !(item as any).requiresRouterModule || currentOrganization?.router_module_enabled)
           .map((item) => {
           const isActive = location.pathname === item.href;
           return (

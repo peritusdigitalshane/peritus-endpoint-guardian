@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useDirectCustomers, usePartners, useAssignCustomerToPartner, useRenameOrganization, useDeleteOrganization } from "@/hooks/usePartners";
-import { useUpdateOrganizationNetworkModule } from "@/hooks/useSuperAdmin";
+import { useUpdateOrganizationNetworkModule, useUpdateOrganizationRouterModule } from "@/hooks/useSuperAdmin";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -30,12 +30,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Building2, Monitor, ChevronRight, Loader2, Network, Pencil, Trash2, Check, X } from "lucide-react";
+import { Building2, Monitor, ChevronRight, Loader2, Network, Router, Pencil, Trash2, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { useTenant } from "@/contexts/TenantContext";
 
 export function DirectCustomersSection() {
   const updateNetworkModule = useUpdateOrganizationNetworkModule();
+  const updateRouterModule = useUpdateOrganizationRouterModule();
   const { data: customers, isLoading } = useDirectCustomers();
   const { data: partners } = usePartners();
   const assignToPartner = useAssignCustomerToPartner();
@@ -88,6 +89,7 @@ export function DirectCustomersSection() {
       organization_type: customer.organization_type,
       parent_partner_id: null,
       network_module_enabled: customer.network_module_enabled ?? false,
+      router_module_enabled: customer.router_module_enabled ?? false,
     });
   };
 
@@ -115,6 +117,7 @@ export function DirectCustomersSection() {
               <TableHead>Customer</TableHead>
               <TableHead>Endpoints</TableHead>
               <TableHead className="text-center">Network</TableHead>
+              <TableHead className="text-center">Routers</TableHead>
               <TableHead>Created</TableHead>
               <TableHead>Assign to Partner</TableHead>
               <TableHead className="w-[100px]">Actions</TableHead>
@@ -183,6 +186,31 @@ export function DirectCustomersSection() {
                     {customer.network_module_enabled ? "Enabled" : "Disabled"}
                   </Button>
                 </TableCell>
+                <TableCell className="text-center">
+                  <Button
+                    variant={customer.router_module_enabled ? "default" : "outline"}
+                    size="sm"
+                    className="text-xs"
+                    onClick={() => {
+                      updateRouterModule.mutate(
+                        { id: customer.id, routerModuleEnabled: !customer.router_module_enabled },
+                        {
+                          onSuccess: () => {
+                            toast.success(
+                              customer.router_module_enabled 
+                                ? `Router module disabled for ${customer.name}` 
+                                : `Router module enabled for ${customer.name}`
+                            );
+                          },
+                        }
+                      );
+                    }}
+                    disabled={updateRouterModule.isPending}
+                  >
+                    <Router className="h-3 w-3 mr-1" />
+                    {customer.router_module_enabled ? "Enabled" : "Disabled"}
+                  </Button>
+                </TableCell>
                 <TableCell className="text-muted-foreground">
                   {new Date(customer.created_at).toLocaleDateString()}
                 </TableCell>
@@ -238,7 +266,7 @@ export function DirectCustomersSection() {
             ))}
             {customers?.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                   No direct customers found. All customers are assigned to partners.
                 </TableCell>
               </TableRow>

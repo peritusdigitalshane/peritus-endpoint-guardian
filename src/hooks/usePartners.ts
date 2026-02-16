@@ -26,6 +26,7 @@ interface Customer {
   created_at: string;
   endpoint_count?: number;
   network_module_enabled?: boolean;
+  router_module_enabled?: boolean;
 }
 
 // Fetch all partner organizations (super admin only)

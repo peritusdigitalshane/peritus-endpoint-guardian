@@ -56,6 +56,7 @@ interface Organization {
   organization_type: "partner" | "customer";
   parent_partner_id: string | null;
   network_module_enabled: boolean;
+  router_module_enabled: boolean;
 }
 
 const Admin = () => {
@@ -123,6 +124,7 @@ const Admin = () => {
       organization_type: (org.organization_type as "partner" | "customer") || "customer",
       parent_partner_id: org.parent_partner_id ?? null,
       network_module_enabled: org.network_module_enabled ?? false,
+      router_module_enabled: (org as any).router_module_enabled ?? false,
     };
     setImpersonatedOrg(fullOrg);
     toast({
