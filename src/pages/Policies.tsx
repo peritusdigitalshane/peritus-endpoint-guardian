@@ -202,14 +202,14 @@ const Policies = () => {
               />
               <StatCard
                 title="Endpoints Covered"
-                value="127"
+                value={endpointsCovered}
                 icon={CheckCircle}
               />
               <StatCard
-                title="Non-Compliant"
-                value="3"
+                title="No Policy Assigned"
+                value={nonCompliant}
                 icon={AlertTriangle}
-                variant="warning"
+                variant={nonCompliant > 0 ? "warning" : "default"}
               />
             </div>
 

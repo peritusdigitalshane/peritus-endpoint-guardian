@@ -83,7 +83,7 @@ const Dashboard = () => {
         {/* Threats and Endpoints */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <ThreatsList />
-          <EndpointsTable />
+          <EndpointsTable limit={5} />
         </div>
       </div>
     </MainLayout>
