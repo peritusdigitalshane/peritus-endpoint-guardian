@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useEndpoints } from "@/hooks/useDashboardData";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
