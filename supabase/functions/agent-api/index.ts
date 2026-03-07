@@ -245,6 +245,11 @@ Deno.serve(async (req) => {
       return await handleGetWindowsUpdatePolicy(req);
     }
 
+    // Route: GET /gpo-policy - Get assigned GPO policy
+    if (path === "/gpo-policy" && req.method === "GET") {
+      return await handleGetGpoPolicy(req);
+    }
+
     // Route: GET /status - Get full endpoint status for tray application
     if (path === "/status" && req.method === "GET") {
       return await handleGetStatus(req);
