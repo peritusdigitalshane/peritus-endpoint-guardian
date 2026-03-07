@@ -1528,6 +1528,7 @@ async function handleGetStatus(req: Request) {
         uac: uacPolicy ? { ...uacPolicy, source: uacSource } : null,
         windows_update: wuPolicy ? { ...wuPolicy, source: wuSource } : null,
         wdac_rule_sets: directRuleSets + groupRuleSets,
+        gpo: gpoPolicy ? { ...gpoPolicy, source: gpoSource } : null,
       },
       threats: {
         active_count: activeThreats || 0,
