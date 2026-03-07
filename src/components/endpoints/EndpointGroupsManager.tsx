@@ -178,7 +178,8 @@ export function EndpointGroupsManager() {
         wdac_policy_id: null,
         uac_policy_id: formData.uac_policy_id || null,
         windows_update_policy_id: formData.windows_update_policy_id || null,
-      });
+        gpo_policy_id: formData.gpo_policy_id || null,
+      } as any);
       groupId = result.id;
 
       // Assign selected rule sets
