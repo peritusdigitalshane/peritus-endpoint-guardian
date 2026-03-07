@@ -152,10 +152,11 @@ export function EndpointGroupsManager() {
         name: formData.name,
         description: formData.description || null,
         defender_policy_id: formData.defender_policy_id || null,
-        wdac_policy_id: null, // Clear legacy WDAC
+        wdac_policy_id: null,
         uac_policy_id: formData.uac_policy_id || null,
         windows_update_policy_id: formData.windows_update_policy_id || null,
-      });
+        gpo_policy_id: formData.gpo_policy_id || null,
+      } as any);
       groupId = editingGroup.id;
 
       // Sync rule set assignments
