@@ -250,10 +250,39 @@ export function EndpointsTable() {
                       </span>
                     </td>
                     <td className="px-4 py-4">
-                      <button className="rounded-lg p-2 text-muted-foreground opacity-0 transition-all hover:bg-secondary hover:text-foreground group-hover:opacity-100">
-                        <ChevronRight className="h-4 w-4" />
-                      </button>
-                    </td>
+                      <div className="flex items-center gap-1">
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <button
+                              className="rounded-lg p-2 text-muted-foreground transition-all hover:bg-destructive/10 hover:text-destructive"
+                              title="Remove endpoint"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete {endpoint.hostname}?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This will permanently remove this endpoint and all its associated data including logs, threats, status history, and group memberships. This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                onClick={() => deleteEndpoint.mutate(endpoint.id)}
+                                disabled={deleteEndpoint.isPending}
+                              >
+                                {deleteEndpoint.isPending ? "Deleting..." : "Delete Endpoint"}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                        <button className="rounded-lg p-2 text-muted-foreground opacity-0 transition-all hover:bg-secondary hover:text-foreground group-hover:opacity-100">
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
+                      </div>
                   </tr>
                 );
               })}
