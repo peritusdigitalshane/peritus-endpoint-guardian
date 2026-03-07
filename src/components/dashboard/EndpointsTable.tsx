@@ -121,7 +121,7 @@ export function EndpointsTable({ limit, showHeader = true }: EndpointsTableProps
     );
   }
 
-  const displayEndpoints = endpoints?.slice(0, 5) || [];
+  const displayEndpoints = limit ? (endpoints?.slice(0, limit) || []) : (endpoints || []);
 
   return (
     <div className="rounded-xl border border-border bg-card shadow-card">

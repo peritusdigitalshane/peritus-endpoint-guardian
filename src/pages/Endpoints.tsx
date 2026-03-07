@@ -34,7 +34,7 @@ const Endpoints = () => {
           </div>
         </div>
 
-        <EndpointsTable />
+        <EndpointsTable showHeader={false} />
       </div>
     </MainLayout>
   );
