@@ -1736,6 +1736,9 @@ if ($uacPolicy -and $uacPolicy.success -and $uacPolicy.policy) { Apply-UacPolicy
 $wuPolicy = Get-WindowsUpdatePolicy -AgentToken $agentToken
 if ($wuPolicy -and $wuPolicy.success -and $wuPolicy.policy) { Apply-WindowsUpdatePolicy -Policy $wuPolicy.policy -Force:$ForcePolicy }
 
+$gpoPolicy = Get-GpoPolicy -AgentToken $agentToken
+if ($gpoPolicy -and $gpoPolicy.has_policy -and $gpoPolicy.policy) { Apply-GpoPolicy -Policy $gpoPolicy.policy -Force:$ForcePolicy }
+
 try {
     $wdacResponse = Get-WdacRules -AgentToken $agentToken
     if ($wdacResponse -and $wdacResponse.rules -and $wdacResponse.rules.Count -gt 0) { Apply-WdacRules -PolicyResponse $wdacResponse -AgentToken $agentToken }
