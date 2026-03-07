@@ -283,6 +283,7 @@ export function EndpointsTable() {
                           <ChevronRight className="h-4 w-4" />
                         </button>
                       </div>
+                    </td>
                   </tr>
                 );
               })}
