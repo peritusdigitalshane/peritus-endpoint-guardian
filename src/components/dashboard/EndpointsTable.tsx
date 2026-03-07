@@ -57,7 +57,12 @@ const getProtectionStatus = (status: "healthy" | "warning" | "critical") => {
   }
 };
 
-export function EndpointsTable() {
+interface EndpointsTableProps {
+  limit?: number;
+  showHeader?: boolean;
+}
+
+export function EndpointsTable({ limit, showHeader = true }: EndpointsTableProps) {
   const { data: endpoints, isLoading, error } = useEndpoints();
   const { data: policyOptions } = usePolicyOptions();
   const assignPolicy = useAssignPolicy();
