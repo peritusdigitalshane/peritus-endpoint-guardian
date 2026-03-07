@@ -1305,6 +1305,47 @@ async function handleGetWindowsUpdatePolicy(req: Request) {
   );
 }
 
+// GET /gpo-policy - Get assigned GPO policy for an endpoint (via group only)
+async function handleGetGpoPolicy(req: Request) {
+  const endpoint = await validateAgentToken(req);
+
+  // GPO policies are assigned via groups only
+  const { data: groupMemberships } = await supabase
+    .from("endpoint_group_memberships")
+    .select(`
+      group_id,
+      endpoint_groups(gpo_policy_id)
+    `)
+    .eq("endpoint_id", endpoint.id);
+
+  for (const membership of groupMemberships || []) {
+    const group = membership.endpoint_groups as unknown as { gpo_policy_id: string | null } | null;
+    if (group?.gpo_policy_id) {
+      const { data: policy } = await supabase
+        .from("gpo_policies")
+        .select("*")
+        .eq("id", group.gpo_policy_id)
+        .maybeSingle();
+
+      if (policy) {
+        return new Response(
+          JSON.stringify({
+            has_policy: true,
+            source: "group",
+            policy,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+  }
+
+  return new Response(
+    JSON.stringify({ has_policy: false }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+
 // Helper to generate a simple hash for change detection
 async function generateHash(input: string): Promise<string> {
   const encoder = new TextEncoder();
