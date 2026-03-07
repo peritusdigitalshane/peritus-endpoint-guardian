@@ -63,6 +63,7 @@ import { usePolicyOptions } from "@/hooks/usePolicies";
 import { useUacPolicies } from "@/hooks/useUacPolicies";
 import { useWindowsUpdatePolicies } from "@/hooks/useWindowsUpdatePolicies";
 import { useRuleSets, useGroupRuleSetAssignments, useRuleSetMutations } from "@/hooks/useRuleSets";
+import { useGpoPolicyOptions } from "@/hooks/useGpoPolicies";
 import { GroupMembersDialog } from "./GroupMembersDialog";
 
 export function EndpointGroupsManager() {
