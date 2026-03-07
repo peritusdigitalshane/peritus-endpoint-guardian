@@ -1477,6 +1477,31 @@ async function handleGetStatus(req: Request) {
     }
   }
 
+  // Get GPO policy (via groups only)
+  let gpoPolicy = null;
+  let gpoSource = null;
+  {
+    const { data: gpoGroupMemberships } = await supabase
+      .from("endpoint_group_memberships")
+      .select("endpoint_groups(gpo_policy_id)")
+      .eq("endpoint_id", endpoint.id);
+    for (const m of gpoGroupMemberships || []) {
+      const g = m.endpoint_groups as unknown as { gpo_policy_id: string | null } | null;
+      if (g?.gpo_policy_id) {
+        const { data: policy } = await supabase
+          .from("gpo_policies")
+          .select("id, name")
+          .eq("id", g.gpo_policy_id)
+          .maybeSingle();
+        if (policy) {
+          gpoPolicy = policy;
+          gpoSource = "group";
+          break;
+        }
+      }
+    }
+  }
+
   // Get WDAC rule sets count
   const { data: directAssignments } = await supabase
     .from("endpoint_rule_set_assignments")
