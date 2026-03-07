@@ -105,6 +105,7 @@ export function EndpointGroupsManager() {
       defender_policy_id: "",
       uac_policy_id: "",
       windows_update_policy_id: "",
+      gpo_policy_id: "",
     });
     setSelectedRuleSetIds(new Set());
     setDialogOpen(true);
