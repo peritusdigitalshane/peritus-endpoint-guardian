@@ -1561,7 +1561,9 @@ function Show-StatusForm {
         $wuName = if ($StatusData.policies.windows_update) { $StatusData.policies.windows_update.name } else { "None" }
         $lblWu = New-Object System.Windows.Forms.Label; $lblWu.Text = "- Windows Update: $wuName"; $lblWu.Font = New-Object System.Drawing.Font("Segoe UI", 10); $lblWu.Location = New-Object System.Drawing.Point(25, $y); $lblWu.Size = New-Object System.Drawing.Size(370, 22); $form.Controls.Add($lblWu); $y += 24
         $wdacCount = $StatusData.policies.wdac_rule_sets
-        $lblWdac = New-Object System.Windows.Forms.Label; $lblWdac.Text = "- WDAC Rule Sets: $wdacCount"; $lblWdac.Font = New-Object System.Drawing.Font("Segoe UI", 10); $lblWdac.Location = New-Object System.Drawing.Point(25, $y); $lblWdac.Size = New-Object System.Drawing.Size(370, 22); $form.Controls.Add($lblWdac); $y += 35
+        $lblWdac = New-Object System.Windows.Forms.Label; $lblWdac.Text = "- WDAC Rule Sets: $wdacCount"; $lblWdac.Font = New-Object System.Drawing.Font("Segoe UI", 10); $lblWdac.Location = New-Object System.Drawing.Point(25, $y); $lblWdac.Size = New-Object System.Drawing.Size(370, 22); $form.Controls.Add($lblWdac); $y += 24
+        $gpoName = if ($StatusData.policies.gpo) { $StatusData.policies.gpo.name } else { "None" }
+        $lblGpo = New-Object System.Windows.Forms.Label; $lblGpo.Text = "- Group Policy: $gpoName"; $lblGpo.Font = New-Object System.Drawing.Font("Segoe UI", 10); $lblGpo.Location = New-Object System.Drawing.Point(25, $y); $lblGpo.Size = New-Object System.Drawing.Size(370, 22); $form.Controls.Add($lblGpo); $y += 35
         $threatCount = $StatusData.threats.active_count
         $lblThreats = New-Object System.Windows.Forms.Label
         $lblThreats.Text = if ($threatCount -gt 0) { "[!] Active Threats: $threatCount" } else { "[OK] No Active Threats" }
