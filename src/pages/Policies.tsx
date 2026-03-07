@@ -108,6 +108,9 @@ const Policies = () => {
     return acc + count;
   }, 0);
 
+  const endpointsCovered = endpoints.filter(e => e.policy_id !== null).length;
+  const nonCompliant = endpoints.filter(e => e.policy_id === null).length;
+
   return (
     <MainLayout>
       <div className="space-y-6">
