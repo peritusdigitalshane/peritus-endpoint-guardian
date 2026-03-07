@@ -1,6 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { useToast } from "@/hooks/use-toast";
 
 export interface Endpoint {
   id: string;
@@ -75,6 +76,37 @@ export function useEndpoints() {
     },
     refetchInterval: 30000,
     staleTime: 10000,
+  });
+}
+
+export function useDeleteEndpoint() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (endpointId: string) => {
+      const { error } = await supabase
+        .from("endpoints")
+        .delete()
+        .eq("id", endpointId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["endpoints"] });
+      queryClient.invalidateQueries({ queryKey: ["endpoint_threats"] });
+      queryClient.invalidateQueries({ queryKey: ["endpoint_statuses"] });
+      toast({
+        title: "Endpoint removed",
+        description: "The endpoint and all associated data have been permanently deleted.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Failed to delete endpoint",
+        description: "Please try again or check your permissions.",
+        variant: "destructive",
+      });
+    },
   });
 }
 

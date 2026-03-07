@@ -1,6 +1,7 @@
-import { Monitor, Shield, Clock, ChevronRight, Loader2 } from "lucide-react";
+import { useState } from "react";
+import { Monitor, Shield, Clock, ChevronRight, Loader2, Trash2 } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { useEndpoints } from "@/hooks/useDashboardData";
+import { useEndpoints, useDeleteEndpoint } from "@/hooks/useDashboardData";
 import { useAssignPolicy, usePolicyOptions } from "@/hooks/usePolicies";
 import { formatDistanceToNow } from "date-fns";
 import { Link } from "react-router-dom";
@@ -12,6 +13,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const getEndpointStatus = (
   isOnline: boolean,
@@ -49,7 +61,9 @@ export function EndpointsTable() {
   const { data: endpoints, isLoading, error } = useEndpoints();
   const { data: policyOptions } = usePolicyOptions();
   const assignPolicy = useAssignPolicy();
+  const deleteEndpoint = useDeleteEndpoint();
   const { toast } = useToast();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const handlePolicyChange = async (endpointId: string, policyId: string) => {
     try {
@@ -236,9 +250,39 @@ export function EndpointsTable() {
                       </span>
                     </td>
                     <td className="px-4 py-4">
-                      <button className="rounded-lg p-2 text-muted-foreground opacity-0 transition-all hover:bg-secondary hover:text-foreground group-hover:opacity-100">
-                        <ChevronRight className="h-4 w-4" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <button
+                              className="rounded-lg p-2 text-muted-foreground transition-all hover:bg-destructive/10 hover:text-destructive"
+                              title="Remove endpoint"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete {endpoint.hostname}?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This will permanently remove this endpoint and all its associated data including logs, threats, status history, and group memberships. This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                onClick={() => deleteEndpoint.mutate(endpoint.id)}
+                                disabled={deleteEndpoint.isPending}
+                              >
+                                {deleteEndpoint.isPending ? "Deleting..." : "Delete Endpoint"}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                        <button className="rounded-lg p-2 text-muted-foreground opacity-0 transition-all hover:bg-secondary hover:text-foreground group-hover:opacity-100">
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
