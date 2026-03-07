@@ -1,6 +1,7 @@
-import { Monitor, Shield, Clock, ChevronRight, Loader2 } from "lucide-react";
+import { useState } from "react";
+import { Monitor, Shield, Clock, ChevronRight, Loader2, Trash2 } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { useEndpoints } from "@/hooks/useDashboardData";
+import { useEndpoints, useDeleteEndpoint } from "@/hooks/useDashboardData";
 import { useAssignPolicy, usePolicyOptions } from "@/hooks/usePolicies";
 import { formatDistanceToNow } from "date-fns";
 import { Link } from "react-router-dom";
@@ -12,6 +13,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const getEndpointStatus = (
   isOnline: boolean,
