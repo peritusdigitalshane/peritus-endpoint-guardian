@@ -32,6 +32,7 @@ const baseNavigation = [
   { name: "Event Logs", href: "/logs", icon: ScrollText },
   { name: "Threat Hunting", href: "/threat-hunting", icon: Crosshair },
   { name: "Policies", href: "/policies", icon: FileText },
+  { name: "Group Policy", href: "/group-policy", icon: SlidersHorizontal },
   { name: "Network", href: "/network", icon: Network, requiresNetworkModule: true },
   { name: "Routers", href: "/routers", icon: Router, requiresRouterModule: true },
   { name: "Reports", href: "/reports", icon: ClipboardList },

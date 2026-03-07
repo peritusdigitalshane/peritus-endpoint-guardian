@@ -169,6 +169,14 @@ const App = () => (
                   </ProtectedRoute>
                 }
               />
+              <Route
+                path="/group-policy"
+                element={
+                  <ProtectedRoute>
+                    <GroupPolicy />
+                  </ProtectedRoute>
+                }
+              />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </TenantProvider>

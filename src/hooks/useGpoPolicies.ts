@@ -82,14 +82,14 @@ export function useUpdateGpoPolicy() {
     mutationFn: async ({ id, patch }: { id: string; patch: Partial<GpoPolicy> }) => {
       const { data, error } = await supabase
         .from("gpo_policies")
-        .update({ ...patch, updated_at: new Date().toISOString() })
+        .update({ ...patch, updated_at: new Date().toISOString() } as any)
         .eq("id", id)
         .select("*")
         .single();
 
       if (error) throw error;
       await logActivity(data.organization_id, "update", "gpo_policy", id, { name: data.name });
-      return data as GpoPolicy;
+      return data as unknown as GpoPolicy;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["gpo-policies"] });
