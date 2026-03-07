@@ -65,7 +65,7 @@ export function useCreateGpoPolicy() {
 
       if (error) throw error;
       await logActivity(orgId, "create", "gpo_policy", data.id, { name: data.name });
-      return data as GpoPolicy;
+      return data as unknown as GpoPolicy;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["gpo-policies"] });
