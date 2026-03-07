@@ -1,106 +1,29 @@
 
-# Plan: Fix PowerShell Variable Escaping in Agent Script
 
-## Problem Summary
+## Add Endpoint Deletion (Remove Domain Controllers / Any Endpoint)
 
-The Windows Firewall is not being enabled automatically because the PowerShell agent script has incorrect variable escaping. The `Ensure-FirewallTelemetry` function and `Collect-FirewallLogs` function use `\$` instead of `$` for all variable references, which produces invalid PowerShell syntax.
+The platform currently has no way to delete/remove endpoints. Users can add endpoints via the agent but cannot decommission them from the UI. This applies to domain controllers, servers, and workstations alike.
 
-## Root Cause
+### What will be built
 
-In the JavaScript template string within `supabase/functions/agent-script/index.ts`, starting at line 264:
+1. **`useDeleteEndpoint` hook** in `src/hooks/useDashboardData.ts`
+   - Mutation that calls `supabase.from("endpoints").delete().eq("id", id)`
+   - Invalidates `endpoints`, `endpoint-status`, `endpoint-threats` queries on success
+   - Shows toast confirmation
 
-```javascript
-// Current (BROKEN) - produces literal backslash in output
-\$changed = \$false
-\$profiles = @("Domain", "Private", "Public")
-```
+2. **Delete button on each endpoint row** in `src/components/dashboard/EndpointsTable.tsx`
+   - Add a Trash2 icon button (ghost/destructive style) in a new actions column
+   - Wrap in an `AlertDialog` confirmation: "Delete {hostname}? This will permanently remove this endpoint and all its associated data (logs, threats, status history)."
+   - Only visible to admins (check org role from context or simply let RLS enforce it — the existing `Admins can manage endpoints` ALL policy already covers DELETE)
 
-PowerShell receives:
-```powershell
-\$changed = \$false  # Invalid - PowerShell doesn't understand \$
-```
+3. **No database migration needed** — the `endpoints` table already has an RLS policy `Admins can manage endpoints` with command `ALL`, which includes DELETE. Cascading deletes for related tables (endpoint_status, endpoint_logs, endpoint_event_logs, endpoint_threats) depend on foreign key ON DELETE CASCADE — if those aren't set, the delete will fail. We should verify and add a migration if needed.
 
-Should be:
-```powershell
-$changed = $false   # Valid PowerShell variable assignment
-```
+### Technical detail: Foreign key cascade check
 
-## Solution
+The schema shows `endpoint_status.endpoint_id`, `endpoint_logs.endpoint_id`, `endpoint_event_logs.endpoint_id`, and `endpoint_threats.endpoint_id` reference `endpoints.id`. If these lack `ON DELETE CASCADE`, we'll add a migration to set it. This ensures removing an endpoint also cleans up all child records.
 
-Remove all unnecessary backslash escapes from PowerShell variable references in the `Ensure-FirewallTelemetry` and `Collect-FirewallLogs` functions. In JavaScript template literals, only `${` needs escaping (to prevent interpolation), but plain `$` followed by other characters does not.
+### Files to modify
+- **`src/hooks/useDashboardData.ts`** — add `useDeleteEndpoint` mutation
+- **`src/components/dashboard/EndpointsTable.tsx`** — add delete button + confirmation dialog per row
+- **Possible migration** — add `ON DELETE CASCADE` to foreign keys on endpoint child tables if missing
 
-## Files to Modify
-
-| File | Change |
-|------|--------|
-| `supabase/functions/agent-script/index.ts` | Replace all `\$` with `$` in the PowerShell functions (lines 264-438) |
-| `supabase/functions/agent-script/index.ts` | Bump version to 2.11.0 to trigger agent updates |
-| `supabase/functions/agent-api/index.ts` | Bump version to match (2.11.0) |
-
-## Detailed Changes
-
-### 1. Fix `Ensure-FirewallTelemetry` Function (Lines 264-315)
-
-Before (broken):
-```javascript
-\$changed = \$false
-\$profiles = @("Domain", "Private", "Public")
-foreach (\$profile in \$profiles) {
-    \$fwProfile = Get-NetFirewallProfile -Name \$profile
-    if (-not \$fwProfile.Enabled) {
-```
-
-After (fixed):
-```javascript
-$changed = $false
-$profiles = @("Domain", "Private", "Public")
-foreach ($profile in $profiles) {
-    $fwProfile = Get-NetFirewallProfile -Name $profile
-    if (-not $fwProfile.Enabled) {
-```
-
-### 2. Fix `Collect-FirewallLogs` Function (Lines 318-434)
-
-Same pattern - replace all `\$` with `$` for variable references like:
-- `$FirewallLogTimeFile`
-- `$headers`
-- `$lastTime`
-- `$firewallEvents`
-- `$logs`
-- etc.
-
-### 3. Fix Function Calls (Lines 437-438)
-
-Before:
-```javascript
-Ensure-FirewallTelemetry
-Collect-FirewallLogs -AgentToken \$agentToken
-```
-
-After:
-```javascript
-Ensure-FirewallTelemetry
-Collect-FirewallLogs -AgentToken $agentToken
-```
-
-### 4. Version Bump
-
-Update `AGENT_VERSION` from `"2.10.0"` to `"2.11.0"` in both files to trigger automatic agent updates on all endpoints.
-
-## Expected Outcome
-
-After deployment:
-
-1. Agents will auto-update to v2.11.0 on their next heartbeat
-2. The `Ensure-FirewallTelemetry` function will execute correctly
-3. Windows Firewall will be enabled for Domain, Private, and Public profiles
-4. Firewall logging will be enabled
-5. Audit policy for "Filtering Platform Connection" will be configured
-6. Firewall telemetry (Event IDs 5156/5157) will start flowing to the dashboard
-
-## Testing
-
-After deployment, you can verify on an endpoint by:
-1. Checking `$env:ProgramData\PeritusSecure\agent.log` for messages like "Enabling Windows Firewall for Domain profile..."
-2. Running `Get-NetFirewallProfile` to confirm all profiles show `Enabled: True`
-3. Running `auditpol /get /subcategory:"Filtering Platform Connection"` to confirm auditing is enabled
