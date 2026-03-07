@@ -119,6 +119,7 @@ export function EndpointGroupsManager() {
       defender_policy_id: group.defender_policy_id || "",
       uac_policy_id: (group as any).uac_policy_id || "",
       windows_update_policy_id: (group as any).windows_update_policy_id || "",
+      gpo_policy_id: (group as any).gpo_policy_id || "",
     });
     // We'll load existing rule set assignments via the hook
     setSelectedRuleSetIds(new Set());
