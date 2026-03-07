@@ -359,6 +359,26 @@ export function EndpointGroupsManager() {
             </div>
 
             <div className="space-y-2">
+              <Label>Group Policy (GPO)</Label>
+              <Select
+                value={formData.gpo_policy_id}
+                onValueChange={(v) => setFormData({ ...formData, gpo_policy_id: v === "none" ? "" : v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a policy..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No policy</SelectItem>
+                  {gpoPolicies.map((policy) => (
+                    <SelectItem key={policy.id} value={policy.id}>
+                      {policy.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
               <Label>App Control Rule Sets</Label>
               <p className="text-xs text-muted-foreground">Select rule sets to assign to this group</p>
               {ruleSets.length === 0 ? (
