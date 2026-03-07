@@ -57,7 +57,12 @@ const getProtectionStatus = (status: "healthy" | "warning" | "critical") => {
   }
 };
 
-export function EndpointsTable() {
+interface EndpointsTableProps {
+  limit?: number;
+  showHeader?: boolean;
+}
+
+export function EndpointsTable({ limit, showHeader = true }: EndpointsTableProps) {
   const { data: endpoints, isLoading, error } = useEndpoints();
   const { data: policyOptions } = usePolicyOptions();
   const assignPolicy = useAssignPolicy();
@@ -116,19 +121,21 @@ export function EndpointsTable() {
     );
   }
 
-  const displayEndpoints = endpoints?.slice(0, 5) || [];
+  const displayEndpoints = limit ? (endpoints?.slice(0, limit) || []) : (endpoints || []);
 
   return (
     <div className="rounded-xl border border-border bg-card shadow-card">
-      <div className="flex items-center justify-between border-b border-border p-4">
-        <div className="flex items-center gap-2">
-          <Monitor className="h-5 w-5 text-primary" />
-          <h3 className="font-semibold text-foreground">Managed Endpoints</h3>
+      {showHeader && (
+        <div className="flex items-center justify-between border-b border-border p-4">
+          <div className="flex items-center gap-2">
+            <Monitor className="h-5 w-5 text-primary" />
+            <h3 className="font-semibold text-foreground">Managed Endpoints</h3>
+          </div>
+          <Link to="/endpoints" className="text-sm text-primary hover:underline">
+            Manage All
+          </Link>
         </div>
-        <Link to="/endpoints" className="text-sm text-primary hover:underline">
-          Manage All
-        </Link>
-      </div>
+      )}
 
       {displayEndpoints.length === 0 ? (
         <div className="p-8 text-center">

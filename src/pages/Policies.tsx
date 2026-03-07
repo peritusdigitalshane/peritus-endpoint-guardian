@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useEndpoints } from "@/hooks/useDashboardData";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -30,6 +31,7 @@ const Policies = () => {
   const { data: policies = [], isLoading: policiesLoading, error: policiesError } = usePolicies();
   const createPolicy = useCreatePolicy();
   const updatePolicy = useUpdatePolicy();
+  const { data: endpoints = [] } = useEndpoints();
 
   const sanitizePolicyPatch = useMemo(() => {
     return (policyData: Partial<DefenderPolicy>) => {
@@ -106,6 +108,9 @@ const Policies = () => {
     ].filter(r => r === "enabled").length;
     return acc + count;
   }, 0);
+
+  const endpointsCovered = endpoints.filter(e => e.policy_id !== null).length;
+  const nonCompliant = endpoints.filter(e => e.policy_id === null).length;
 
   return (
     <MainLayout>
@@ -201,14 +206,14 @@ const Policies = () => {
               />
               <StatCard
                 title="Endpoints Covered"
-                value="127"
+                value={endpointsCovered}
                 icon={CheckCircle}
               />
               <StatCard
-                title="Non-Compliant"
-                value="3"
+                title="No Policy Assigned"
+                value={nonCompliant}
                 icon={AlertTriangle}
-                variant="warning"
+                variant={nonCompliant > 0 ? "warning" : "default"}
               />
             </div>
 

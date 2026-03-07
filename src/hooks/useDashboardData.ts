@@ -135,8 +135,7 @@ export function useEndpointThreats() {
           endpoints(hostname, organization_id)
         `)
         .in("endpoint_id", endpointIds)
-        .order("created_at", { ascending: false })
-        .limit(10);
+        .order("created_at", { ascending: false });
 
       if (error) throw error;
       return data as EndpointThreat[];
