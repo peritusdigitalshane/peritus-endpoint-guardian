@@ -72,6 +72,7 @@ export function EndpointGroupsManager() {
   const { data: uacPolicies = [] } = useUacPolicies();
   const { data: windowsUpdatePolicies = [] } = useWindowsUpdatePolicies();
   const { data: ruleSets = [] } = useRuleSets();
+  const { data: gpoPolicies = [] } = useGpoPolicyOptions();
   const { assignToGroup, removeFromGroup } = useRuleSetMutations();
   const createGroup = useCreateEndpointGroup();
   const updateGroup = useUpdateEndpointGroup();
