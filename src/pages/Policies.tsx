@@ -31,6 +31,7 @@ const Policies = () => {
   const { data: policies = [], isLoading: policiesLoading, error: policiesError } = usePolicies();
   const createPolicy = useCreatePolicy();
   const updatePolicy = useUpdatePolicy();
+  const { data: endpoints = [] } = useEndpoints();
 
   const sanitizePolicyPatch = useMemo(() => {
     return (policyData: Partial<DefenderPolicy>) => {
