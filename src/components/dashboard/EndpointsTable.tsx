@@ -61,7 +61,9 @@ export function EndpointsTable() {
   const { data: endpoints, isLoading, error } = useEndpoints();
   const { data: policyOptions } = usePolicyOptions();
   const assignPolicy = useAssignPolicy();
+  const deleteEndpoint = useDeleteEndpoint();
   const { toast } = useToast();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const handlePolicyChange = async (endpointId: string, policyId: string) => {
     try {
