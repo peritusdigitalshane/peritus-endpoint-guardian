@@ -1223,16 +1223,7 @@ function Apply-GpoPolicy {
         try {
             $secEditFile = "$ConfigPath\\gpo_secedit.inf"
             $secEditDb = "$ConfigPath\\gpo_secedit.sdb"
-            $secContent = @"
-[Unicode]
-Unicode=yes
-[System Access]
-PasswordComplexity = $(if ($Policy.password_complexity_enabled) { 1 } else { 0 })
-ClearTextPassword = $(if ($Policy.password_reversible_encryption) { 1 } else { 0 })
-[Version]
-signature="`$CHICAGO`$"
-Revision=1
-"@
+            $secContent = "[Unicode]`r`nUnicode=yes`r`n[System Access]`r`nPasswordComplexity = " + $(if ($Policy.password_complexity_enabled) { "1" } else { "0" }) + "`r`nClearTextPassword = " + $(if ($Policy.password_reversible_encryption) { "1" } else { "0" }) + "`r`n[Version]`r`nsignature=" + '$' + "CHICAGO" + '$' + "`r`nRevision=1"
             $secContent | Set-Content -Path $secEditFile -Force -Encoding Unicode
             secedit /configure /db $secEditDb /cfg $secEditFile /areas SECURITYPOLICY 2>&1 | Out-Null
             Remove-Item $secEditFile -Force -ErrorAction SilentlyContinue
