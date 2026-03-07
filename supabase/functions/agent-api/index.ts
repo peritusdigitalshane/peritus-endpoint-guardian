@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Version for deployment verification - bump to trigger agent updates
-const VERSION = "v2.13.0";
+const VERSION = "v2.14.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -243,6 +243,11 @@ Deno.serve(async (req) => {
     // Route: GET /windows-update-policy - Get assigned Windows Update policy
     if (path === "/windows-update-policy" && req.method === "GET") {
       return await handleGetWindowsUpdatePolicy(req);
+    }
+
+    // Route: GET /gpo-policy - Get assigned GPO policy
+    if (path === "/gpo-policy" && req.method === "GET") {
+      return await handleGetGpoPolicy(req);
     }
 
     // Route: GET /status - Get full endpoint status for tray application
@@ -1300,6 +1305,47 @@ async function handleGetWindowsUpdatePolicy(req: Request) {
   );
 }
 
+// GET /gpo-policy - Get assigned GPO policy for an endpoint (via group only)
+async function handleGetGpoPolicy(req: Request) {
+  const endpoint = await validateAgentToken(req);
+
+  // GPO policies are assigned via groups only
+  const { data: groupMemberships } = await supabase
+    .from("endpoint_group_memberships")
+    .select(`
+      group_id,
+      endpoint_groups(gpo_policy_id)
+    `)
+    .eq("endpoint_id", endpoint.id);
+
+  for (const membership of groupMemberships || []) {
+    const group = membership.endpoint_groups as unknown as { gpo_policy_id: string | null } | null;
+    if (group?.gpo_policy_id) {
+      const { data: policy } = await supabase
+        .from("gpo_policies")
+        .select("*")
+        .eq("id", group.gpo_policy_id)
+        .maybeSingle();
+
+      if (policy) {
+        return new Response(
+          JSON.stringify({
+            has_policy: true,
+            source: "group",
+            policy,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+  }
+
+  return new Response(
+    JSON.stringify({ has_policy: false }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+
 // Helper to generate a simple hash for change detection
 async function generateHash(input: string): Promise<string> {
   const encoder = new TextEncoder();
@@ -1431,6 +1477,31 @@ async function handleGetStatus(req: Request) {
     }
   }
 
+  // Get GPO policy (via groups only)
+  let gpoPolicy = null;
+  let gpoSource = null;
+  {
+    const { data: gpoGroupMemberships } = await supabase
+      .from("endpoint_group_memberships")
+      .select("endpoint_groups(gpo_policy_id)")
+      .eq("endpoint_id", endpoint.id);
+    for (const m of gpoGroupMemberships || []) {
+      const g = m.endpoint_groups as unknown as { gpo_policy_id: string | null } | null;
+      if (g?.gpo_policy_id) {
+        const { data: policy } = await supabase
+          .from("gpo_policies")
+          .select("id, name")
+          .eq("id", g.gpo_policy_id)
+          .maybeSingle();
+        if (policy) {
+          gpoPolicy = policy;
+          gpoSource = "group";
+          break;
+        }
+      }
+    }
+  }
+
   // Get WDAC rule sets count
   const { data: directAssignments } = await supabase
     .from("endpoint_rule_set_assignments")
@@ -1482,6 +1553,7 @@ async function handleGetStatus(req: Request) {
         uac: uacPolicy ? { ...uacPolicy, source: uacSource } : null,
         windows_update: wuPolicy ? { ...wuPolicy, source: wuSource } : null,
         wdac_rule_sets: directRuleSets + groupRuleSets,
+        gpo: gpoPolicy ? { ...gpoPolicy, source: gpoSource } : null,
       },
       threats: {
         active_count: activeThreats || 0,
@@ -1492,7 +1564,7 @@ async function handleGetStatus(req: Request) {
 }
 
 // Current agent version - increment when agent script changes
-const AGENT_VERSION = "2.18.0";
+const AGENT_VERSION = "2.19.0";
 
 // GET /agent-update - Check for updates and return new script if needed
 async function handleAgentUpdate(req: Request) {
