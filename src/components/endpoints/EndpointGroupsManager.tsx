@@ -541,7 +541,13 @@ function GroupCard({ group, onEdit, onDelete, onMembers }: {
               {a.rule_set?.name || "Rule Set"}
             </Badge>
           ))}
-          {!group.defender_policy && !(group as any).uac_policy && !(group as any).windows_update_policy && (!ruleSetAssignments || ruleSetAssignments.length === 0) && (
+          {(group as any).gpo_policy ? (
+            <Badge variant="secondary" className="text-xs">
+              <SlidersHorizontal className="mr-1 h-3 w-3" />
+              {(group as any).gpo_policy.name}
+            </Badge>
+          ) : null}
+          {!group.defender_policy && !(group as any).uac_policy && !(group as any).windows_update_policy && !(group as any).gpo_policy && (!ruleSetAssignments || ruleSetAssignments.length === 0) && (
             <span className="text-xs text-muted-foreground">No policies assigned</span>
           )}
         </div>
