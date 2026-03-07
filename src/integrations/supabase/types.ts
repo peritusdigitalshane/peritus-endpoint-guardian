@@ -329,6 +329,7 @@ export type Database = {
           created_by: string | null
           defender_policy_id: string | null
           description: string | null
+          gpo_policy_id: string | null
           id: string
           name: string
           organization_id: string
@@ -342,6 +343,7 @@ export type Database = {
           created_by?: string | null
           defender_policy_id?: string | null
           description?: string | null
+          gpo_policy_id?: string | null
           id?: string
           name: string
           organization_id: string
@@ -355,6 +357,7 @@ export type Database = {
           created_by?: string | null
           defender_policy_id?: string | null
           description?: string | null
+          gpo_policy_id?: string | null
           id?: string
           name?: string
           organization_id?: string
@@ -369,6 +372,13 @@ export type Database = {
             columns: ["defender_policy_id"]
             isOneToOne: false
             referencedRelation: "defender_policies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "endpoint_groups_gpo_policy_id_fkey"
+            columns: ["gpo_policy_id"]
+            isOneToOne: false
+            referencedRelation: "gpo_policies"
             referencedColumns: ["id"]
           },
           {
@@ -1024,6 +1034,249 @@ export type Database = {
           rules_json?: Json
         }
         Relationships: []
+      }
+      gpo_policies: {
+        Row: {
+          audit_account_logon: string
+          audit_account_management: string
+          audit_ds_access: string
+          audit_logon_events: string
+          audit_object_access: string
+          audit_policy_change: string
+          audit_privilege_use: string
+          audit_process_tracking: string
+          audit_system_events: string
+          created_at: string
+          created_by: string | null
+          custom_registry_settings: Json
+          description: string | null
+          devices_restrict_cd_rom: boolean
+          devices_restrict_floppy: boolean
+          disable_cmd_prompt: boolean
+          disable_consumer_features: boolean
+          disable_control_panel: boolean
+          disable_cortana: boolean
+          disable_game_bar: boolean
+          disable_ipv6: boolean
+          disable_lock_screen_camera: boolean
+          disable_onedrive: boolean
+          disable_registry_tools: boolean
+          disable_run_command: boolean
+          disable_store_apps: boolean
+          disable_task_manager: boolean
+          disable_telemetry: boolean
+          disable_wifi_sense: boolean
+          enable_windows_firewall_domain: boolean
+          enable_windows_firewall_private: boolean
+          enable_windows_firewall_public: boolean
+          id: string
+          interactive_logon_dont_display_last_user: boolean
+          interactive_logon_message_text: string
+          interactive_logon_message_title: string
+          interactive_logon_require_ctrl_alt_del: boolean
+          is_default: boolean
+          lockout_duration_minutes: number
+          lockout_reset_minutes: number
+          lockout_threshold: number
+          name: string
+          network_access_restrict_anonymous: boolean
+          network_security_lan_manager_level: number
+          network_security_min_session_security_ntlm: boolean
+          organization_id: string
+          password_complexity_enabled: boolean
+          password_history_count: number
+          password_max_age_days: number
+          password_min_age_days: number
+          password_min_length: number
+          password_reversible_encryption: boolean
+          remote_desktop_enabled: boolean
+          remote_desktop_max_sessions: number
+          remote_desktop_nla_required: boolean
+          require_password_on_wake: boolean
+          right_change_system_time: string[]
+          right_debug_programs: string[]
+          right_deny_local_logon: string[]
+          right_deny_network_logon: string[]
+          right_deny_remote_desktop_logon: string[]
+          right_local_logon: string[]
+          right_network_logon: string[]
+          right_remote_desktop_logon: string[]
+          right_shut_down_system: string[]
+          screen_timeout_ac_minutes: number
+          screen_timeout_dc_minutes: number
+          shutdown_clear_virtual_memory: boolean
+          sleep_timeout_ac_minutes: number
+          sleep_timeout_dc_minutes: number
+          system_objects_strengthen_default_permissions: boolean
+          telemetry_level: number
+          updated_at: string
+        }
+        Insert: {
+          audit_account_logon?: string
+          audit_account_management?: string
+          audit_ds_access?: string
+          audit_logon_events?: string
+          audit_object_access?: string
+          audit_policy_change?: string
+          audit_privilege_use?: string
+          audit_process_tracking?: string
+          audit_system_events?: string
+          created_at?: string
+          created_by?: string | null
+          custom_registry_settings?: Json
+          description?: string | null
+          devices_restrict_cd_rom?: boolean
+          devices_restrict_floppy?: boolean
+          disable_cmd_prompt?: boolean
+          disable_consumer_features?: boolean
+          disable_control_panel?: boolean
+          disable_cortana?: boolean
+          disable_game_bar?: boolean
+          disable_ipv6?: boolean
+          disable_lock_screen_camera?: boolean
+          disable_onedrive?: boolean
+          disable_registry_tools?: boolean
+          disable_run_command?: boolean
+          disable_store_apps?: boolean
+          disable_task_manager?: boolean
+          disable_telemetry?: boolean
+          disable_wifi_sense?: boolean
+          enable_windows_firewall_domain?: boolean
+          enable_windows_firewall_private?: boolean
+          enable_windows_firewall_public?: boolean
+          id?: string
+          interactive_logon_dont_display_last_user?: boolean
+          interactive_logon_message_text?: string
+          interactive_logon_message_title?: string
+          interactive_logon_require_ctrl_alt_del?: boolean
+          is_default?: boolean
+          lockout_duration_minutes?: number
+          lockout_reset_minutes?: number
+          lockout_threshold?: number
+          name: string
+          network_access_restrict_anonymous?: boolean
+          network_security_lan_manager_level?: number
+          network_security_min_session_security_ntlm?: boolean
+          organization_id: string
+          password_complexity_enabled?: boolean
+          password_history_count?: number
+          password_max_age_days?: number
+          password_min_age_days?: number
+          password_min_length?: number
+          password_reversible_encryption?: boolean
+          remote_desktop_enabled?: boolean
+          remote_desktop_max_sessions?: number
+          remote_desktop_nla_required?: boolean
+          require_password_on_wake?: boolean
+          right_change_system_time?: string[]
+          right_debug_programs?: string[]
+          right_deny_local_logon?: string[]
+          right_deny_network_logon?: string[]
+          right_deny_remote_desktop_logon?: string[]
+          right_local_logon?: string[]
+          right_network_logon?: string[]
+          right_remote_desktop_logon?: string[]
+          right_shut_down_system?: string[]
+          screen_timeout_ac_minutes?: number
+          screen_timeout_dc_minutes?: number
+          shutdown_clear_virtual_memory?: boolean
+          sleep_timeout_ac_minutes?: number
+          sleep_timeout_dc_minutes?: number
+          system_objects_strengthen_default_permissions?: boolean
+          telemetry_level?: number
+          updated_at?: string
+        }
+        Update: {
+          audit_account_logon?: string
+          audit_account_management?: string
+          audit_ds_access?: string
+          audit_logon_events?: string
+          audit_object_access?: string
+          audit_policy_change?: string
+          audit_privilege_use?: string
+          audit_process_tracking?: string
+          audit_system_events?: string
+          created_at?: string
+          created_by?: string | null
+          custom_registry_settings?: Json
+          description?: string | null
+          devices_restrict_cd_rom?: boolean
+          devices_restrict_floppy?: boolean
+          disable_cmd_prompt?: boolean
+          disable_consumer_features?: boolean
+          disable_control_panel?: boolean
+          disable_cortana?: boolean
+          disable_game_bar?: boolean
+          disable_ipv6?: boolean
+          disable_lock_screen_camera?: boolean
+          disable_onedrive?: boolean
+          disable_registry_tools?: boolean
+          disable_run_command?: boolean
+          disable_store_apps?: boolean
+          disable_task_manager?: boolean
+          disable_telemetry?: boolean
+          disable_wifi_sense?: boolean
+          enable_windows_firewall_domain?: boolean
+          enable_windows_firewall_private?: boolean
+          enable_windows_firewall_public?: boolean
+          id?: string
+          interactive_logon_dont_display_last_user?: boolean
+          interactive_logon_message_text?: string
+          interactive_logon_message_title?: string
+          interactive_logon_require_ctrl_alt_del?: boolean
+          is_default?: boolean
+          lockout_duration_minutes?: number
+          lockout_reset_minutes?: number
+          lockout_threshold?: number
+          name?: string
+          network_access_restrict_anonymous?: boolean
+          network_security_lan_manager_level?: number
+          network_security_min_session_security_ntlm?: boolean
+          organization_id?: string
+          password_complexity_enabled?: boolean
+          password_history_count?: number
+          password_max_age_days?: number
+          password_min_age_days?: number
+          password_min_length?: number
+          password_reversible_encryption?: boolean
+          remote_desktop_enabled?: boolean
+          remote_desktop_max_sessions?: number
+          remote_desktop_nla_required?: boolean
+          require_password_on_wake?: boolean
+          right_change_system_time?: string[]
+          right_debug_programs?: string[]
+          right_deny_local_logon?: string[]
+          right_deny_network_logon?: string[]
+          right_deny_remote_desktop_logon?: string[]
+          right_local_logon?: string[]
+          right_network_logon?: string[]
+          right_remote_desktop_logon?: string[]
+          right_shut_down_system?: string[]
+          screen_timeout_ac_minutes?: number
+          screen_timeout_dc_minutes?: number
+          shutdown_clear_virtual_memory?: boolean
+          sleep_timeout_ac_minutes?: number
+          sleep_timeout_dc_minutes?: number
+          system_objects_strengthen_default_permissions?: boolean
+          telemetry_level?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gpo_policies_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gpo_policies_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       group_rule_set_assignments: {
         Row: {
