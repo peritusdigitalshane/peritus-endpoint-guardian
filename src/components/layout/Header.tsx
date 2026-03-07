@@ -1,6 +1,5 @@
-import { Bell, Search, User, LogOut } from "lucide-react";
+import { Bell, User, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
   DropdownMenu,
@@ -12,6 +11,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { TenantSwitcher } from "./TenantSwitcher";
+import { GlobalSearch } from "./GlobalSearch";
 
 export function Header() {
   const { user, signOut } = useAuth();
@@ -28,13 +28,7 @@ export function Header() {
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-background/80 px-6 backdrop-blur-sm">
       <div className="flex items-center gap-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search endpoints, threats..."
-            className="w-80 bg-secondary pl-10"
-          />
-        </div>
+        <GlobalSearch />
       </div>
 
       <div className="flex items-center gap-4">
