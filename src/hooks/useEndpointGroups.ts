@@ -41,7 +41,8 @@ export function useEndpointGroups() {
           defender_policy:defender_policies(id, name),
           wdac_policy:wdac_policies(id, name, mode),
           uac_policy:uac_policies(id, name),
-          windows_update_policy:windows_update_policies(id, name)
+          windows_update_policy:windows_update_policies(id, name),
+          gpo_policy:gpo_policies(id, name)
         `)
         .eq("organization_id", orgId)
         .order("name");

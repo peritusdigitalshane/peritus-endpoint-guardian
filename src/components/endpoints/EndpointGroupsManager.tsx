@@ -12,6 +12,7 @@ import {
   MonitorCog,
   RefreshCw,
   Layers,
+  SlidersHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -62,6 +63,7 @@ import { usePolicyOptions } from "@/hooks/usePolicies";
 import { useUacPolicies } from "@/hooks/useUacPolicies";
 import { useWindowsUpdatePolicies } from "@/hooks/useWindowsUpdatePolicies";
 import { useRuleSets, useGroupRuleSetAssignments, useRuleSetMutations } from "@/hooks/useRuleSets";
+import { useGpoPolicyOptions } from "@/hooks/useGpoPolicies";
 import { GroupMembersDialog } from "./GroupMembersDialog";
 
 export function EndpointGroupsManager() {
@@ -70,6 +72,7 @@ export function EndpointGroupsManager() {
   const { data: uacPolicies = [] } = useUacPolicies();
   const { data: windowsUpdatePolicies = [] } = useWindowsUpdatePolicies();
   const { data: ruleSets = [] } = useRuleSets();
+  const { data: gpoPolicies = [] } = useGpoPolicyOptions();
   const { assignToGroup, removeFromGroup } = useRuleSetMutations();
   const createGroup = useCreateEndpointGroup();
   const updateGroup = useUpdateEndpointGroup();
@@ -86,6 +89,7 @@ export function EndpointGroupsManager() {
     defender_policy_id: "",
     uac_policy_id: "",
     windows_update_policy_id: "",
+    gpo_policy_id: "",
   });
   // Rule sets selected for assignment (used during create/edit)
   const [selectedRuleSetIds, setSelectedRuleSetIds] = useState<Set<string>>(new Set());
@@ -101,6 +105,7 @@ export function EndpointGroupsManager() {
       defender_policy_id: "",
       uac_policy_id: "",
       windows_update_policy_id: "",
+      gpo_policy_id: "",
     });
     setSelectedRuleSetIds(new Set());
     setDialogOpen(true);
@@ -114,6 +119,7 @@ export function EndpointGroupsManager() {
       defender_policy_id: group.defender_policy_id || "",
       uac_policy_id: (group as any).uac_policy_id || "",
       windows_update_policy_id: (group as any).windows_update_policy_id || "",
+      gpo_policy_id: (group as any).gpo_policy_id || "",
     });
     // We'll load existing rule set assignments via the hook
     setSelectedRuleSetIds(new Set());
@@ -146,10 +152,11 @@ export function EndpointGroupsManager() {
         name: formData.name,
         description: formData.description || null,
         defender_policy_id: formData.defender_policy_id || null,
-        wdac_policy_id: null, // Clear legacy WDAC
+        wdac_policy_id: null,
         uac_policy_id: formData.uac_policy_id || null,
         windows_update_policy_id: formData.windows_update_policy_id || null,
-      });
+        gpo_policy_id: formData.gpo_policy_id || null,
+      } as any);
       groupId = editingGroup.id;
 
       // Sync rule set assignments
@@ -171,7 +178,8 @@ export function EndpointGroupsManager() {
         wdac_policy_id: null,
         uac_policy_id: formData.uac_policy_id || null,
         windows_update_policy_id: formData.windows_update_policy_id || null,
-      });
+        gpo_policy_id: formData.gpo_policy_id || null,
+      } as any);
       groupId = result.id;
 
       // Assign selected rule sets
@@ -351,6 +359,26 @@ export function EndpointGroupsManager() {
             </div>
 
             <div className="space-y-2">
+              <Label>Group Policy (GPO)</Label>
+              <Select
+                value={formData.gpo_policy_id}
+                onValueChange={(v) => setFormData({ ...formData, gpo_policy_id: v === "none" ? "" : v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a policy..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No policy</SelectItem>
+                  {gpoPolicies.map((policy) => (
+                    <SelectItem key={policy.id} value={policy.id}>
+                      {policy.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
               <Label>App Control Rule Sets</Label>
               <p className="text-xs text-muted-foreground">Select rule sets to assign to this group</p>
               {ruleSets.length === 0 ? (
@@ -513,7 +541,13 @@ function GroupCard({ group, onEdit, onDelete, onMembers }: {
               {a.rule_set?.name || "Rule Set"}
             </Badge>
           ))}
-          {!group.defender_policy && !(group as any).uac_policy && !(group as any).windows_update_policy && (!ruleSetAssignments || ruleSetAssignments.length === 0) && (
+          {(group as any).gpo_policy ? (
+            <Badge variant="secondary" className="text-xs">
+              <SlidersHorizontal className="mr-1 h-3 w-3" />
+              {(group as any).gpo_policy.name}
+            </Badge>
+          ) : null}
+          {!group.defender_policy && !(group as any).uac_policy && !(group as any).windows_update_policy && !(group as any).gpo_policy && (!ruleSetAssignments || ruleSetAssignments.length === 0) && (
             <span className="text-xs text-muted-foreground">No policies assigned</span>
           )}
         </div>
