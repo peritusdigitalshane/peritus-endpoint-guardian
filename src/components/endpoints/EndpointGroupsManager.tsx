@@ -89,6 +89,7 @@ export function EndpointGroupsManager() {
     defender_policy_id: "",
     uac_policy_id: "",
     windows_update_policy_id: "",
+    gpo_policy_id: "",
   });
   // Rule sets selected for assignment (used during create/edit)
   const [selectedRuleSetIds, setSelectedRuleSetIds] = useState<Set<string>>(new Set());
