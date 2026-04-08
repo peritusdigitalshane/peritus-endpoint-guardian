@@ -59,6 +59,14 @@ const App = () => (
                 }
               />
               <Route
+                path="/endpoints/:id"
+                element={
+                  <ProtectedRoute>
+                    <EndpointDetail />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/groups"
                 element={
                   <ProtectedRoute>
