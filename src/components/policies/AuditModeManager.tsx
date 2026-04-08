@@ -29,13 +29,6 @@ interface AuditModeManagerProps {
   policyName: string;
 }
 
-const POLICY_TYPE_LABELS: Record<PolicyType, string> = {
-  defender: "Defender",
-  gpo: "Group Policy",
-  wdac: "Application Control",
-  uac: "UAC",
-  windows_update: "Windows Update",
-};
 
 export function AuditModeManager({ policyType, policyId, policyName }: AuditModeManagerProps) {
   const { toast } = useToast();
