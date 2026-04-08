@@ -183,7 +183,18 @@ Deno.serve(async (req) => {
 
   try {
     const url = new URL(req.url);
-    const path = url.pathname.replace("/agent-api", "");
+    // Decode the path to handle agents that URL-encode the '?' (e.g. v2.17.0 sends
+    // /agent-update%3Fversion=2.17.0 instead of /agent-update?version=2.17.0).
+    const rawPath = decodeURIComponent(url.pathname).replace("/agent-api", "");
+    // If the decoded path contains '?', split it out and merge into url.searchParams
+    const qIdx = rawPath.indexOf("?");
+    const path = qIdx >= 0 ? rawPath.substring(0, qIdx) : rawPath;
+    if (qIdx >= 0) {
+      const extraParams = new URLSearchParams(rawPath.substring(qIdx + 1));
+      for (const [k, v] of extraParams) {
+        if (!url.searchParams.has(k)) url.searchParams.set(k, v);
+      }
+    }
 
     // Route: POST /register - Register a new endpoint
     if (path === "/register" && req.method === "POST") {
