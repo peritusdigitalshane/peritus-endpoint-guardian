@@ -20,6 +20,7 @@ import {
   Router,
   SlidersHorizontal,
   Bell,
+  ShieldAlert,
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
@@ -38,6 +39,7 @@ const baseNavigation = [
   { name: "Group Policy", href: "/group-policy", icon: SlidersHorizontal },
   { name: "Network", href: "/network", icon: Network, requiresNetworkModule: true },
   { name: "Routers", href: "/routers", icon: Router, requiresRouterModule: true },
+  { name: "Legacy Hardening", href: "/legacy-hardening", icon: ShieldAlert, requiresLegacyHardening: true },
   { name: "Reports", href: "/reports", icon: ClipboardList },
   { name: "AI Advisor", href: "/recommendations", icon: Sparkles },
   { name: "Deploy Agent", href: "/deploy", icon: Download },
@@ -136,6 +138,7 @@ export function Sidebar() {
         {baseNavigation
           .filter((item) => !item.requiresNetworkModule || currentOrganization?.network_module_enabled)
           .filter((item) => !(item as any).requiresRouterModule || currentOrganization?.router_module_enabled)
+          .filter((item) => !(item as any).requiresLegacyHardening || currentOrganization?.legacy_hardening_enabled)
           .map((item) => {
           const isActive = location.pathname === item.href;
           return (

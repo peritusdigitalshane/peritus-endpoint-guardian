@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useDirectCustomers, usePartners, useAssignCustomerToPartner, useRenameOrganization, useDeleteOrganization } from "@/hooks/usePartners";
-import { useUpdateOrganizationNetworkModule, useUpdateOrganizationRouterModule } from "@/hooks/useSuperAdmin";
+import { useUpdateOrganizationNetworkModule, useUpdateOrganizationRouterModule, useUpdateOrganizationLegacyHardening } from "@/hooks/useSuperAdmin";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -30,13 +30,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Building2, Monitor, ChevronRight, Loader2, Network, Router, Pencil, Trash2, Check, X } from "lucide-react";
+import { Building2, Monitor, ChevronRight, Loader2, Network, Router, Pencil, Trash2, Check, X, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { useTenant } from "@/contexts/TenantContext";
 
 export function DirectCustomersSection() {
   const updateNetworkModule = useUpdateOrganizationNetworkModule();
   const updateRouterModule = useUpdateOrganizationRouterModule();
+  const updateLegacyHardening = useUpdateOrganizationLegacyHardening();
   const { data: customers, isLoading } = useDirectCustomers();
   const { data: partners } = usePartners();
   const assignToPartner = useAssignCustomerToPartner();
@@ -119,6 +120,7 @@ export function DirectCustomersSection() {
               <TableHead>Endpoints</TableHead>
               <TableHead className="text-center">Network</TableHead>
               <TableHead className="text-center">Routers</TableHead>
+              <TableHead className="text-center">Hardening</TableHead>
               <TableHead>Created</TableHead>
               <TableHead>Assign to Partner</TableHead>
               <TableHead className="w-[100px]">Actions</TableHead>
@@ -212,6 +214,31 @@ export function DirectCustomersSection() {
                     {customer.router_module_enabled ? "Enabled" : "Disabled"}
                   </Button>
                 </TableCell>
+                <TableCell className="text-center">
+                  <Button
+                    variant={customer.legacy_hardening_enabled ? "default" : "outline"}
+                    size="sm"
+                    className="text-xs"
+                    onClick={() => {
+                      updateLegacyHardening.mutate(
+                        { id: customer.id, legacyHardeningEnabled: !customer.legacy_hardening_enabled },
+                        {
+                          onSuccess: () => {
+                            toast.success(
+                              customer.legacy_hardening_enabled 
+                                ? `Legacy Hardening disabled for ${customer.name}` 
+                                : `Legacy Hardening enabled for ${customer.name}`
+                            );
+                          },
+                        }
+                      );
+                    }}
+                    disabled={updateLegacyHardening.isPending}
+                  >
+                    <ShieldAlert className="h-3 w-3 mr-1" />
+                    {customer.legacy_hardening_enabled ? "Enabled" : "Disabled"}
+                  </Button>
+                </TableCell>
                 <TableCell className="text-muted-foreground">
                   {new Date(customer.created_at).toLocaleDateString()}
                 </TableCell>
@@ -267,7 +294,7 @@ export function DirectCustomersSection() {
             ))}
             {customers?.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                   No direct customers found. All customers are assigned to partners.
                 </TableCell>
               </TableRow>
