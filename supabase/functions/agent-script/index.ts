@@ -1832,29 +1832,74 @@ if ($isFirstRun) {
     Ensure-TrayStartupAndLaunch
 }
 
+Initialize-TlsSettings
+
 Check-AgentUpdate -AgentToken $agentToken
 
 Send-Heartbeat -AgentToken $agentToken
 Send-Threats -AgentToken $agentToken
 Send-DefenderLogs -AgentToken $agentToken
 
+# Apply Defender policy with rollback
 $policy = Get-AssignedPolicy -AgentToken $agentToken
-if ($policy) { Apply-Policy -Policy $policy -Force:$ForcePolicy }
+if ($policy) {
+    $backupFile = Backup-CurrentSettings -PolicyType "defender"
+    try { Apply-Policy -Policy $policy -Force:$ForcePolicy }
+    catch {
+        Write-Log "Defender policy enforcement failed: $_" -Level "ERROR"
+        Add-HealthError -Component "defender_policy" -Message "Enforcement failed: $_" -Severity "error"
+        Restore-FromBackup -BackupFile $backupFile -PolicyType "defender"
+    }
+}
 
+# Apply UAC policy with rollback
 $uacPolicy = Get-UacPolicy -AgentToken $agentToken
-if ($uacPolicy -and $uacPolicy.success -and $uacPolicy.policy) { Apply-UacPolicy -Policy $uacPolicy.policy -Force:$ForcePolicy }
+if ($uacPolicy -and $uacPolicy.success -and $uacPolicy.policy) {
+    $backupFile = Backup-CurrentSettings -PolicyType "uac"
+    try { Apply-UacPolicy -Policy $uacPolicy.policy -Force:$ForcePolicy }
+    catch {
+        Write-Log "UAC policy enforcement failed: $_" -Level "ERROR"
+        Add-HealthError -Component "uac_policy" -Message "Enforcement failed: $_" -Severity "error"
+        Restore-FromBackup -BackupFile $backupFile -PolicyType "uac"
+    }
+}
 
+# Apply Windows Update policy
 $wuPolicy = Get-WindowsUpdatePolicy -AgentToken $agentToken
-if ($wuPolicy -and $wuPolicy.success -and $wuPolicy.policy) { Apply-WindowsUpdatePolicy -Policy $wuPolicy.policy -Force:$ForcePolicy }
+if ($wuPolicy -and $wuPolicy.success -and $wuPolicy.policy) {
+    try { Apply-WindowsUpdatePolicy -Policy $wuPolicy.policy -Force:$ForcePolicy }
+    catch {
+        Write-Log "Windows Update policy enforcement failed: $_" -Level "ERROR"
+        Add-HealthError -Component "wu_policy" -Message "Enforcement failed: $_" -Severity "error"
+    }
+}
 
+# Apply GPO policy - skip if domain-joined (domain GPO takes precedence)
 $gpoPolicy = Get-GpoPolicy -AgentToken $agentToken
-if ($gpoPolicy -and $gpoPolicy.has_policy -and $gpoPolicy.policy) { Apply-GpoPolicy -Policy $gpoPolicy.policy -Force:$ForcePolicy }
+if ($gpoPolicy -and $gpoPolicy.has_policy -and $gpoPolicy.policy) {
+    $isDomainJoined = Test-DomainJoined
+    if ($isDomainJoined) {
+        Write-Log "Skipping local GPO enforcement - machine is domain-joined. Domain GPO policies take precedence." -Level "WARN"
+        Add-HealthError -Component "gpo_policy" -Message "Skipped: machine is domain-joined" -Severity "info"
+    } else {
+        $backupFile = Backup-CurrentSettings -PolicyType "gpo"
+        try { Apply-GpoPolicy -Policy $gpoPolicy.policy -Force:$ForcePolicy }
+        catch {
+            Write-Log "GPO policy enforcement failed: $_" -Level "ERROR"
+            Add-HealthError -Component "gpo_policy" -Message "Enforcement failed: $_" -Severity "error"
+            Restore-FromBackup -BackupFile $backupFile -PolicyType "gpo"
+        }
+    }
+}
 
 try {
     $wdacResponse = Get-WdacRules -AgentToken $agentToken
     if ($wdacResponse -and $wdacResponse.rules -and $wdacResponse.rules.Count -gt 0) { Apply-WdacRules -PolicyResponse $wdacResponse -AgentToken $agentToken }
     elseif ($wdacResponse -and $wdacResponse.rules_count -eq 0) { Remove-WdacCiPolicy }
-} catch { Write-Log "WDAC enforcement error: $_" -Level "WARN" }
+} catch {
+    Write-Log "WDAC enforcement error: $_" -Level "WARN"
+    Add-HealthError -Component "wdac" -Message "Enforcement error: $_" -Severity "error"
+}
 
 if ($script:NetworkModuleEnabled) {
     Ensure-FirewallTelemetry
@@ -1864,6 +1909,9 @@ if ($script:NetworkModuleEnabled) {
 }
 
 Send-DiscoveredApps -AgentToken $agentToken
+
+# Send health report with any errors collected during this run
+Send-HealthReport -AgentToken $agentToken
 
 Write-Log "Agent run complete"
 `;
