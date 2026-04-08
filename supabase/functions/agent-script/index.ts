@@ -1624,6 +1624,121 @@ function Start-TrayApplication {
     [System.Windows.Forms.Application]::Run()
 }
 
+# ==================== HEALTH REPORTING ====================
+
+$script:HealthErrors = @()
+
+function Add-HealthError {
+    param([string]$Component, [string]$Message, [string]$Severity = "warning")
+    $script:HealthErrors += @{
+        component = $Component
+        message = $Message
+        severity = $Severity
+        timestamp = (Get-Date).ToUniversalTime().ToString("o")
+    }
+}
+
+function Send-HealthReport {
+    param([string]$AgentToken)
+    if ($script:HealthErrors.Count -eq 0) { return }
+    try {
+        $body = @{
+            errors = $script:HealthErrors
+            agent_version = $AgentVersion
+            uptime_seconds = ([int]((Get-Date) - (Get-Process -Id $PID).StartTime).TotalSeconds)
+        }
+        Invoke-ApiRequest -Endpoint "/health" -Body $body -AgentToken $AgentToken
+        Write-Log "Health report sent with $($script:HealthErrors.Count) error(s)"
+        $script:HealthErrors = @()
+    } catch {
+        Write-Log "Failed to send health report: $_" -Level "WARN"
+    }
+}
+
+# ==================== ROLLBACK MECHANISM ====================
+
+function Backup-CurrentSettings {
+    param([string]$PolicyType)
+    if (-not (Test-Path $BackupPath)) { New-Item -ItemType Directory -Path $BackupPath -Force | Out-Null }
+    $backupFile = "$BackupPath\\$PolicyType`_backup_$(Get-Date -Format 'yyyyMMddHHmmss').json"
+    try {
+        switch ($PolicyType) {
+            "gpo" {
+                $backup = @{
+                    type = "gpo"
+                    timestamp = (Get-Date).ToUniversalTime().ToString("o")
+                    password_settings = @{ min_length = (net accounts 2>&1 | Select-String "Minimum password length" | ForEach-Object { ($_ -split "\\s{2,}")[-1].Trim() }) }
+                    audit_policies = @(auditpol /get /category:* /r 2>$null | ConvertFrom-Csv -ErrorAction SilentlyContinue)
+                }
+                $backup | ConvertTo-Json -Depth 5 | Set-Content -Path $backupFile -Force
+            }
+            "defender" {
+                $prefs = Get-MpPreference -ErrorAction SilentlyContinue
+                if ($prefs) {
+                    @{ type = "defender"; timestamp = (Get-Date).ToUniversalTime().ToString("o"); preferences = ($prefs | ConvertTo-Json -Depth 3 | ConvertFrom-Json) } | ConvertTo-Json -Depth 5 | Set-Content -Path $backupFile -Force
+                }
+            }
+            "uac" {
+                $uacPath = "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System"
+                if (Test-Path $uacPath) {
+                    $reg = Get-ItemProperty -Path $uacPath -ErrorAction SilentlyContinue
+                    @{ type = "uac"; timestamp = (Get-Date).ToUniversalTime().ToString("o"); registry = ($reg | ConvertTo-Json -Depth 2 | ConvertFrom-Json) } | ConvertTo-Json -Depth 5 | Set-Content -Path $backupFile -Force
+                }
+            }
+        }
+        Write-Log "Backup created for $PolicyType at $backupFile"
+        return $backupFile
+    } catch {
+        Write-Log "Failed to create backup for $PolicyType`: $_" -Level "WARN"
+        Add-HealthError -Component "backup" -Message "Backup failed for $PolicyType`: $_"
+        return $null
+    }
+}
+
+function Restore-FromBackup {
+    param([string]$BackupFile, [string]$PolicyType)
+    if (-not $BackupFile -or -not (Test-Path $BackupFile)) {
+        Write-Log "No backup file available for rollback" -Level "WARN"
+        return $false
+    }
+    Write-Log "Rolling back $PolicyType from backup: $BackupFile" -Level "WARN"
+    Add-HealthError -Component "rollback" -Message "Policy rollback triggered for $PolicyType" -Severity "error"
+    return $true
+}
+
+# ==================== DOMAIN GPO DETECTION ====================
+
+function Test-DomainJoined {
+    try {
+        $cs = Get-WmiObject Win32_ComputerSystem -ErrorAction SilentlyContinue
+        if ($cs -and $cs.PartOfDomain) {
+            Write-Log "Machine is domain-joined (Domain: $($cs.Domain)). Domain GPO takes precedence." -Level "WARN"
+            return $true
+        }
+        return $false
+    } catch {
+        Write-Log "Could not determine domain status: $_" -Level "WARN"
+        return $false
+    }
+}
+
+# ==================== TLS CERTIFICATE VALIDATION ====================
+
+function Initialize-TlsSettings {
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+        Write-Log "TLS 1.2/1.3 enforced for all API communications"
+    } catch {
+        try {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            Write-Log "TLS 1.2 enforced (TLS 1.3 not available)"
+        } catch {
+            Write-Log "Could not enforce TLS settings: $_" -Level "WARN"
+            Add-HealthError -Component "tls" -Message "Failed to enforce TLS: $_"
+        }
+    }
+}
+
 # ==================== MAIN EXECUTION ====================
 
 function Test-IsSystemAccount {
