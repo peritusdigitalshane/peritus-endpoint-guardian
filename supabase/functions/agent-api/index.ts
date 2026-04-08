@@ -255,6 +255,11 @@ Deno.serve(async (req) => {
       return await handleGetStatus(req);
     }
 
+    // Route: POST /health - Report agent health/errors
+    if (path === "/health" && req.method === "POST") {
+      return await handleHealthReport(req);
+    }
+
     // Route: GET /agent-update - Check for agent updates and get new script
     if (path === "/agent-update" && req.method === "GET") {
       return await handleAgentUpdate(req);
