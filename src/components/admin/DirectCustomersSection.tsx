@@ -120,6 +120,7 @@ export function DirectCustomersSection() {
               <TableHead>Endpoints</TableHead>
               <TableHead className="text-center">Network</TableHead>
               <TableHead className="text-center">Routers</TableHead>
+              <TableHead className="text-center">Hardening</TableHead>
               <TableHead>Created</TableHead>
               <TableHead>Assign to Partner</TableHead>
               <TableHead className="w-[100px]">Actions</TableHead>
