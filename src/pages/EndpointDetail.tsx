@@ -26,10 +26,10 @@ const getEndpointStatus = (isOnline: boolean, lastSeenAt: string | null): "healt
 const BooleanIndicator = ({ value, label }: { value: boolean | null; label: string }) => (
   <div className="flex items-center justify-between py-2">
     <span className="text-sm text-muted-foreground">{label}</span>
-    {value === null ? (
+  {value === null ? (
       <span className="text-xs text-muted-foreground">N/A</span>
     ) : value ? (
-      <CheckCircle2 className="h-4 w-4 text-green-500" />
+      <CheckCircle2 className="h-4 w-4 text-status-healthy" />
     ) : (
       <XCircle className="h-4 w-4 text-destructive" />
     )}
