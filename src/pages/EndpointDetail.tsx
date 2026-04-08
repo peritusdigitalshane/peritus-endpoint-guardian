@@ -10,8 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  ArrowLeft, Monitor, Shield, Clock, AlertTriangle, ScrollText,
-  Activity, HardDrive, CheckCircle2, XCircle, RefreshCw, FileText
+  ArrowLeft, Monitor, Shield, AlertTriangle, ScrollText,
+  Activity, HardDrive, CheckCircle2, XCircle, FileText
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 
