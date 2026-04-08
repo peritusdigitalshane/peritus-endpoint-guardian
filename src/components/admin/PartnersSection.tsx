@@ -82,6 +82,7 @@ export function PartnersSection() {
       parent_partner_id: null,
       network_module_enabled: partner.network_module_enabled ?? false,
       router_module_enabled: partner.router_module_enabled ?? false,
+      legacy_hardening_enabled: partner.legacy_hardening_enabled ?? false,
     });
   };
 
@@ -302,6 +303,7 @@ function PartnerCustomersSheet({
       parent_partner_id: customer.parent_partner_id,
       network_module_enabled: customer.network_module_enabled ?? false,
       router_module_enabled: customer.router_module_enabled ?? false,
+      legacy_hardening_enabled: customer.legacy_hardening_enabled ?? false,
     });
     onClose();
   };
