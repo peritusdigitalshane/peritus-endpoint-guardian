@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Monitor, Shield, Clock, ChevronRight, Loader2, Trash2 } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useEndpoints, useDeleteEndpoint } from "@/hooks/useDashboardData";
@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,6 +25,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { BulkActionsToolbar } from "@/components/endpoints/BulkActionsToolbar";
 
 const getEndpointStatus = (
   isOnline: boolean,
@@ -69,6 +71,25 @@ export function EndpointsTable({ limit, showHeader = true }: EndpointsTableProps
   const deleteEndpoint = useDeleteEndpoint();
   const { toast } = useToast();
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleAll = useCallback(() => {
+    const all = endpoints || [];
+    const display = limit ? all.slice(0, limit) : all;
+    if (selectedIds.size === display.length && display.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(display.map(e => e.id)));
+    }
+  }, [endpoints, limit, selectedIds.size]);
 
   const handlePolicyChange = async (endpointId: string, policyId: string) => {
     try {
@@ -137,6 +158,15 @@ export function EndpointsTable({ limit, showHeader = true }: EndpointsTableProps
         </div>
       )}
 
+      {/* Bulk Actions Toolbar */}
+      {!limit && (
+        <BulkActionsToolbar
+          selectedIds={selectedIds}
+          onClearSelection={() => setSelectedIds(new Set())}
+          endpoints={displayEndpoints}
+        />
+      )}
+
       {displayEndpoints.length === 0 ? (
         <div className="p-8 text-center">
           <Monitor className="mx-auto h-12 w-12 text-muted-foreground/50 mb-3" />
@@ -150,6 +180,14 @@ export function EndpointsTable({ limit, showHeader = true }: EndpointsTableProps
           <table className="w-full">
             <thead>
               <tr className="border-b border-border bg-secondary/50">
+                {!limit && (
+                  <th className="px-3 py-3 w-10">
+                    <Checkbox
+                      checked={selectedIds.size === displayEndpoints.length && displayEndpoints.length > 0}
+                      onCheckedChange={toggleAll}
+                    />
+                  </th>
+                )}
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Endpoint
                 </th>
@@ -186,6 +224,14 @@ export function EndpointsTable({ limit, showHeader = true }: EndpointsTableProps
                     key={endpoint.id}
                     className="group transition-colors hover:bg-secondary/30"
                   >
+                    {!limit && (
+                      <td className="px-3 py-4">
+                        <Checkbox
+                          checked={selectedIds.has(endpoint.id)}
+                          onCheckedChange={() => toggleSelect(endpoint.id)}
+                        />
+                      </td>
+                    )}
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-3">
                         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary">

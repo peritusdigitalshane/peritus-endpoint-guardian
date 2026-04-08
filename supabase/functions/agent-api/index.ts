@@ -1821,3 +1821,45 @@ async function handleGetFirewallPolicy(req: Request) {
     { headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
 }
+
+// POST /health - Receive health/error reports from agent
+async function handleHealthReport(req: Request) {
+  const endpoint = await validateAgentToken(req);
+  const body = await req.json();
+
+  const errors = Array.isArray(body?.errors) ? body.errors : [];
+  const agentVersion = body?.agent_version || null;
+
+  // Store each error as an endpoint_log
+  for (const err of errors.slice(0, 50)) {
+    await supabase.from("endpoint_logs").insert({
+      endpoint_id: endpoint.id,
+      log_type: "health",
+      message: `[${err.component || "unknown"}] ${err.message || "No message"}`,
+      details: {
+        severity: err.severity || "warning",
+        component: err.component,
+        timestamp: err.timestamp,
+        agent_version: agentVersion,
+      },
+    });
+  }
+
+  // Create alerts for critical errors
+  const criticalErrors = errors.filter((e: any) => e.severity === "error" || e.severity === "critical");
+  if (criticalErrors.length > 0) {
+    await supabase.from("alerts").insert({
+      organization_id: endpoint.organization_id,
+      endpoint_id: endpoint.id,
+      alert_type: "agent_health",
+      severity: "high",
+      title: `Agent health issues on ${endpoint.hostname}`,
+      message: `${criticalErrors.length} error(s) reported: ${criticalErrors.map((e: any) => e.message).join("; ").slice(0, 500)}`,
+    });
+  }
+
+  return new Response(
+    JSON.stringify({ success: true, errors_received: errors.length }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}

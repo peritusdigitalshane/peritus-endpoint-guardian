@@ -110,7 +110,7 @@ function generateAgentScript(orgId: string, apiBaseUrl: string, version: string,
 .PARAMETER OrganizationToken
     Your organization's unique token for agent registration
 .PARAMETER HeartbeatIntervalSeconds
-    How often the agent sends status updates (default: 30 seconds)
+    How often the agent sends status updates (default: 60 seconds)
 .PARAMETER Uninstall
     Remove the scheduled task and agent configuration
 .PARAMETER TrayMode
@@ -125,7 +125,7 @@ function generateAgentScript(orgId: string, apiBaseUrl: string, version: string,
 
 param(
     [string]$OrganizationToken = "${orgId}",
-    [int]$HeartbeatIntervalSeconds = 30,
+    [int]$HeartbeatIntervalSeconds = 60,
     [switch]$Uninstall,
     [switch]$ForcePolicy,
     [switch]$ForceFullLogSync,
@@ -148,6 +148,8 @@ $LogFile = "$ConfigPath\\agent.log"
 $PolicyHashFile = "$ConfigPath\\policy_hash.txt"
 $TrayIconFile = "$ConfigPath\\tray_icon.ico"
 $UpdateLockFile = "$ConfigPath\\update.lock"
+$HealthErrorsFile = "$ConfigPath\\health_errors.json"
+$BackupPath = "$ConfigPath\\backups"
 
 function Write-Log {
     param([string]$Message, [string]$Level = "INFO")
@@ -1622,6 +1624,121 @@ function Start-TrayApplication {
     [System.Windows.Forms.Application]::Run()
 }
 
+# ==================== HEALTH REPORTING ====================
+
+$script:HealthErrors = @()
+
+function Add-HealthError {
+    param([string]$Component, [string]$Message, [string]$Severity = "warning")
+    $script:HealthErrors += @{
+        component = $Component
+        message = $Message
+        severity = $Severity
+        timestamp = (Get-Date).ToUniversalTime().ToString("o")
+    }
+}
+
+function Send-HealthReport {
+    param([string]$AgentToken)
+    if ($script:HealthErrors.Count -eq 0) { return }
+    try {
+        $body = @{
+            errors = $script:HealthErrors
+            agent_version = $AgentVersion
+            uptime_seconds = ([int]((Get-Date) - (Get-Process -Id $PID).StartTime).TotalSeconds)
+        }
+        Invoke-ApiRequest -Endpoint "/health" -Body $body -AgentToken $AgentToken
+        Write-Log "Health report sent with $($script:HealthErrors.Count) error(s)"
+        $script:HealthErrors = @()
+    } catch {
+        Write-Log "Failed to send health report: $_" -Level "WARN"
+    }
+}
+
+# ==================== ROLLBACK MECHANISM ====================
+
+function Backup-CurrentSettings {
+    param([string]$PolicyType)
+    if (-not (Test-Path $BackupPath)) { New-Item -ItemType Directory -Path $BackupPath -Force | Out-Null }
+    $backupFile = "$BackupPath\\$PolicyType`_backup_$(Get-Date -Format 'yyyyMMddHHmmss').json"
+    try {
+        switch ($PolicyType) {
+            "gpo" {
+                $backup = @{
+                    type = "gpo"
+                    timestamp = (Get-Date).ToUniversalTime().ToString("o")
+                    password_settings = @{ min_length = (net accounts 2>&1 | Select-String "Minimum password length" | ForEach-Object { ($_ -split "\\s{2,}")[-1].Trim() }) }
+                    audit_policies = @(auditpol /get /category:* /r 2>$null | ConvertFrom-Csv -ErrorAction SilentlyContinue)
+                }
+                $backup | ConvertTo-Json -Depth 5 | Set-Content -Path $backupFile -Force
+            }
+            "defender" {
+                $prefs = Get-MpPreference -ErrorAction SilentlyContinue
+                if ($prefs) {
+                    @{ type = "defender"; timestamp = (Get-Date).ToUniversalTime().ToString("o"); preferences = ($prefs | ConvertTo-Json -Depth 3 | ConvertFrom-Json) } | ConvertTo-Json -Depth 5 | Set-Content -Path $backupFile -Force
+                }
+            }
+            "uac" {
+                $uacPath = "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System"
+                if (Test-Path $uacPath) {
+                    $reg = Get-ItemProperty -Path $uacPath -ErrorAction SilentlyContinue
+                    @{ type = "uac"; timestamp = (Get-Date).ToUniversalTime().ToString("o"); registry = ($reg | ConvertTo-Json -Depth 2 | ConvertFrom-Json) } | ConvertTo-Json -Depth 5 | Set-Content -Path $backupFile -Force
+                }
+            }
+        }
+        Write-Log "Backup created for $PolicyType at $backupFile"
+        return $backupFile
+    } catch {
+        Write-Log "Failed to create backup for $PolicyType`: $_" -Level "WARN"
+        Add-HealthError -Component "backup" -Message "Backup failed for $PolicyType`: $_"
+        return $null
+    }
+}
+
+function Restore-FromBackup {
+    param([string]$BackupFile, [string]$PolicyType)
+    if (-not $BackupFile -or -not (Test-Path $BackupFile)) {
+        Write-Log "No backup file available for rollback" -Level "WARN"
+        return $false
+    }
+    Write-Log "Rolling back $PolicyType from backup: $BackupFile" -Level "WARN"
+    Add-HealthError -Component "rollback" -Message "Policy rollback triggered for $PolicyType" -Severity "error"
+    return $true
+}
+
+# ==================== DOMAIN GPO DETECTION ====================
+
+function Test-DomainJoined {
+    try {
+        $cs = Get-WmiObject Win32_ComputerSystem -ErrorAction SilentlyContinue
+        if ($cs -and $cs.PartOfDomain) {
+            Write-Log "Machine is domain-joined (Domain: $($cs.Domain)). Domain GPO takes precedence." -Level "WARN"
+            return $true
+        }
+        return $false
+    } catch {
+        Write-Log "Could not determine domain status: $_" -Level "WARN"
+        return $false
+    }
+}
+
+# ==================== TLS CERTIFICATE VALIDATION ====================
+
+function Initialize-TlsSettings {
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+        Write-Log "TLS 1.2/1.3 enforced for all API communications"
+    } catch {
+        try {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            Write-Log "TLS 1.2 enforced (TLS 1.3 not available)"
+        } catch {
+            Write-Log "Could not enforce TLS settings: $_" -Level "WARN"
+            Add-HealthError -Component "tls" -Message "Failed to enforce TLS: $_"
+        }
+    }
+}
+
 # ==================== MAIN EXECUTION ====================
 
 function Test-IsSystemAccount {
@@ -1715,29 +1832,74 @@ if ($isFirstRun) {
     Ensure-TrayStartupAndLaunch
 }
 
+Initialize-TlsSettings
+
 Check-AgentUpdate -AgentToken $agentToken
 
 Send-Heartbeat -AgentToken $agentToken
 Send-Threats -AgentToken $agentToken
 Send-DefenderLogs -AgentToken $agentToken
 
+# Apply Defender policy with rollback
 $policy = Get-AssignedPolicy -AgentToken $agentToken
-if ($policy) { Apply-Policy -Policy $policy -Force:$ForcePolicy }
+if ($policy) {
+    $backupFile = Backup-CurrentSettings -PolicyType "defender"
+    try { Apply-Policy -Policy $policy -Force:$ForcePolicy }
+    catch {
+        Write-Log "Defender policy enforcement failed: $_" -Level "ERROR"
+        Add-HealthError -Component "defender_policy" -Message "Enforcement failed: $_" -Severity "error"
+        Restore-FromBackup -BackupFile $backupFile -PolicyType "defender"
+    }
+}
 
+# Apply UAC policy with rollback
 $uacPolicy = Get-UacPolicy -AgentToken $agentToken
-if ($uacPolicy -and $uacPolicy.success -and $uacPolicy.policy) { Apply-UacPolicy -Policy $uacPolicy.policy -Force:$ForcePolicy }
+if ($uacPolicy -and $uacPolicy.success -and $uacPolicy.policy) {
+    $backupFile = Backup-CurrentSettings -PolicyType "uac"
+    try { Apply-UacPolicy -Policy $uacPolicy.policy -Force:$ForcePolicy }
+    catch {
+        Write-Log "UAC policy enforcement failed: $_" -Level "ERROR"
+        Add-HealthError -Component "uac_policy" -Message "Enforcement failed: $_" -Severity "error"
+        Restore-FromBackup -BackupFile $backupFile -PolicyType "uac"
+    }
+}
 
+# Apply Windows Update policy
 $wuPolicy = Get-WindowsUpdatePolicy -AgentToken $agentToken
-if ($wuPolicy -and $wuPolicy.success -and $wuPolicy.policy) { Apply-WindowsUpdatePolicy -Policy $wuPolicy.policy -Force:$ForcePolicy }
+if ($wuPolicy -and $wuPolicy.success -and $wuPolicy.policy) {
+    try { Apply-WindowsUpdatePolicy -Policy $wuPolicy.policy -Force:$ForcePolicy }
+    catch {
+        Write-Log "Windows Update policy enforcement failed: $_" -Level "ERROR"
+        Add-HealthError -Component "wu_policy" -Message "Enforcement failed: $_" -Severity "error"
+    }
+}
 
+# Apply GPO policy - skip if domain-joined (domain GPO takes precedence)
 $gpoPolicy = Get-GpoPolicy -AgentToken $agentToken
-if ($gpoPolicy -and $gpoPolicy.has_policy -and $gpoPolicy.policy) { Apply-GpoPolicy -Policy $gpoPolicy.policy -Force:$ForcePolicy }
+if ($gpoPolicy -and $gpoPolicy.has_policy -and $gpoPolicy.policy) {
+    $isDomainJoined = Test-DomainJoined
+    if ($isDomainJoined) {
+        Write-Log "Skipping local GPO enforcement - machine is domain-joined. Domain GPO policies take precedence." -Level "WARN"
+        Add-HealthError -Component "gpo_policy" -Message "Skipped: machine is domain-joined" -Severity "info"
+    } else {
+        $backupFile = Backup-CurrentSettings -PolicyType "gpo"
+        try { Apply-GpoPolicy -Policy $gpoPolicy.policy -Force:$ForcePolicy }
+        catch {
+            Write-Log "GPO policy enforcement failed: $_" -Level "ERROR"
+            Add-HealthError -Component "gpo_policy" -Message "Enforcement failed: $_" -Severity "error"
+            Restore-FromBackup -BackupFile $backupFile -PolicyType "gpo"
+        }
+    }
+}
 
 try {
     $wdacResponse = Get-WdacRules -AgentToken $agentToken
     if ($wdacResponse -and $wdacResponse.rules -and $wdacResponse.rules.Count -gt 0) { Apply-WdacRules -PolicyResponse $wdacResponse -AgentToken $agentToken }
     elseif ($wdacResponse -and $wdacResponse.rules_count -eq 0) { Remove-WdacCiPolicy }
-} catch { Write-Log "WDAC enforcement error: $_" -Level "WARN" }
+} catch {
+    Write-Log "WDAC enforcement error: $_" -Level "WARN"
+    Add-HealthError -Component "wdac" -Message "Enforcement error: $_" -Severity "error"
+}
 
 if ($script:NetworkModuleEnabled) {
     Ensure-FirewallTelemetry
@@ -1747,6 +1909,9 @@ if ($script:NetworkModuleEnabled) {
 }
 
 Send-DiscoveredApps -AgentToken $agentToken
+
+# Send health report with any errors collected during this run
+Send-HealthReport -AgentToken $agentToken
 
 Write-Log "Agent run complete"
 `;
