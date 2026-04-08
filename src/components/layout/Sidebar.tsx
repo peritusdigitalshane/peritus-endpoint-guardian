@@ -54,6 +54,7 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const { currentOrganization, isSuperAdmin, isImpersonating, isLoading } = useTenant();
+  const { data: alertCount } = useUnacknowledgedAlertCount();
 
   return (
     <aside
