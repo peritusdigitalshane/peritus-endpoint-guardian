@@ -20,6 +20,7 @@ import { UacPoliciesManager } from "@/components/security/UacPoliciesManager";
 import { EndpointUacList } from "@/components/security/EndpointUacList";
 import { WindowsUpdatePoliciesManager } from "@/components/security/WindowsUpdatePoliciesManager";
 import { EndpointWindowsUpdateList } from "@/components/security/EndpointWindowsUpdateList";
+import { AuditModeManager } from "@/components/policies/AuditModeManager";
 
 const Policies = () => {
   const [editorOpen, setEditorOpen] = useState(false);
