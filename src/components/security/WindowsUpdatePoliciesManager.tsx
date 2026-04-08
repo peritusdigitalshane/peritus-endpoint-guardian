@@ -49,7 +49,7 @@ export function WindowsUpdatePoliciesManager() {
 
   const handleConfirmDelete = async () => {
     if (policyToDelete) {
-      await deletePolicy.mutateAsync(policyToDelete.id);
+      await deletePolicy.mutateAsync({ id: policyToDelete.id, name: policyToDelete.name });
       setDeleteDialogOpen(false);
       setPolicyToDelete(null);
     }

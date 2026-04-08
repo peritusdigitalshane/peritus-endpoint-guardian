@@ -255,6 +255,11 @@ Deno.serve(async (req) => {
       return await handleGetStatus(req);
     }
 
+    // Route: POST /health - Report agent health/errors
+    if (path === "/health" && req.method === "POST") {
+      return await handleHealthReport(req);
+    }
+
     // Route: GET /agent-update - Check for agent updates and get new script
     if (path === "/agent-update" && req.method === "GET") {
       return await handleAgentUpdate(req);
@@ -1305,43 +1310,55 @@ async function handleGetWindowsUpdatePolicy(req: Request) {
   );
 }
 
-// GET /gpo-policy - Get assigned GPO policy for an endpoint (via group only)
+// GET /gpo-policy - Get assigned GPO policy for an endpoint (via group, with priority)
 async function handleGetGpoPolicy(req: Request) {
   const endpoint = await validateAgentToken(req);
 
-  // GPO policies are assigned via groups only
+  // GPO policies are assigned via groups - fetch ALL memberships with group details
   const { data: groupMemberships } = await supabase
     .from("endpoint_group_memberships")
     .select(`
       group_id,
-      endpoint_groups(gpo_policy_id)
+      endpoint_groups(id, gpo_policy_id, name, created_at)
     `)
     .eq("endpoint_id", endpoint.id);
 
-  for (const membership of groupMemberships || []) {
-    const group = membership.endpoint_groups as unknown as { gpo_policy_id: string | null } | null;
-    if (group?.gpo_policy_id) {
-      const { data: policy } = await supabase
-        .from("gpo_policies")
-        .select("*")
-        .eq("id", group.gpo_policy_id)
-        .maybeSingle();
+  // Collect all groups that have a GPO policy, sorted by created_at (earliest wins)
+  const groupsWithGpo = (groupMemberships || [])
+    .map((m) => m.endpoint_groups as unknown as { id: string; gpo_policy_id: string | null; name: string; created_at: string } | null)
+    .filter((g): g is { id: string; gpo_policy_id: string; name: string; created_at: string } => !!g?.gpo_policy_id)
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
-      if (policy) {
-        return new Response(
-          JSON.stringify({
-            has_policy: true,
-            source: "group",
-            policy,
-          }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-    }
+  if (groupsWithGpo.length === 0) {
+    return new Response(
+      JSON.stringify({ has_policy: false }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  // Use the first (oldest/highest priority) group's GPO policy
+  const winningGroup = groupsWithGpo[0];
+  const { data: policy } = await supabase
+    .from("gpo_policies")
+    .select("*")
+    .eq("id", winningGroup.gpo_policy_id)
+    .maybeSingle();
+
+  if (!policy) {
+    return new Response(
+      JSON.stringify({ has_policy: false }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 
   return new Response(
-    JSON.stringify({ has_policy: false }),
+    JSON.stringify({
+      has_policy: true,
+      source: "group",
+      source_group: winningGroup.name,
+      conflicts: groupsWithGpo.length > 1 ? groupsWithGpo.length : 0,
+      policy,
+    }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
 }
@@ -1749,14 +1766,36 @@ async function handleGetFirewallPolicy(req: Request) {
       let resolvedSourceIps: string[] = [...(rule.allowed_source_ips || [])];
 
       if (rule.action === "allow_from_groups" && rule.allowed_source_groups?.length) {
-        // Get endpoints in source groups
+        // Get endpoints in source groups and resolve their last known IPs
         const { data: sourceEndpoints } = await supabase
           .from("endpoint_group_memberships")
-          .select("endpoint_id, endpoints(id)")
+          .select("endpoint_id, endpoints(id, hostname)")
           .in("group_id", rule.allowed_source_groups);
 
-        // For now, the agent would need to resolve IPs locally
-        // This structure tells the agent which groups are allowed
+        // Get the latest status for each source endpoint to extract reported IPs
+        const sourceEndpointIds = (sourceEndpoints || []).map((se) => {
+          const ep = se.endpoints as unknown as { id: string } | null;
+          return ep?.id;
+        }).filter(Boolean) as string[];
+
+        if (sourceEndpointIds.length > 0) {
+          const { data: sourceStatuses } = await supabase
+            .from("endpoint_status")
+            .select("endpoint_id, raw_status")
+            .in("endpoint_id", sourceEndpointIds)
+            .order("collected_at", { ascending: false });
+
+          // Extract IPs from raw_status if available
+          const seenEndpoints = new Set<string>();
+          for (const st of sourceStatuses || []) {
+            if (seenEndpoints.has(st.endpoint_id)) continue;
+            seenEndpoints.add(st.endpoint_id);
+            const raw = st.raw_status as Record<string, unknown> | null;
+            if (raw?.reported_ip && typeof raw.reported_ip === "string") {
+              resolvedSourceIps.push(raw.reported_ip);
+            }
+          }
+        }
       }
 
       return {

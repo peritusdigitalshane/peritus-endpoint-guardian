@@ -19,15 +19,18 @@ import {
   ClipboardList,
   Router,
   SlidersHorizontal,
+  Bell,
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useTenant } from "@/contexts/TenantContext";
+import { useUnacknowledgedAlertCount } from "@/hooks/useAlerts";
 
 const baseNavigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Endpoints", href: "/endpoints", icon: Monitor },
   { name: "Groups", href: "/groups", icon: FolderOpen },
+  { name: "Alerts", href: "/alerts", icon: Bell },
   { name: "Threats", href: "/threats", icon: AlertTriangle },
   { name: "Event Logs", href: "/logs", icon: ScrollText },
   { name: "Threat Hunting", href: "/threat-hunting", icon: Crosshair },
@@ -51,6 +54,7 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const { currentOrganization, isSuperAdmin, isImpersonating, isLoading } = useTenant();
+  const { data: alertCount } = useUnacknowledgedAlertCount();
 
   return (
     <aside
@@ -152,9 +156,13 @@ export function Sidebar() {
                 )}
               />
               {!collapsed && <span>{item.name}</span>}
-              {isActive && (
+              {item.name === "Alerts" && !collapsed && alertCount && alertCount > 0 ? (
+                <span className="ml-auto rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-bold text-destructive-foreground">
+                  {alertCount > 99 ? "99+" : alertCount}
+                </span>
+              ) : isActive ? (
                 <div className="ml-auto h-1.5 w-1.5 rounded-full bg-primary" />
-              )}
+              ) : null}
             </Link>
           );
         })}

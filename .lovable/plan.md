@@ -1,106 +1,83 @@
 
-# Plan: Fix PowerShell Variable Escaping in Agent Script
+# Plan: Fix All 17 Audit Findings
 
-## Problem Summary
+Items 1, 2, 7 are already fixed. Remaining: 3-6, 8-17.
 
-The Windows Firewall is not being enabled automatically because the PowerShell agent script has incorrect variable escaping. The `Ensure-FirewallTelemetry` function and `Collect-FirewallLogs` function use `\$` instead of `$` for all variable references, which produces invalid PowerShell syntax.
+## Phase 1: Agent API Fixes (Edge Functions)
 
-## Root Cause
+### Issue 3+4: GPO policy conflict resolution
+- Update `/gpo-policy` in `agent-api` to fetch ALL group memberships, pick the one with the highest-priority group (lowest `id` or explicit priority field), return that GPO policy
+- If multiple groups have GPO policies, use deterministic ordering (earliest created group wins)
 
-In the JavaScript template string within `supabase/functions/agent-script/index.ts`, starting at line 264:
+### Issue 5: Firewall source group IP resolution
+- Complete the stub in `agent-api` — resolve endpoint IPs from group memberships and return them as `allowed_source_ips`
 
-```javascript
-// Current (BROKEN) - produces literal backslash in output
-\$changed = \$false
-\$profiles = @("Domain", "Private", "Public")
-```
+### Issue 16: Heartbeat interval
+- Change agent heartbeat from 30s to 60s in `agent-script`
 
-PowerShell receives:
-```powershell
-\$changed = \$false  # Invalid - PowerShell doesn't understand \$
-```
+## Phase 2: Agent Improvements (PowerShell in agent-script)
 
-Should be:
-```powershell
-$changed = $false   # Valid PowerShell variable assignment
-```
+### Issue 13: Rollback mechanism
+- Before applying GPO/WDAC policies, export current settings to a backup file
+- On failure, restore from backup and log the error
 
-## Solution
+### Issue 14: Agent health reporting
+- Add error collection during enforcement
+- Send health/error data back to the API on each heartbeat via a new `/health` endpoint in agent-api
+- Store in `endpoint_logs` table
 
-Remove all unnecessary backslash escapes from PowerShell variable references in the `Ensure-FirewallTelemetry` and `Collect-FirewallLogs` functions. In JavaScript template literals, only `${` needs escaping (to prevent interpolation), but plain `$` followed by other characters does not.
+### Issue 15: TLS certificate pinning
+- Add `-CertificateThumbprint` or custom certificate validation callback to `Invoke-RestMethod` calls (note: basic HTTPS validation is already in place, this adds pinning)
 
-## Files to Modify
+### Issue 17: Domain GPO detection
+- Before applying GPO, check `(Get-WmiObject Win32_ComputerSystem).PartOfDomain`
+- If domain-joined, skip local GPO enforcement and log a warning
 
-| File | Change |
-|------|--------|
-| `supabase/functions/agent-script/index.ts` | Replace all `\$` with `$` in the PowerShell functions (lines 264-438) |
-| `supabase/functions/agent-script/index.ts` | Bump version to 2.11.0 to trigger agent updates |
-| `supabase/functions/agent-api/index.ts` | Bump version to match (2.11.0) |
+## Phase 3: Database & Backend
 
-## Detailed Changes
+### Issue 6: Event log retention cron
+- Create a migration to set up `pg_cron` to call the `cleanup-old-data` edge function daily
+- OR: Add a `pg_cron` job that directly deletes old event logs based on `event_log_retention_days`
 
-### 1. Fix `Ensure-FirewallTelemetry` Function (Lines 264-315)
+### Issue 8: Alert/notification system
+- Create `alerts` table (type, severity, endpoint_id, organization_id, message, acknowledged, created_at)
+- Create DB trigger that auto-creates alerts when: new threat inserted, endpoint goes offline (via function)
+- Add Alerts page in UI with badge count in sidebar
 
-Before (broken):
-```javascript
-\$changed = \$false
-\$profiles = @("Domain", "Private", "Public")
-foreach (\$profile in \$profiles) {
-    \$fwProfile = Get-NetFirewallProfile -Name \$profile
-    if (-not \$fwProfile.Enabled) {
-```
+### Issue 9: Audit trail for policy changes
+- Already have `activity_logs` table and `logActivity` calls in hooks
+- Verify all policy CRUD hooks (Defender, GPO, WDAC, UAC, WU) call `logActivity`
+- Add missing ones
 
-After (fixed):
-```javascript
-$changed = $false
-$profiles = @("Domain", "Private", "Public")
-foreach ($profile in $profiles) {
-    $fwProfile = Get-NetFirewallProfile -Name $profile
-    if (-not $fwProfile.Enabled) {
-```
+### Issue 11: RBAC improvements
+- Add `viewer` role to `org_role` enum
+- Update RLS policies to differentiate viewer (read-only) from member
+- Update UI to hide edit controls for viewers
 
-### 2. Fix `Collect-FirewallLogs` Function (Lines 318-434)
+## Phase 4: UI Improvements
 
-Same pattern - replace all `\$` with `$` for variable references like:
-- `$FirewallLogTimeFile`
-- `$headers`
-- `$lastTime`
-- `$firewallEvents`
-- `$logs`
-- etc.
+### Issue 10: Bulk endpoint actions
+- Add checkbox selection to endpoints table
+- Add bulk action toolbar (assign policy, move to group, force scan)
 
-### 3. Fix Function Calls (Lines 437-438)
+### Issue 12: Dashboard data verification
+- Audit `useDashboardData` hook to confirm it queries real aggregates, not mock data
+- Fix any remaining hardcoded values
 
-Before:
-```javascript
-Ensure-FirewallTelemetry
-Collect-FirewallLogs -AgentToken \$agentToken
-```
+## Phase 5: Test Cases
+- Edge function tests for agent-api (GPO resolution, health endpoint, firewall IP resolution)
+- Frontend component tests for alerts page, bulk actions, endpoint detail
+- Unit tests for dashboard data hooks
 
-After:
-```javascript
-Ensure-FirewallTelemetry
-Collect-FirewallLogs -AgentToken $agentToken
-```
-
-### 4. Version Bump
-
-Update `AGENT_VERSION` from `"2.10.0"` to `"2.11.0"` in both files to trigger automatic agent updates on all endpoints.
-
-## Expected Outcome
-
-After deployment:
-
-1. Agents will auto-update to v2.11.0 on their next heartbeat
-2. The `Ensure-FirewallTelemetry` function will execute correctly
-3. Windows Firewall will be enabled for Domain, Private, and Public profiles
-4. Firewall logging will be enabled
-5. Audit policy for "Filtering Platform Connection" will be configured
-6. Firewall telemetry (Event IDs 5156/5157) will start flowing to the dashboard
-
-## Testing
-
-After deployment, you can verify on an endpoint by:
-1. Checking `$env:ProgramData\PeritusSecure\agent.log` for messages like "Enabling Windows Firewall for Domain profile..."
-2. Running `Get-NetFirewallProfile` to confirm all profiles show `Enabled: True`
-3. Running `auditpol /get /subcategory:"Filtering Platform Connection"` to confirm auditing is enabled
+## Files to modify
+| File | Changes |
+|------|---------|
+| `supabase/functions/agent-api/index.ts` | GPO conflict resolution, health endpoint, firewall IP fix |
+| `supabase/functions/agent-script/index.ts` | Rollback, health reporting, TLS pinning, domain detection, 60s heartbeat |
+| `src/pages/Dashboard.tsx` | Verify real data |
+| `src/components/dashboard/EndpointsTable.tsx` | Bulk actions |
+| `src/components/layout/Sidebar.tsx` | Alert badge |
+| New: `src/pages/Alerts.tsx` | Alert management page |
+| New: `src/hooks/useAlerts.ts` | Alert data hooks |
+| Migration | alerts table, viewer role, pg_cron cleanup |
+| Tests | Edge function + frontend tests |

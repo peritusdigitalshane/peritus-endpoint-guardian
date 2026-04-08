@@ -75,6 +75,70 @@ export type Database = {
           },
         ]
       }
+      alerts: {
+        Row: {
+          acknowledged: boolean
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          alert_type: string
+          created_at: string
+          endpoint_id: string | null
+          id: string
+          message: string
+          organization_id: string
+          severity: string
+          title: string
+        }
+        Insert: {
+          acknowledged?: boolean
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          alert_type?: string
+          created_at?: string
+          endpoint_id?: string | null
+          id?: string
+          message: string
+          organization_id: string
+          severity?: string
+          title: string
+        }
+        Update: {
+          acknowledged?: boolean
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          alert_type?: string
+          created_at?: string
+          endpoint_id?: string | null
+          id?: string
+          message?: string
+          organization_id?: string
+          severity?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alerts_acknowledged_by_fkey"
+            columns: ["acknowledged_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alerts_endpoint_id_fkey"
+            columns: ["endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "endpoints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alerts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       defender_policies: {
         Row: {
           archive_scanning: boolean
@@ -2694,7 +2758,7 @@ export type Database = {
     }
     Enums: {
       asr_action: "disabled" | "enabled" | "audit"
-      org_role: "owner" | "admin" | "member"
+      org_role: "owner" | "admin" | "member" | "viewer"
       subscription_plan: "free" | "pro" | "business"
     }
     CompositeTypes: {
@@ -2824,7 +2888,7 @@ export const Constants = {
   public: {
     Enums: {
       asr_action: ["disabled", "enabled", "audit"],
-      org_role: ["owner", "admin", "member"],
+      org_role: ["owner", "admin", "member", "viewer"],
       subscription_plan: ["free", "pro", "business"],
     },
   },
