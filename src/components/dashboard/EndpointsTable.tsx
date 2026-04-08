@@ -158,6 +158,15 @@ export function EndpointsTable({ limit, showHeader = true }: EndpointsTableProps
         </div>
       )}
 
+      {/* Bulk Actions Toolbar */}
+      {!limit && (
+        <BulkActionsToolbar
+          selectedIds={selectedIds}
+          onClearSelection={() => setSelectedIds(new Set())}
+          endpoints={displayEndpoints}
+        />
+      )}
+
       {displayEndpoints.length === 0 ? (
         <div className="p-8 text-center">
           <Monitor className="mx-auto h-12 w-12 text-muted-foreground/50 mb-3" />
@@ -171,8 +180,17 @@ export function EndpointsTable({ limit, showHeader = true }: EndpointsTableProps
           <table className="w-full">
             <thead>
               <tr className="border-b border-border bg-secondary/50">
+                {!limit && (
+                  <th className="px-3 py-3 w-10">
+                    <Checkbox
+                      checked={selectedIds.size === displayEndpoints.length && displayEndpoints.length > 0}
+                      onCheckedChange={toggleAll}
+                    />
+                  </th>
+                )}
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Endpoint
+                </th>
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Operating System
