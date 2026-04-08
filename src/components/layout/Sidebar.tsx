@@ -20,6 +20,7 @@ import {
   Router,
   SlidersHorizontal,
   Bell,
+  ShieldAlert,
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
