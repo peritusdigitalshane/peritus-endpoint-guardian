@@ -301,16 +301,19 @@ function generateAgentToken(): string {
 async function validateAgentToken(req: Request) {
   const token = req.headers.get("x-agent-token");
   if (!token) {
+    console.error(`[${VERSION}] validateAgentToken: No x-agent-token header found. Headers: ${JSON.stringify(Object.fromEntries([...new Headers(req.headers).entries()].filter(([k]) => k !== 'authorization')))}`);
     throw new Error("Missing agent token");
   }
 
+  const trimmedToken = token.trim();
   const { data: endpoint, error } = await supabase
     .from("endpoints")
     .select("*")
-    .eq("agent_token", token)
+    .eq("agent_token", trimmedToken)
     .maybeSingle();
 
   if (error || !endpoint) {
+    console.error(`[${VERSION}] validateAgentToken: Token lookup failed. tokenLength=${trimmedToken.length}, tokenPrefix=${trimmedToken.substring(0, 8)}..., dbError=${error?.message || 'none'}, found=${!!endpoint}`);
     throw new Error("Invalid agent token");
   }
 
@@ -1596,9 +1599,10 @@ const AGENT_VERSION = "2.19.0";
 
 // GET /agent-update - Check for updates and return new script if needed
 async function handleAgentUpdate(req: Request) {
-  const endpoint = await validateAgentToken(req);
   const url = new URL(req.url);
   const currentVersion = url.searchParams.get("version");
+
+  console.log(`[${VERSION}] handleAgentUpdate called, currentVersion=${currentVersion}`);
 
   // Compare versions - simple semantic version comparison
   const needsUpdate = !currentVersion || compareVersions(AGENT_VERSION, currentVersion) > 0;
@@ -1614,16 +1618,13 @@ async function handleAgentUpdate(req: Request) {
     );
   }
 
-  // Fetch the agent script template from platform_settings or return a placeholder
-  // In production, this would fetch from a stored script or generate dynamically
-  const { data: orgData } = await supabase
-    .from("endpoints")
-    .select("organization_id")
-    .eq("id", endpoint.id)
-    .single();
-
-  if (!orgData) {
-    throw new Error("Endpoint organization not found");
+  // Try to get org ID from token if available, but don't fail if missing
+  let organizationId: string | null = null;
+  try {
+    const endpoint = await validateAgentToken(req);
+    organizationId = endpoint.organization_id;
+  } catch {
+    console.log(`[${VERSION}] handleAgentUpdate: token validation failed, returning update info without org ID`);
   }
 
   return new Response(
@@ -1631,7 +1632,7 @@ async function handleAgentUpdate(req: Request) {
       success: true,
       update_available: true,
       current_version: AGENT_VERSION,
-      organization_id: orgData.organization_id,
+      ...(organizationId && { organization_id: organizationId }),
       // Agent will download from the agent-script edge function using its token
       script_endpoint: `${SUPABASE_URL}/functions/v1/agent-script`,
     }),
