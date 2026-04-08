@@ -3,7 +3,7 @@ import { useEndpoints } from "@/hooks/useDashboardData";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, FileText, Shield, AlertTriangle, CheckCircle, Loader2, Layers, ShieldCheck, RefreshCw, Monitor } from "lucide-react";
+import { Plus, FileText, Shield, AlertTriangle, CheckCircle, Loader2, Layers, ShieldCheck, RefreshCw, Monitor, Eye } from "lucide-react";
 import { PolicyCard } from "@/components/policies/PolicyCard";
 import { PolicyEditor } from "@/components/policies/PolicyEditor";
 import { StatCard } from "@/components/ui/stat-card";
@@ -20,6 +20,7 @@ import { UacPoliciesManager } from "@/components/security/UacPoliciesManager";
 import { EndpointUacList } from "@/components/security/EndpointUacList";
 import { WindowsUpdatePoliciesManager } from "@/components/security/WindowsUpdatePoliciesManager";
 import { EndpointWindowsUpdateList } from "@/components/security/EndpointWindowsUpdateList";
+import { AuditModeManager } from "@/components/policies/AuditModeManager";
 
 const Policies = () => {
   const [editorOpen, setEditorOpen] = useState(false);
@@ -161,6 +162,10 @@ const Policies = () => {
               <Monitor className="h-4 w-4" />
               <span className="hidden sm:inline">Update Endpoints</span>
             </TabsTrigger>
+            <TabsTrigger value="learning" className="flex items-center gap-2">
+              <Eye className="h-4 w-4" />
+              <span className="hidden sm:inline">Learning Mode</span>
+            </TabsTrigger>
           </TabsList>
 
           {/* Defender Tab */}
@@ -253,6 +258,25 @@ const Policies = () => {
           {/* Windows Update Status Tab */}
           <TabsContent value="wu-status">
             <EndpointWindowsUpdateList />
+          </TabsContent>
+
+          {/* Learning Mode Tab */}
+          <TabsContent value="learning" className="space-y-6">
+            <div>
+              <h2 className="text-lg font-semibold">Learning Mode</h2>
+              <p className="text-sm text-muted-foreground">
+                Run policies in audit mode to baseline normal behavior before enforcing. Duration is flexible — extend or complete at any time.
+              </p>
+            </div>
+
+            {policies.length > 0 && (
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium text-muted-foreground">Defender Policies</h3>
+                {policies.map(p => (
+                  <AuditModeManager key={p.id} policyType="defender" policyId={p.id} policyName={p.name} />
+                ))}
+              </div>
+            )}
           </TabsContent>
         </Tabs>
 
