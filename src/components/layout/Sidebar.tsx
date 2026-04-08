@@ -30,6 +30,7 @@ const baseNavigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Endpoints", href: "/endpoints", icon: Monitor },
   { name: "Groups", href: "/groups", icon: FolderOpen },
+  { name: "Alerts", href: "/alerts", icon: Bell },
   { name: "Threats", href: "/threats", icon: AlertTriangle },
   { name: "Event Logs", href: "/logs", icon: ScrollText },
   { name: "Threat Hunting", href: "/threat-hunting", icon: Crosshair },
