@@ -1305,43 +1305,55 @@ async function handleGetWindowsUpdatePolicy(req: Request) {
   );
 }
 
-// GET /gpo-policy - Get assigned GPO policy for an endpoint (via group only)
+// GET /gpo-policy - Get assigned GPO policy for an endpoint (via group, with priority)
 async function handleGetGpoPolicy(req: Request) {
   const endpoint = await validateAgentToken(req);
 
-  // GPO policies are assigned via groups only
+  // GPO policies are assigned via groups - fetch ALL memberships with group details
   const { data: groupMemberships } = await supabase
     .from("endpoint_group_memberships")
     .select(`
       group_id,
-      endpoint_groups(gpo_policy_id)
+      endpoint_groups(id, gpo_policy_id, name, created_at)
     `)
     .eq("endpoint_id", endpoint.id);
 
-  for (const membership of groupMemberships || []) {
-    const group = membership.endpoint_groups as unknown as { gpo_policy_id: string | null } | null;
-    if (group?.gpo_policy_id) {
-      const { data: policy } = await supabase
-        .from("gpo_policies")
-        .select("*")
-        .eq("id", group.gpo_policy_id)
-        .maybeSingle();
+  // Collect all groups that have a GPO policy, sorted by created_at (earliest wins)
+  const groupsWithGpo = (groupMemberships || [])
+    .map((m) => m.endpoint_groups as unknown as { id: string; gpo_policy_id: string | null; name: string; created_at: string } | null)
+    .filter((g): g is { id: string; gpo_policy_id: string; name: string; created_at: string } => !!g?.gpo_policy_id)
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
-      if (policy) {
-        return new Response(
-          JSON.stringify({
-            has_policy: true,
-            source: "group",
-            policy,
-          }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-    }
+  if (groupsWithGpo.length === 0) {
+    return new Response(
+      JSON.stringify({ has_policy: false }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  // Use the first (oldest/highest priority) group's GPO policy
+  const winningGroup = groupsWithGpo[0];
+  const { data: policy } = await supabase
+    .from("gpo_policies")
+    .select("*")
+    .eq("id", winningGroup.gpo_policy_id)
+    .maybeSingle();
+
+  if (!policy) {
+    return new Response(
+      JSON.stringify({ has_policy: false }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 
   return new Response(
-    JSON.stringify({ has_policy: false }),
+    JSON.stringify({
+      has_policy: true,
+      source: "group",
+      source_group: winningGroup.name,
+      conflicts: groupsWithGpo.length > 1 ? groupsWithGpo.length : 0,
+      policy,
+    }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
 }
