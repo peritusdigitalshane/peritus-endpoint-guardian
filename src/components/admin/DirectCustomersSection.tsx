@@ -214,6 +214,31 @@ export function DirectCustomersSection() {
                     {customer.router_module_enabled ? "Enabled" : "Disabled"}
                   </Button>
                 </TableCell>
+                <TableCell className="text-center">
+                  <Button
+                    variant={customer.legacy_hardening_enabled ? "default" : "outline"}
+                    size="sm"
+                    className="text-xs"
+                    onClick={() => {
+                      updateLegacyHardening.mutate(
+                        { id: customer.id, legacyHardeningEnabled: !customer.legacy_hardening_enabled },
+                        {
+                          onSuccess: () => {
+                            toast.success(
+                              customer.legacy_hardening_enabled 
+                                ? `Legacy Hardening disabled for ${customer.name}` 
+                                : `Legacy Hardening enabled for ${customer.name}`
+                            );
+                          },
+                        }
+                      );
+                    }}
+                    disabled={updateLegacyHardening.isPending}
+                  >
+                    <ShieldAlert className="h-3 w-3 mr-1" />
+                    {customer.legacy_hardening_enabled ? "Enabled" : "Disabled"}
+                  </Button>
+                </TableCell>
                 <TableCell className="text-muted-foreground">
                   {new Date(customer.created_at).toLocaleDateString()}
                 </TableCell>
