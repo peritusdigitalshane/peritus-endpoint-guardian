@@ -138,6 +138,7 @@ export function Sidebar() {
         {baseNavigation
           .filter((item) => !item.requiresNetworkModule || currentOrganization?.network_module_enabled)
           .filter((item) => !(item as any).requiresRouterModule || currentOrganization?.router_module_enabled)
+          .filter((item) => !(item as any).requiresLegacyHardening || currentOrganization?.legacy_hardening_enabled)
           .map((item) => {
           const isActive = location.pathname === item.href;
           return (
