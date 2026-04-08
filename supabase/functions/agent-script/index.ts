@@ -1090,29 +1090,30 @@ function Build-WdacPolicyXml {
     $denyRulesXml = ""; $allowRulesXml = ""; $signersXml = ""; $fileRulesXml = ""; $ruleIdx = 0
     # Use a variable for the double-quote character to avoid escaping issues
     $DQ = '"'
+    $NL = [char]10
     foreach ($rule in $EnforcedBlockRules) {
         $ruleIdx++
         $escaped = [System.Security.SecurityElement]::Escape($(if ($rule.description) { $rule.description } else { $rule.value }))
         $escapedVal = [System.Security.SecurityElement]::Escape($rule.value)
         switch ($rule.rule_type) {
-            "hash" { $fileRulesXml += "      <Deny ID=$DQ" + "ID_DENY_$ruleIdx$DQ FriendlyName=$DQ$escaped$DQ Hash=$DQ$($rule.value)$DQ />`n"; $denyRulesXml += "        <FileRuleRef RuleID=$DQ" + "ID_DENY_$ruleIdx$DQ />`n" }
-            "path" { $fileRulesXml += "      <Deny ID=$DQ" + "ID_DENY_$ruleIdx$DQ FriendlyName=$DQ$escaped$DQ FilePath=$DQ$escapedVal$DQ />`n"; $denyRulesXml += "        <FileRuleRef RuleID=$DQ" + "ID_DENY_$ruleIdx$DQ />`n" }
-            "file_name" { $fileRulesXml += "      <Deny ID=$DQ" + "ID_DENY_$ruleIdx$DQ FriendlyName=$DQ$escaped$DQ FileName=$DQ$escapedVal$DQ MinimumFileVersion=$DQ" + "0.0.0.0$DQ />`n"; $denyRulesXml += "        <FileRuleRef RuleID=$DQ" + "ID_DENY_$ruleIdx$DQ />`n" }
+            "hash" { $fileRulesXml += "      <Deny ID=$DQ" + "ID_DENY_$ruleIdx$DQ FriendlyName=$DQ$escaped$DQ Hash=$DQ$($rule.value)$DQ />$NL"; $denyRulesXml += "        <FileRuleRef RuleID=$DQ" + "ID_DENY_$ruleIdx$DQ />$NL" }
+            "path" { $fileRulesXml += "      <Deny ID=$DQ" + "ID_DENY_$ruleIdx$DQ FriendlyName=$DQ$escaped$DQ FilePath=$DQ$escapedVal$DQ />$NL"; $denyRulesXml += "        <FileRuleRef RuleID=$DQ" + "ID_DENY_$ruleIdx$DQ />$NL" }
+            "file_name" { $fileRulesXml += "      <Deny ID=$DQ" + "ID_DENY_$ruleIdx$DQ FriendlyName=$DQ$escaped$DQ FileName=$DQ$escapedVal$DQ MinimumFileVersion=$DQ" + "0.0.0.0$DQ />$NL"; $denyRulesXml += "        <FileRuleRef RuleID=$DQ" + "ID_DENY_$ruleIdx$DQ />$NL" }
             "publisher" {
                 $ruleIdx++
                 $pubEscaped = [System.Security.SecurityElement]::Escape($(if ($rule.publisher_name) { $rule.publisher_name } else { $rule.value }))
-                $signerXml = "      <Signer ID=$DQ" + "ID_SIGNER_DENY_$ruleIdx$DQ Name=$DQ$pubEscaped$DQ>`n"
-                $signerXml += "        <CertRoot Type=$DQ" + "TBS$DQ Value=$DQ*$DQ />`n"
+                $signerXml = "      <Signer ID=$DQ" + "ID_SIGNER_DENY_$ruleIdx$DQ Name=$DQ$pubEscaped$DQ>$NL"
+                $signerXml += "        <CertRoot Type=$DQ" + "TBS$DQ Value=$DQ*$DQ />$NL"
                 if ($rule.product_name) {
                     $prodEscaped = [System.Security.SecurityElement]::Escape($rule.product_name)
-                    $signerXml += "        <FileAttribRef RuleID=$DQ" + "ID_FILEATTRIB_$ruleIdx$DQ />`n"
+                    $signerXml += "        <FileAttribRef RuleID=$DQ" + "ID_FILEATTRIB_$ruleIdx$DQ />$NL"
                     $fileRulesXml += "      <FileAttrib ID=$DQ" + "ID_FILEATTRIB_$ruleIdx$DQ ProductName=$DQ$prodEscaped$DQ "
                     if ($rule.file_version_min) { $fileRulesXml += "MinimumFileVersion=$DQ$($rule.file_version_min)$DQ " }
-                    $fileRulesXml += "/>`n"
+                    $fileRulesXml += "/>$NL"
                 }
-                $signerXml += "      </Signer>`n"
+                $signerXml += "      </Signer>$NL"
                 $signersXml += $signerXml
-                $denyRulesXml += "        <FileRuleRef RuleID=$DQ" + "ID_SIGNER_DENY_$ruleIdx$DQ />`n"
+                $denyRulesXml += "        <FileRuleRef RuleID=$DQ" + "ID_SIGNER_DENY_$ruleIdx$DQ />$NL"
             }
         }
     }
@@ -1122,32 +1123,32 @@ function Build-WdacPolicyXml {
         $escaped = [System.Security.SecurityElement]::Escape($(if ($rule.description) { $rule.description } else { $rule.value }))
         $escapedVal = [System.Security.SecurityElement]::Escape($rule.value)
         switch ($rule.rule_type) {
-            "hash" { $fileRulesXml += "      <Allow ID=$DQ" + "ID_ALLOW_$ruleIdx$DQ FriendlyName=$DQ$escaped$DQ Hash=$DQ$($rule.value)$DQ />`n"; $allowRulesXml += "        <FileRuleRef RuleID=$DQ" + "ID_ALLOW_$ruleIdx$DQ />`n" }
-            "path" { $fileRulesXml += "      <Allow ID=$DQ" + "ID_ALLOW_$ruleIdx$DQ FriendlyName=$DQ$escaped$DQ FilePath=$DQ$escapedVal$DQ />`n"; $allowRulesXml += "        <FileRuleRef RuleID=$DQ" + "ID_ALLOW_$ruleIdx$DQ />`n" }
-            "file_name" { $fileRulesXml += "      <Allow ID=$DQ" + "ID_ALLOW_$ruleIdx$DQ FriendlyName=$DQ$escaped$DQ FileName=$DQ$escapedVal$DQ MinimumFileVersion=$DQ" + "0.0.0.0$DQ />`n"; $allowRulesXml += "        <FileRuleRef RuleID=$DQ" + "ID_ALLOW_$ruleIdx$DQ />`n" }
+            "hash" { $fileRulesXml += "      <Allow ID=$DQ" + "ID_ALLOW_$ruleIdx$DQ FriendlyName=$DQ$escaped$DQ Hash=$DQ$($rule.value)$DQ />$NL"; $allowRulesXml += "        <FileRuleRef RuleID=$DQ" + "ID_ALLOW_$ruleIdx$DQ />$NL" }
+            "path" { $fileRulesXml += "      <Allow ID=$DQ" + "ID_ALLOW_$ruleIdx$DQ FriendlyName=$DQ$escaped$DQ FilePath=$DQ$escapedVal$DQ />$NL"; $allowRulesXml += "        <FileRuleRef RuleID=$DQ" + "ID_ALLOW_$ruleIdx$DQ />$NL" }
+            "file_name" { $fileRulesXml += "      <Allow ID=$DQ" + "ID_ALLOW_$ruleIdx$DQ FriendlyName=$DQ$escaped$DQ FileName=$DQ$escapedVal$DQ MinimumFileVersion=$DQ" + "0.0.0.0$DQ />$NL"; $allowRulesXml += "        <FileRuleRef RuleID=$DQ" + "ID_ALLOW_$ruleIdx$DQ />$NL" }
             "publisher" {
                 $ruleIdx++
                 $pubEscaped = [System.Security.SecurityElement]::Escape($(if ($rule.publisher_name) { $rule.publisher_name } else { $rule.value }))
-                $signerXml = "      <Signer ID=$DQ" + "ID_SIGNER_ALLOW_$ruleIdx$DQ Name=$DQ$pubEscaped$DQ>`n"
-                $signerXml += "        <CertRoot Type=$DQ" + "TBS$DQ Value=$DQ*$DQ />`n"
+                $signerXml = "      <Signer ID=$DQ" + "ID_SIGNER_ALLOW_$ruleIdx$DQ Name=$DQ$pubEscaped$DQ>$NL"
+                $signerXml += "        <CertRoot Type=$DQ" + "TBS$DQ Value=$DQ*$DQ />$NL"
                 if ($rule.product_name) {
                     $prodEscaped = [System.Security.SecurityElement]::Escape($rule.product_name)
-                    $signerXml += "        <FileAttribRef RuleID=$DQ" + "ID_FILEATTRIB_$ruleIdx$DQ />`n"
+                    $signerXml += "        <FileAttribRef RuleID=$DQ" + "ID_FILEATTRIB_$ruleIdx$DQ />$NL"
                     $fileRulesXml += "      <FileAttrib ID=$DQ" + "ID_FILEATTRIB_$ruleIdx$DQ ProductName=$DQ$prodEscaped$DQ "
                     if ($rule.file_version_min) { $fileRulesXml += "MinimumFileVersion=$DQ$($rule.file_version_min)$DQ " }
-                    $fileRulesXml += "/>`n"
+                    $fileRulesXml += "/>$NL"
                 }
-                $signerXml += "      </Signer>`n"
+                $signerXml += "      </Signer>$NL"
                 $signersXml += $signerXml
-                $allowRulesXml += "        <FileRuleRef RuleID=$DQ" + "ID_SIGNER_ALLOW_$ruleIdx$DQ />`n"
+                $allowRulesXml += "        <FileRuleRef RuleID=$DQ" + "ID_SIGNER_ALLOW_$ruleIdx$DQ />$NL"
             }
         }
     }
     $optionsXml = ""
-    if (-not $hasEnforced) { $optionsXml += "      <Rule><Option>Enabled:Audit Mode</Option></Rule>`n" }
-    $optionsXml += "      <Rule><Option>Enabled:Unsigned System Integrity Policy</Option></Rule>`n"
-    $optionsXml += "      <Rule><Option>Enabled:Advanced Boot Options Menu</Option></Rule>`n"
-    $optionsXml += "      <Rule><Option>Enabled:UMCI</Option></Rule>`n"
+    if (-not $hasEnforced) { $optionsXml += "      <Rule><Option>Enabled:Audit Mode</Option></Rule>$NL" }
+    $optionsXml += "      <Rule><Option>Enabled:Unsigned System Integrity Policy</Option></Rule>$NL"
+    $optionsXml += "      <Rule><Option>Enabled:Advanced Boot Options Menu</Option></Rule>$NL"
+    $optionsXml += "      <Rule><Option>Enabled:UMCI</Option></Rule>$NL"
     $policyGuid = "A244370E-44C9-4C06-B551-F6016E563076"
     return @"
 <?xml version="1.0" encoding="utf-8"?>

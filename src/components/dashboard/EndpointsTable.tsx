@@ -192,9 +192,9 @@ export function EndpointsTable({ limit, showHeader = true }: EndpointsTableProps
                           <Shield className="h-4 w-4 text-primary" />
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-foreground">
+                          <Link to={`/endpoints/${endpoint.id}`} className="text-sm font-medium text-foreground hover:text-primary hover:underline">
                             {endpoint.hostname}
-                          </p>
+                          </Link>
                           <p className="text-xs text-muted-foreground">
                             {getProtectionStatus(status)}
                           </p>
