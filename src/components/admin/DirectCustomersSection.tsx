@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useDirectCustomers, usePartners, useAssignCustomerToPartner, useRenameOrganization, useDeleteOrganization } from "@/hooks/usePartners";
-import { useUpdateOrganizationNetworkModule, useUpdateOrganizationRouterModule } from "@/hooks/useSuperAdmin";
+import { useUpdateOrganizationNetworkModule, useUpdateOrganizationRouterModule, useUpdateOrganizationLegacyHardening } from "@/hooks/useSuperAdmin";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
