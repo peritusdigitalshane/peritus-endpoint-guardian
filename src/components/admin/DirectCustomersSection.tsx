@@ -30,7 +30,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Building2, Monitor, ChevronRight, Loader2, Network, Router, Pencil, Trash2, Check, X } from "lucide-react";
+import { Building2, Monitor, ChevronRight, Loader2, Network, Router, Pencil, Trash2, Check, X, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { useTenant } from "@/contexts/TenantContext";
 
