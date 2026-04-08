@@ -148,6 +148,8 @@ $LogFile = "$ConfigPath\\agent.log"
 $PolicyHashFile = "$ConfigPath\\policy_hash.txt"
 $TrayIconFile = "$ConfigPath\\tray_icon.ico"
 $UpdateLockFile = "$ConfigPath\\update.lock"
+$HealthErrorsFile = "$ConfigPath\\health_errors.json"
+$BackupPath = "$ConfigPath\\backups"
 
 function Write-Log {
     param([string]$Message, [string]$Level = "INFO")
