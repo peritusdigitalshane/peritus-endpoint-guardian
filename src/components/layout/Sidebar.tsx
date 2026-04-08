@@ -156,9 +156,13 @@ export function Sidebar() {
                 )}
               />
               {!collapsed && <span>{item.name}</span>}
-              {isActive && (
+              {item.name === "Alerts" && !collapsed && alertCount && alertCount > 0 ? (
+                <span className="ml-auto rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-bold text-destructive-foreground">
+                  {alertCount > 99 ? "99+" : alertCount}
+                </span>
+              ) : isActive ? (
                 <div className="ml-auto h-1.5 w-1.5 rounded-full bg-primary" />
-              )}
+              ) : null}
             </Link>
           );
         })}
