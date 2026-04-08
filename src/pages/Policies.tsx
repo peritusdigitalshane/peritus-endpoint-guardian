@@ -3,7 +3,7 @@ import { useEndpoints } from "@/hooks/useDashboardData";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, FileText, Shield, AlertTriangle, CheckCircle, Loader2, Layers, ShieldCheck, RefreshCw, Monitor } from "lucide-react";
+import { Plus, FileText, Shield, AlertTriangle, CheckCircle, Loader2, Layers, ShieldCheck, RefreshCw, Monitor, Eye } from "lucide-react";
 import { PolicyCard } from "@/components/policies/PolicyCard";
 import { PolicyEditor } from "@/components/policies/PolicyEditor";
 import { StatCard } from "@/components/ui/stat-card";
