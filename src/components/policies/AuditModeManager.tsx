@@ -14,7 +14,6 @@ import { formatDistanceToNow, differenceInDays, addDays, format } from "date-fns
 import {
   type PolicyType,
   type AuditSession,
-  type AuditFinding,
   useActiveAuditSession,
   useAuditSessions,
   useAuditFindings,
