@@ -1599,9 +1599,10 @@ const AGENT_VERSION = "2.19.0";
 
 // GET /agent-update - Check for updates and return new script if needed
 async function handleAgentUpdate(req: Request) {
-  const endpoint = await validateAgentToken(req);
   const url = new URL(req.url);
   const currentVersion = url.searchParams.get("version");
+
+  console.log(`[${VERSION}] handleAgentUpdate called, currentVersion=${currentVersion}`);
 
   // Compare versions - simple semantic version comparison
   const needsUpdate = !currentVersion || compareVersions(AGENT_VERSION, currentVersion) > 0;
@@ -1617,16 +1618,13 @@ async function handleAgentUpdate(req: Request) {
     );
   }
 
-  // Fetch the agent script template from platform_settings or return a placeholder
-  // In production, this would fetch from a stored script or generate dynamically
-  const { data: orgData } = await supabase
-    .from("endpoints")
-    .select("organization_id")
-    .eq("id", endpoint.id)
-    .single();
-
-  if (!orgData) {
-    throw new Error("Endpoint organization not found");
+  // Try to get org ID from token if available, but don't fail if missing
+  let organizationId: string | null = null;
+  try {
+    const endpoint = await validateAgentToken(req);
+    organizationId = endpoint.organization_id;
+  } catch {
+    console.log(`[${VERSION}] handleAgentUpdate: token validation failed, returning update info without org ID`);
   }
 
   return new Response(
@@ -1634,7 +1632,7 @@ async function handleAgentUpdate(req: Request) {
       success: true,
       update_available: true,
       current_version: AGENT_VERSION,
-      organization_id: orgData.organization_id,
+      ...(organizationId && { organization_id: organizationId }),
       // Agent will download from the agent-script edge function using its token
       script_endpoint: `${SUPABASE_URL}/functions/v1/agent-script`,
     }),
