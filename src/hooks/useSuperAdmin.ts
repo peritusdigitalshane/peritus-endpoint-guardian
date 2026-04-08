@@ -12,6 +12,7 @@ interface Organization {
   event_log_retention_days: number;
   network_module_enabled: boolean;
   router_module_enabled: boolean;
+  legacy_hardening_enabled: boolean;
 }
 
 interface OrganizationWithStats extends Organization {
