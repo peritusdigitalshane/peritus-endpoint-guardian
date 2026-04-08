@@ -205,6 +205,14 @@ const App = () => (
                   </ProtectedRoute>
                 }
               />
+              <Route
+                path="/help"
+                element={
+                  <ProtectedRoute>
+                    <Help />
+                  </ProtectedRoute>
+                }
+              />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </TenantProvider>
