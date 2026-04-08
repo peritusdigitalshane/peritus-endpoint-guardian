@@ -21,6 +21,7 @@ import {
   SlidersHorizontal,
   Bell,
   ShieldAlert,
+  BookOpen,
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
