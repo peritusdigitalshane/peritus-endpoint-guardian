@@ -381,7 +381,7 @@ export function AuditModeManager({ policyType, policyId, policyName }: AuditMode
   );
 }
 
-function SessionHistoryCard({ session, isActive }: { session: AuditSession; isActive: boolean }) {
+function SessionHistoryCard({ session }: { session: AuditSession }) {
   const daysRan = session.completed_at
     ? differenceInDays(new Date(session.completed_at), new Date(session.started_at))
     : differenceInDays(new Date(), new Date(session.started_at));
