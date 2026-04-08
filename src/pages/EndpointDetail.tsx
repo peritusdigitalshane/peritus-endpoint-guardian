@@ -160,7 +160,7 @@ const EndpointDetail = () => {
             <div className="flex items-center gap-3">
               <Monitor className="h-6 w-6 text-primary" />
               <h1 className="text-2xl font-bold text-foreground">{endpoint.hostname}</h1>
-              <StatusBadge status={status}>{statusLabel}</StatusBadge>
+              <StatusBadge status={status} label={statusLabel} />
               {activeThreats.length > 0 && (
                 <Badge variant="destructive" className="ml-2">
                   <AlertTriangle className="h-3 w-3 mr-1" />
