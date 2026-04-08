@@ -1689,8 +1689,8 @@ function Backup-CurrentSettings {
         Write-Log "Backup created for $PolicyType at $backupFile"
         return $backupFile
     } catch {
-        Write-Log "Failed to create backup for $PolicyType`: $_" -Level "WARN"
-        Add-HealthError -Component "backup" -Message "Backup failed for $PolicyType`: $_"
+        Write-Log "Failed to create backup for $($PolicyType): $_" -Level "WARN"
+        Add-HealthError -Component "backup" -Message "Backup failed for $($PolicyType): $_"
         return $null
     }
 }
