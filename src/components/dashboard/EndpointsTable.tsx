@@ -191,7 +191,6 @@ export function EndpointsTable({ limit, showHeader = true }: EndpointsTableProps
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Endpoint
                 </th>
-                </th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Operating System
                 </th>
