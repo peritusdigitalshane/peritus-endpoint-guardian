@@ -25,6 +25,7 @@ import Network from "./pages/Network";
 import Routers from "./pages/Routers";
 import Reports from "./pages/Reports";
 import GroupPolicy from "./pages/GroupPolicy";
+import EndpointDetail from "./pages/EndpointDetail";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
