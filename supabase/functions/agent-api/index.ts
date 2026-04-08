@@ -301,16 +301,19 @@ function generateAgentToken(): string {
 async function validateAgentToken(req: Request) {
   const token = req.headers.get("x-agent-token");
   if (!token) {
+    console.error(`[${VERSION}] validateAgentToken: No x-agent-token header found. Headers: ${JSON.stringify(Object.fromEntries([...new Headers(req.headers).entries()].filter(([k]) => k !== 'authorization')))}`);
     throw new Error("Missing agent token");
   }
 
+  const trimmedToken = token.trim();
   const { data: endpoint, error } = await supabase
     .from("endpoints")
     .select("*")
-    .eq("agent_token", token)
+    .eq("agent_token", trimmedToken)
     .maybeSingle();
 
   if (error || !endpoint) {
+    console.error(`[${VERSION}] validateAgentToken: Token lookup failed. tokenLength=${trimmedToken.length}, tokenPrefix=${trimmedToken.substring(0, 8)}..., dbError=${error?.message || 'none'}, found=${!!endpoint}`);
     throw new Error("Invalid agent token");
   }
 
