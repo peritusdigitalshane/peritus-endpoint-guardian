@@ -1764,6 +1764,122 @@ export type Database = {
         }
         Relationships: []
       }
+      policy_audit_findings: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          details: Json | null
+          finding_type: string
+          first_seen_at: string
+          id: string
+          is_approved: boolean | null
+          last_seen_at: string
+          occurrence_count: number
+          session_id: string
+          source_endpoint_id: string | null
+          value: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          details?: Json | null
+          finding_type: string
+          first_seen_at?: string
+          id?: string
+          is_approved?: boolean | null
+          last_seen_at?: string
+          occurrence_count?: number
+          session_id: string
+          source_endpoint_id?: string | null
+          value: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          details?: Json | null
+          finding_type?: string
+          first_seen_at?: string
+          id?: string
+          is_approved?: boolean | null
+          last_seen_at?: string
+          occurrence_count?: number
+          session_id?: string
+          source_endpoint_id?: string | null
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "policy_audit_findings_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "policy_audit_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "policy_audit_findings_source_endpoint_id_fkey"
+            columns: ["source_endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "endpoints"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      policy_audit_sessions: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          organization_id: string
+          planned_duration_days: number
+          policy_id: string
+          policy_type: string
+          started_at: string
+          started_by: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          organization_id: string
+          planned_duration_days?: number
+          policy_id: string
+          policy_type: string
+          started_at?: string
+          started_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          organization_id?: string
+          planned_duration_days?: number
+          policy_id?: string
+          policy_type?: string
+          started_at?: string
+          started_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "policy_audit_sessions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
