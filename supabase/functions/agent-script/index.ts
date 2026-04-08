@@ -1660,7 +1660,7 @@ function Send-HealthReport {
 function Backup-CurrentSettings {
     param([string]$PolicyType)
     if (-not (Test-Path $BackupPath)) { New-Item -ItemType Directory -Path $BackupPath -Force | Out-Null }
-    $backupFile = "$BackupPath\\$PolicyType`_backup_$(Get-Date -Format 'yyyyMMddHHmmss').json"
+    $backupFile = "$BackupPath\\$($PolicyType)_backup_$(Get-Date -Format 'yyyyMMddHHmmss').json"
     try {
         switch ($PolicyType) {
             "gpo" {
@@ -1689,8 +1689,8 @@ function Backup-CurrentSettings {
         Write-Log "Backup created for $PolicyType at $backupFile"
         return $backupFile
     } catch {
-        Write-Log "Failed to create backup for $PolicyType`: $_" -Level "WARN"
-        Add-HealthError -Component "backup" -Message "Backup failed for $PolicyType`: $_"
+        Write-Log "Failed to create backup for $($PolicyType): $_" -Level "WARN"
+        Add-HealthError -Component "backup" -Message "Backup failed for $($PolicyType): $_"
         return $null
     }
 }
