@@ -196,6 +196,14 @@ const App = () => (
                   </ProtectedRoute>
                 }
               />
+              <Route
+                path="/legacy-hardening"
+                element={
+                  <ProtectedRoute>
+                    <LegacyHardening />
+                  </ProtectedRoute>
+                }
+              />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </TenantProvider>
