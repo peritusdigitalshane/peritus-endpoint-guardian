@@ -1090,6 +1090,7 @@ function Build-WdacPolicyXml {
     $denyRulesXml = ""; $allowRulesXml = ""; $signersXml = ""; $fileRulesXml = ""; $ruleIdx = 0
     # Use a variable for the double-quote character to avoid escaping issues
     $DQ = '"'
+    $NL = [char]10
     foreach ($rule in $EnforcedBlockRules) {
         $ruleIdx++
         $escaped = [System.Security.SecurityElement]::Escape($(if ($rule.description) { $rule.description } else { $rule.value }))
