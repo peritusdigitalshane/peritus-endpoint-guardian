@@ -1660,7 +1660,7 @@ function Send-HealthReport {
 function Backup-CurrentSettings {
     param([string]$PolicyType)
     if (-not (Test-Path $BackupPath)) { New-Item -ItemType Directory -Path $BackupPath -Force | Out-Null }
-    $backupFile = "$BackupPath\\$PolicyType`_backup_$(Get-Date -Format 'yyyyMMddHHmmss').json"
+    $backupFile = "$BackupPath\\$($PolicyType)_backup_$(Get-Date -Format 'yyyyMMddHHmmss').json"
     try {
         switch ($PolicyType) {
             "gpo" {
