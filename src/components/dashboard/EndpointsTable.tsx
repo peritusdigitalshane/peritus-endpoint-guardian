@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Monitor, Shield, Clock, ChevronRight, Loader2, Trash2 } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useEndpoints, useDeleteEndpoint } from "@/hooks/useDashboardData";
