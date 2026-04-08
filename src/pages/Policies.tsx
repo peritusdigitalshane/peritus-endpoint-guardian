@@ -259,6 +259,25 @@ const Policies = () => {
           <TabsContent value="wu-status">
             <EndpointWindowsUpdateList />
           </TabsContent>
+
+          {/* Learning Mode Tab */}
+          <TabsContent value="learning" className="space-y-6">
+            <div>
+              <h2 className="text-lg font-semibold">Learning Mode</h2>
+              <p className="text-sm text-muted-foreground">
+                Run policies in audit mode to baseline normal behavior before enforcing. Duration is flexible — extend or complete at any time.
+              </p>
+            </div>
+
+            {policies.length > 0 && (
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium text-muted-foreground">Defender Policies</h3>
+                {policies.map(p => (
+                  <AuditModeManager key={p.id} policyType="defender" policyId={p.id} policyName={p.name} />
+                ))}
+              </div>
+            )}
+          </TabsContent>
         </Tabs>
 
         {/* Policy Editor */}
