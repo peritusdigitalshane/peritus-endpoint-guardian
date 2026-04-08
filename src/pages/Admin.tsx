@@ -57,6 +57,7 @@ interface Organization {
   parent_partner_id: string | null;
   network_module_enabled: boolean;
   router_module_enabled: boolean;
+  legacy_hardening_enabled: boolean;
 }
 
 const Admin = () => {
