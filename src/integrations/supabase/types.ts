@@ -475,6 +475,85 @@ export type Database = {
           },
         ]
       }
+      endpoint_hardening_status: {
+        Row: {
+          compliance_score: number | null
+          created_at: string
+          endpoint_id: string
+          esu_estimated_annual_cost: number | null
+          failed_checks: number | null
+          findings: Json | null
+          hardening_profile_id: string | null
+          id: string
+          is_legacy: boolean
+          last_assessed_at: string | null
+          organization_id: string
+          os_category: string | null
+          os_eol_date: string | null
+          passed_checks: number | null
+          total_checks: number | null
+          updated_at: string
+        }
+        Insert: {
+          compliance_score?: number | null
+          created_at?: string
+          endpoint_id: string
+          esu_estimated_annual_cost?: number | null
+          failed_checks?: number | null
+          findings?: Json | null
+          hardening_profile_id?: string | null
+          id?: string
+          is_legacy?: boolean
+          last_assessed_at?: string | null
+          organization_id: string
+          os_category?: string | null
+          os_eol_date?: string | null
+          passed_checks?: number | null
+          total_checks?: number | null
+          updated_at?: string
+        }
+        Update: {
+          compliance_score?: number | null
+          created_at?: string
+          endpoint_id?: string
+          esu_estimated_annual_cost?: number | null
+          failed_checks?: number | null
+          findings?: Json | null
+          hardening_profile_id?: string | null
+          id?: string
+          is_legacy?: boolean
+          last_assessed_at?: string | null
+          organization_id?: string
+          os_category?: string | null
+          os_eol_date?: string | null
+          passed_checks?: number | null
+          total_checks?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "endpoint_hardening_status_endpoint_id_fkey"
+            columns: ["endpoint_id"]
+            isOneToOne: true
+            referencedRelation: "endpoints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "endpoint_hardening_status_hardening_profile_id_fkey"
+            columns: ["hardening_profile_id"]
+            isOneToOne: false
+            referencedRelation: "hardening_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "endpoint_hardening_status_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       endpoint_logs: {
         Row: {
           created_at: string
@@ -1384,6 +1463,128 @@ export type Database = {
           },
         ]
       }
+      hardening_profiles: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_system_default: boolean
+          name: string
+          organization_id: string
+          os_target: string
+          settings: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_system_default?: boolean
+          name: string
+          organization_id: string
+          os_target?: string
+          settings?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_system_default?: boolean
+          name?: string
+          organization_id?: string
+          os_target?: string
+          settings?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hardening_profiles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hardening_recommendations: {
+        Row: {
+          applied_at: string | null
+          applied_by: string | null
+          category: string
+          created_at: string
+          current_value: string | null
+          description: string | null
+          endpoint_id: string
+          id: string
+          is_applied: boolean
+          is_compliant: boolean
+          organization_id: string
+          policy_reference: string | null
+          recommended_value: string | null
+          remediation_action: string | null
+          severity: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          applied_at?: string | null
+          applied_by?: string | null
+          category: string
+          created_at?: string
+          current_value?: string | null
+          description?: string | null
+          endpoint_id: string
+          id?: string
+          is_applied?: boolean
+          is_compliant?: boolean
+          organization_id: string
+          policy_reference?: string | null
+          recommended_value?: string | null
+          remediation_action?: string | null
+          severity?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          applied_at?: string | null
+          applied_by?: string | null
+          category?: string
+          created_at?: string
+          current_value?: string | null
+          description?: string | null
+          endpoint_id?: string
+          id?: string
+          is_applied?: boolean
+          is_compliant?: boolean
+          organization_id?: string
+          policy_reference?: string | null
+          recommended_value?: string | null
+          remediation_action?: string | null
+          severity?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hardening_recommendations_endpoint_id_fkey"
+            columns: ["endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "endpoints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hardening_recommendations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hunt_jobs: {
         Row: {
           completed_at: string | null
@@ -1647,6 +1848,7 @@ export type Database = {
           created_at: string
           event_log_retention_days: number
           id: string
+          legacy_hardening_enabled: boolean
           name: string
           network_module_enabled: boolean
           organization_type: string
@@ -1660,6 +1862,7 @@ export type Database = {
           created_at?: string
           event_log_retention_days?: number
           id?: string
+          legacy_hardening_enabled?: boolean
           name: string
           network_module_enabled?: boolean
           organization_type?: string
@@ -1673,6 +1876,7 @@ export type Database = {
           created_at?: string
           event_log_retention_days?: number
           id?: string
+          legacy_hardening_enabled?: boolean
           name?: string
           network_module_enabled?: boolean
           organization_type?: string
@@ -2813,6 +3017,10 @@ export type Database = {
     }
     Functions: {
       can_add_device: { Args: { _org_id: string }; Returns: boolean }
+      create_default_hardening_profiles: {
+        Args: { _org_id: string }
+        Returns: undefined
+      }
       get_effective_plan: {
         Args: { _org_id: string }
         Returns: Database["public"]["Enums"]["subscription_plan"]
