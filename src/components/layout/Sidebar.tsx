@@ -39,6 +39,7 @@ const baseNavigation = [
   { name: "Group Policy", href: "/group-policy", icon: SlidersHorizontal },
   { name: "Network", href: "/network", icon: Network, requiresNetworkModule: true },
   { name: "Routers", href: "/routers", icon: Router, requiresRouterModule: true },
+  { name: "Legacy Hardening", href: "/legacy-hardening", icon: ShieldAlert, requiresLegacyHardening: true },
   { name: "Reports", href: "/reports", icon: ClipboardList },
   { name: "AI Advisor", href: "/recommendations", icon: Sparkles },
   { name: "Deploy Agent", href: "/deploy", icon: Download },
