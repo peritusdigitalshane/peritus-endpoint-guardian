@@ -357,7 +357,7 @@ export function AuditModeManager({ policyType, policyId, policyName }: AuditMode
               ) : (
                 <div className="space-y-2 mt-2">
                   {policySessions.map(s => (
-                    <SessionHistoryCard key={s.id} session={s} isActive={s.id === activeSession?.id} />
+                    <SessionHistoryCard key={s.id} session={s} />
                   ))}
                 </div>
               )}
