@@ -303,6 +303,7 @@ function PartnerCustomersSheet({
       parent_partner_id: customer.parent_partner_id,
       network_module_enabled: customer.network_module_enabled ?? false,
       router_module_enabled: customer.router_module_enabled ?? false,
+      legacy_hardening_enabled: customer.legacy_hardening_enabled ?? false,
     });
     onClose();
   };

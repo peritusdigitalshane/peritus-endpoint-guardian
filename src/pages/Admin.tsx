@@ -125,6 +125,7 @@ const Admin = () => {
       parent_partner_id: org.parent_partner_id ?? null,
       network_module_enabled: org.network_module_enabled ?? false,
       router_module_enabled: (org as any).router_module_enabled ?? false,
+      legacy_hardening_enabled: (org as any).legacy_hardening_enabled ?? false,
     };
     setImpersonatedOrg(fullOrg);
     toast({
