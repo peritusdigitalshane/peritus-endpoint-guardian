@@ -52,7 +52,7 @@ export function UacPoliciesManager() {
 
   const handleDelete = async () => {
     if (deletingPolicyId) {
-      await deletePolicy.mutateAsync(deletingPolicyId);
+      await deletePolicy.mutateAsync({ id: deletingPolicyId });
       setDeletingPolicyId(null);
     }
   };
