@@ -127,7 +127,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
         if (isAdmin) {
           const { data: allOrgs, error: orgsError } = await supabase
             .from("organizations")
-            .select("id, name, slug, organization_type, parent_partner_id, network_module_enabled, router_module_enabled")
+            .select("id, name, slug, organization_type, parent_partner_id, network_module_enabled, router_module_enabled, legacy_hardening_enabled")
             .order("name");
 
           if (orgsError) throw orgsError;
