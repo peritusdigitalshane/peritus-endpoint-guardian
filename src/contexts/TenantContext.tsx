@@ -145,7 +145,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
           if (customerOrgs && customerOrgs.length > 0) {
             const { data: customers } = await supabase
               .from("organizations")
-              .select("id, name, slug, organization_type, parent_partner_id, network_module_enabled, router_module_enabled")
+              .select("id, name, slug, organization_type, parent_partner_id, network_module_enabled, router_module_enabled, legacy_hardening_enabled")
               .in("id", customerOrgs)
               .order("name");
 
