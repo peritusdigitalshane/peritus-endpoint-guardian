@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { Bell, CheckCircle, AlertTriangle, Shield, Clock, Filter } from "lucide-react";
+import { Bell, CheckCircle, Clock, Filter } from "lucide-react";
 import { useAlerts, useAcknowledgeAlert, useBulkAcknowledgeAlerts } from "@/hooks/useAlerts";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
