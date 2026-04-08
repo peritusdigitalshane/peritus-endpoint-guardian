@@ -162,6 +162,10 @@ const Policies = () => {
               <Monitor className="h-4 w-4" />
               <span className="hidden sm:inline">Update Endpoints</span>
             </TabsTrigger>
+            <TabsTrigger value="learning" className="flex items-center gap-2">
+              <Eye className="h-4 w-4" />
+              <span className="hidden sm:inline">Learning Mode</span>
+            </TabsTrigger>
           </TabsList>
 
           {/* Defender Tab */}
