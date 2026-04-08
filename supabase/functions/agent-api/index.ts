@@ -1761,14 +1761,36 @@ async function handleGetFirewallPolicy(req: Request) {
       let resolvedSourceIps: string[] = [...(rule.allowed_source_ips || [])];
 
       if (rule.action === "allow_from_groups" && rule.allowed_source_groups?.length) {
-        // Get endpoints in source groups
+        // Get endpoints in source groups and resolve their last known IPs
         const { data: sourceEndpoints } = await supabase
           .from("endpoint_group_memberships")
-          .select("endpoint_id, endpoints(id)")
+          .select("endpoint_id, endpoints(id, hostname)")
           .in("group_id", rule.allowed_source_groups);
 
-        // For now, the agent would need to resolve IPs locally
-        // This structure tells the agent which groups are allowed
+        // Get the latest status for each source endpoint to extract reported IPs
+        const sourceEndpointIds = (sourceEndpoints || []).map((se) => {
+          const ep = se.endpoints as unknown as { id: string } | null;
+          return ep?.id;
+        }).filter(Boolean) as string[];
+
+        if (sourceEndpointIds.length > 0) {
+          const { data: sourceStatuses } = await supabase
+            .from("endpoint_status")
+            .select("endpoint_id, raw_status")
+            .in("endpoint_id", sourceEndpointIds)
+            .order("collected_at", { ascending: false });
+
+          // Extract IPs from raw_status if available
+          const seenEndpoints = new Set<string>();
+          for (const st of sourceStatuses || []) {
+            if (seenEndpoints.has(st.endpoint_id)) continue;
+            seenEndpoints.add(st.endpoint_id);
+            const raw = st.raw_status as Record<string, unknown> | null;
+            if (raw?.reported_ip && typeof raw.reported_ip === "string") {
+              resolvedSourceIps.push(raw.reported_ip);
+            }
+          }
+        }
       }
 
       return {
