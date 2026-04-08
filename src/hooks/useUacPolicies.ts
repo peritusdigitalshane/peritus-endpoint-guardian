@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
+import { logActivity } from "@/hooks/useActivityLogs";
 
 export interface UacPolicy {
   id: string;
@@ -49,7 +50,6 @@ export interface EndpointUacStatus {
   collected_at: string | null;
 }
 
-// UAC consent prompt behavior descriptions
 export const UAC_ADMIN_PROMPTS: Record<number, { label: string; description: string }> = {
   0: { label: "Elevate without prompting", description: "No prompt for admin operations (least secure)" },
   1: { label: "Prompt for credentials on secure desktop", description: "Requires entering credentials on secure desktop" },
@@ -103,10 +103,12 @@ export function useCreateUacPolicy() {
         .single();
 
       if (error) throw error;
+      await logActivity(currentOrganization!.id, "create", "uac_policy", policy.id, { name: data.name });
       return policy;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["uac_policies"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
       toast.success("UAC policy created");
     },
     onError: (error) => {
@@ -116,6 +118,7 @@ export function useCreateUacPolicy() {
 }
 
 export function useUpdateUacPolicy() {
+  const { currentOrganization } = useTenant();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -126,9 +129,13 @@ export function useUpdateUacPolicy() {
         .eq("id", id);
 
       if (error) throw error;
+      if (currentOrganization?.id) {
+        await logActivity(currentOrganization.id, "update", "uac_policy", id, { name: data.name });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["uac_policies"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
       toast.success("UAC policy updated");
     },
     onError: (error) => {
@@ -138,15 +145,20 @@ export function useUpdateUacPolicy() {
 }
 
 export function useDeleteUacPolicy() {
+  const { currentOrganization } = useTenant();
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async ({ id, name }: { id: string; name?: string }) => {
       const { error } = await supabase.from("uac_policies").delete().eq("id", id);
       if (error) throw error;
+      if (currentOrganization?.id) {
+        await logActivity(currentOrganization.id, "delete", "uac_policy", id, { name: name || "Unknown" });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["uac_policies"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
       toast.success("UAC policy deleted");
     },
     onError: (error) => {
@@ -163,40 +175,22 @@ export function useEndpointUacStatuses() {
     queryKey: ["endpoint_uac_statuses", orgId],
     enabled: !!orgId,
     queryFn: async () => {
-      // Get endpoints with their UAC policy assignments
       const { data: endpoints, error: endpointsError } = await supabase
         .from("endpoints")
-        .select(`
-          id,
-          hostname,
-          uac_policy_id,
-          uac_policies(name)
-        `)
+        .select(`id, hostname, uac_policy_id, uac_policies(name)`)
         .eq("organization_id", orgId!);
 
       if (endpointsError) throw endpointsError;
       if (!endpoints?.length) return [];
 
-      // Get latest status for each endpoint
       const { data: statuses, error: statusError } = await supabase
         .from("endpoint_status")
-        .select(`
-          endpoint_id,
-          uac_enabled,
-          uac_consent_prompt_admin,
-          uac_consent_prompt_user,
-          uac_prompt_on_secure_desktop,
-          uac_detect_installations,
-          uac_validate_admin_signatures,
-          uac_filter_administrator_token,
-          collected_at
-        `)
+        .select(`endpoint_id, uac_enabled, uac_consent_prompt_admin, uac_consent_prompt_user, uac_prompt_on_secure_desktop, uac_detect_installations, uac_validate_admin_signatures, uac_filter_administrator_token, collected_at`)
         .in("endpoint_id", endpoints.map(e => e.id))
         .order("collected_at", { ascending: false });
 
       if (statusError) throw statusError;
 
-      // Get latest status per endpoint
       const latestStatusByEndpoint = new Map<string, typeof statuses[0]>();
       for (const status of statuses || []) {
         if (!latestStatusByEndpoint.has(status.endpoint_id)) {
@@ -204,11 +198,9 @@ export function useEndpointUacStatuses() {
         }
       }
 
-      // Merge endpoint info with latest status
       return endpoints.map((endpoint): EndpointUacStatus => {
         const status = latestStatusByEndpoint.get(endpoint.id);
         const uacPolicies = endpoint.uac_policies as { name: string } | null;
-        
         return {
           endpoint_id: endpoint.id,
           hostname: endpoint.hostname,

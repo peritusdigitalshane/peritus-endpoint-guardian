@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
+import { logActivity } from "@/hooks/useActivityLogs";
 
 export interface WindowsUpdatePolicy {
   id: string;
@@ -49,7 +50,6 @@ export interface EndpointWindowsUpdateStatus {
   collected_at: string | null;
 }
 
-// Auto-update mode descriptions
 export const AUTO_UPDATE_MODES: Record<number, { label: string; description: string }> = {
   0: { label: "Notify to download", description: "Notify before downloading updates" },
   1: { label: "Auto download", description: "Download automatically, notify to install" },
@@ -94,10 +94,12 @@ export function useCreateWindowsUpdatePolicy() {
         .single();
 
       if (error) throw error;
+      await logActivity(currentOrganization!.id, "create", "windows_update_policy", policy.id, { name: data.name });
       return policy;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["windows_update_policies"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
       toast.success("Windows Update policy created");
     },
     onError: (error) => {
@@ -107,6 +109,7 @@ export function useCreateWindowsUpdatePolicy() {
 }
 
 export function useUpdateWindowsUpdatePolicy() {
+  const { currentOrganization } = useTenant();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -117,9 +120,13 @@ export function useUpdateWindowsUpdatePolicy() {
         .eq("id", id);
 
       if (error) throw error;
+      if (currentOrganization?.id) {
+        await logActivity(currentOrganization.id, "update", "windows_update_policy", id, { name: data.name });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["windows_update_policies"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
       toast.success("Windows Update policy updated");
     },
     onError: (error) => {
@@ -129,15 +136,20 @@ export function useUpdateWindowsUpdatePolicy() {
 }
 
 export function useDeleteWindowsUpdatePolicy() {
+  const { currentOrganization } = useTenant();
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async ({ id, name }: { id: string; name?: string }) => {
       const { error } = await supabase.from("windows_update_policies").delete().eq("id", id);
       if (error) throw error;
+      if (currentOrganization?.id) {
+        await logActivity(currentOrganization.id, "delete", "windows_update_policy", id, { name: name || "Unknown" });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["windows_update_policies"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
       toast.success("Windows Update policy deleted");
     },
     onError: (error) => {
@@ -154,43 +166,22 @@ export function useEndpointWindowsUpdateStatuses() {
     queryKey: ["endpoint_windows_update_statuses", orgId],
     enabled: !!orgId,
     queryFn: async () => {
-      // Get endpoints with their Windows Update policy assignments
       const { data: endpoints, error: endpointsError } = await supabase
         .from("endpoints")
-        .select(`
-          id,
-          hostname,
-          windows_update_policy_id,
-          windows_update_policies(name)
-        `)
+        .select(`id, hostname, windows_update_policy_id, windows_update_policies(name)`)
         .eq("organization_id", orgId!);
 
       if (endpointsError) throw endpointsError;
       if (!endpoints?.length) return [];
 
-      // Get latest status for each endpoint
       const { data: statuses, error: statusError } = await supabase
         .from("endpoint_status")
-        .select(`
-          endpoint_id,
-          wu_auto_update_mode,
-          wu_active_hours_start,
-          wu_active_hours_end,
-          wu_feature_update_deferral,
-          wu_quality_update_deferral,
-          wu_pause_feature_updates,
-          wu_pause_quality_updates,
-          wu_pending_updates_count,
-          wu_last_install_date,
-          wu_restart_pending,
-          collected_at
-        `)
+        .select(`endpoint_id, wu_auto_update_mode, wu_active_hours_start, wu_active_hours_end, wu_feature_update_deferral, wu_quality_update_deferral, wu_pause_feature_updates, wu_pause_quality_updates, wu_pending_updates_count, wu_last_install_date, wu_restart_pending, collected_at`)
         .in("endpoint_id", endpoints.map(e => e.id))
         .order("collected_at", { ascending: false });
 
       if (statusError) throw statusError;
 
-      // Get latest status per endpoint
       const latestStatusByEndpoint = new Map<string, typeof statuses[0]>();
       for (const status of statuses || []) {
         if (!latestStatusByEndpoint.has(status.endpoint_id)) {
@@ -198,11 +189,9 @@ export function useEndpointWindowsUpdateStatuses() {
         }
       }
 
-      // Merge endpoint info with latest status
       return endpoints.map((endpoint): EndpointWindowsUpdateStatus => {
         const status = latestStatusByEndpoint.get(endpoint.id);
         const wuPolicies = endpoint.windows_update_policies as { name: string } | null;
-        
         return {
           endpoint_id: endpoint.id,
           hostname: endpoint.hostname,
