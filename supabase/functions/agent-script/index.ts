@@ -125,7 +125,7 @@ function generateAgentScript(orgId: string, apiBaseUrl: string, version: string,
 
 param(
     [string]$OrganizationToken = "${orgId}",
-    [int]$HeartbeatIntervalSeconds = 30,
+    [int]$HeartbeatIntervalSeconds = 60,
     [switch]$Uninstall,
     [switch]$ForcePolicy,
     [switch]$ForceFullLogSync,
