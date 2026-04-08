@@ -37,6 +37,7 @@ import { useTenant } from "@/contexts/TenantContext";
 export function DirectCustomersSection() {
   const updateNetworkModule = useUpdateOrganizationNetworkModule();
   const updateRouterModule = useUpdateOrganizationRouterModule();
+  const updateLegacyHardening = useUpdateOrganizationLegacyHardening();
   const { data: customers, isLoading } = useDirectCustomers();
   const { data: partners } = usePartners();
   const assignToPartner = useAssignCustomerToPartner();
