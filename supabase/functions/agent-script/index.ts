@@ -110,7 +110,7 @@ function generateAgentScript(orgId: string, apiBaseUrl: string, version: string,
 .PARAMETER OrganizationToken
     Your organization's unique token for agent registration
 .PARAMETER HeartbeatIntervalSeconds
-    How often the agent sends status updates (default: 30 seconds)
+    How often the agent sends status updates (default: 60 seconds)
 .PARAMETER Uninstall
     Remove the scheduled task and agent configuration
 .PARAMETER TrayMode
