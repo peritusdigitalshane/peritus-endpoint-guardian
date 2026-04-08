@@ -224,6 +224,14 @@ export function EndpointsTable({ limit, showHeader = true }: EndpointsTableProps
                     key={endpoint.id}
                     className="group transition-colors hover:bg-secondary/30"
                   >
+                    {!limit && (
+                      <td className="px-3 py-4">
+                        <Checkbox
+                          checked={selectedIds.has(endpoint.id)}
+                          onCheckedChange={() => toggleSelect(endpoint.id)}
+                        />
+                      </td>
+                    )}
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-3">
                         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary">
