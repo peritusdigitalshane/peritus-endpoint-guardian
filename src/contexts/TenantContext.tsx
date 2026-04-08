@@ -114,7 +114,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
         if (membershipData) {
           const { data: orgData } = await supabase
             .from("organizations")
-            .select("id, name, slug, organization_type, parent_partner_id, network_module_enabled, router_module_enabled")
+            .select("id, name, slug, organization_type, parent_partner_id, network_module_enabled, router_module_enabled, legacy_hardening_enabled")
             .eq("id", membershipData.organization_id)
             .single();
 
