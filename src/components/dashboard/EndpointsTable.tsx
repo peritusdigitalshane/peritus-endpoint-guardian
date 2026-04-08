@@ -71,6 +71,25 @@ export function EndpointsTable({ limit, showHeader = true }: EndpointsTableProps
   const deleteEndpoint = useDeleteEndpoint();
   const { toast } = useToast();
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleAll = useCallback(() => {
+    const all = endpoints || [];
+    const display = limit ? all.slice(0, limit) : all;
+    if (selectedIds.size === display.length && display.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(display.map(e => e.id)));
+    }
+  }, [endpoints, limit, selectedIds.size]);
 
   const handlePolicyChange = async (endpointId: string, policyId: string) => {
     try {
