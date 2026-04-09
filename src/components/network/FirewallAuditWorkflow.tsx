@@ -53,7 +53,8 @@ export function FirewallAuditWorkflow() {
         completeAudit.mutate(activeSession.id);
       }
     }
-  }, [activeSession]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSession?.id, activeSession?.ends_at]);
 
   const defaultPolicy = policies?.[0];
 
