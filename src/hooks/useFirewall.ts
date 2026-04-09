@@ -200,12 +200,19 @@ export function useCreateFirewallPolicy() {
     mutationFn: async (policy: { name: string; description?: string }) => {
       if (!currentOrganization?.id) throw new Error("No organization selected");
 
+      // Check if any policies exist — first one should be default
+      const { count } = await supabase
+        .from("firewall_policies")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", currentOrganization.id);
+
       const { data, error } = await supabase
         .from("firewall_policies")
         .insert({
           organization_id: currentOrganization.id,
           name: policy.name,
           description: policy.description || null,
+          is_default: (count ?? 0) === 0,
         })
         .select()
         .single();
