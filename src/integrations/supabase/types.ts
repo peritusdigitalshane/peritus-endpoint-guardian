@@ -1037,6 +1037,74 @@ export type Database = {
           },
         ]
       }
+      firewall_audit_sessions: {
+        Row: {
+          created_at: string
+          ends_at: string
+          generated_template_id: string | null
+          id: string
+          organization_id: string
+          policy_id: string
+          started_at: string
+          started_by: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          ends_at: string
+          generated_template_id?: string | null
+          id?: string
+          organization_id: string
+          policy_id: string
+          started_at?: string
+          started_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          ends_at?: string
+          generated_template_id?: string | null
+          id?: string
+          organization_id?: string
+          policy_id?: string
+          started_at?: string
+          started_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "firewall_audit_sessions_generated_template_id_fkey"
+            columns: ["generated_template_id"]
+            isOneToOne: false
+            referencedRelation: "firewall_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "firewall_audit_sessions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "firewall_audit_sessions_policy_id_fkey"
+            columns: ["policy_id"]
+            isOneToOne: false
+            referencedRelation: "firewall_policies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "firewall_audit_sessions_started_by_fkey"
+            columns: ["started_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       firewall_policies: {
         Row: {
           created_at: string

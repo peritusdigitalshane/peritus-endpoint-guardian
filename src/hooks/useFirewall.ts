@@ -334,3 +334,185 @@ export function useToggleRuleMode() {
     },
   });
 }
+
+// Audit Sessions
+export interface FirewallAuditSession {
+  id: string;
+  organization_id: string;
+  policy_id: string;
+  status: "auditing" | "completed" | "template_generated";
+  started_at: string;
+  ends_at: string;
+  started_by: string | null;
+  generated_template_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export function useFirewallAuditSessions() {
+  const { currentOrganization } = useTenant();
+
+  return useQuery({
+    queryKey: ["firewall-audit-sessions", currentOrganization?.id],
+    queryFn: async () => {
+      if (!currentOrganization?.id) return [];
+
+      const { data, error } = await supabase
+        .from("firewall_audit_sessions")
+        .select("*")
+        .eq("organization_id", currentOrganization.id)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return data as FirewallAuditSession[];
+    },
+    enabled: !!currentOrganization?.id,
+  });
+}
+
+export function useStartFirewallAudit() {
+  const queryClient = useQueryClient();
+  const { currentOrganization } = useTenant();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (policyId: string) => {
+      if (!currentOrganization?.id) throw new Error("No organization selected");
+
+      const now = new Date();
+      const endsAt = new Date(now);
+      endsAt.setDate(endsAt.getDate() + 30);
+
+      const { data, error } = await supabase
+        .from("firewall_audit_sessions")
+        .insert({
+          organization_id: currentOrganization.id,
+          policy_id: policyId,
+          started_at: now.toISOString(),
+          ends_at: endsAt.toISOString(),
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data as FirewallAuditSession;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["firewall-audit-sessions"] });
+      toast({
+        title: "30-Day Audit Started",
+        description: "Network traffic is now being monitored. A template will be auto-generated when the audit completes.",
+      });
+    },
+    onError: (error) => {
+      toast({ title: "Failed to start audit", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
+export function useGenerateTemplateFromAudit() {
+  const queryClient = useQueryClient();
+  const { currentOrganization } = useTenant();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (sessionId: string) => {
+      if (!currentOrganization?.id) throw new Error("No organization selected");
+
+      // Get the audit session
+      const { data: session, error: sessionError } = await supabase
+        .from("firewall_audit_sessions")
+        .select("*")
+        .eq("id", sessionId)
+        .single();
+
+      if (sessionError) throw sessionError;
+
+      // Fetch all audit logs during the audit period
+      const { data: logs, error: logsError } = await supabase
+        .from("firewall_audit_logs")
+        .select("service_name, local_port, protocol, remote_address")
+        .eq("organization_id", currentOrganization.id)
+        .gte("event_time", session.started_at)
+        .lte("event_time", session.ends_at)
+        .limit(1000);
+
+      if (logsError) throw logsError;
+
+      // Aggregate observed services into unique rules
+      const serviceMap = new Map<string, { port: string; protocol: string }>();
+      (logs || []).forEach((log) => {
+        const key = `${log.service_name}:${log.local_port}:${log.protocol}`;
+        if (!serviceMap.has(key)) {
+          serviceMap.set(key, {
+            port: String(log.local_port),
+            protocol: log.protocol,
+          });
+        }
+      });
+
+      const rules = Array.from(serviceMap.entries()).map(([key, val]) => ({
+        service_name: key.split(":")[0],
+        port: val.port,
+        protocol: val.protocol,
+        action: "allow",
+      }));
+
+      // Create a template from observed traffic
+      const { data: template, error: templateError } = await supabase
+        .from("firewall_templates")
+        .insert([{
+          name: `Auto-Generated: ${new Date(session.started_at).toLocaleDateString()} – ${new Date(session.ends_at).toLocaleDateString()}`,
+          description: `Whitelist template generated from ${logs?.length || 0} observed connections during 30-day audit. Only observed traffic is allowed; all other inbound traffic will be blocked.`,
+          category: "security",
+          rules_json: JSON.parse(JSON.stringify(rules)),
+          default_mode: "enforce",
+        }])
+        .select()
+        .single();
+
+      if (templateError) throw templateError;
+
+      // Update audit session status
+      const { error: updateError } = await supabase
+        .from("firewall_audit_sessions")
+        .update({
+          status: "template_generated",
+          generated_template_id: template.id,
+        })
+        .eq("id", sessionId);
+
+      if (updateError) throw updateError;
+
+      return { template, rules, logCount: logs?.length || 0 };
+    },
+    onSuccess: ({ logCount }) => {
+      queryClient.invalidateQueries({ queryKey: ["firewall-audit-sessions"] });
+      queryClient.invalidateQueries({ queryKey: ["firewall-templates"] });
+      toast({
+        title: "Template Generated",
+        description: `Created whitelist template from ${logCount} observed connections. Review and apply it via the Template Gallery.`,
+      });
+    },
+    onError: (error) => {
+      toast({ title: "Failed to generate template", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
+export function useCompleteAuditSession() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (sessionId: string) => {
+      const { error } = await supabase
+        .from("firewall_audit_sessions")
+        .update({ status: "completed" })
+        .eq("id", sessionId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["firewall-audit-sessions"] });
+    },
+  });
+}
