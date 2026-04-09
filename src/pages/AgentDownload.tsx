@@ -2824,6 +2824,113 @@ const AgentDownload = () => {
             </div>
           </CardContent>
         </Card>
+
+        {/* Remove Agent Script */}
+        <Card className="border-border/40">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Terminal className="h-5 w-5 text-destructive" />
+              Remove Agent (PowerShell Script)
+            </CardTitle>
+            <CardDescription>
+              Run this script as Administrator to completely remove the Peritus agent from an endpoint.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="relative">
+              <pre className="rounded-lg bg-secondary/50 p-4 text-xs overflow-x-auto max-h-80">
+                <code>{`#Requires -RunAsAdministrator
+<#
+.SYNOPSIS
+    Removes the Peritus Threat Defence Agent from this machine.
+.DESCRIPTION
+    Stops running agent processes, removes scheduled tasks,
+    cleans up configuration files, and removes startup entries.
+#>
+
+$ErrorActionPreference = "SilentlyContinue"
+$TaskName = "PeritusSecureAgent"
+$TrayTaskName = "PeritusSecureTray"
+$ConfigPath = "$env:ProgramData\\PeritusSecure"
+
+Write-Host "=== Peritus Agent Removal ===" -ForegroundColor Cyan
+
+# 1. Stop any running tray processes
+Write-Host "[1/5] Stopping tray processes..." -ForegroundColor Yellow
+Get-Process -Name "powershell" -ErrorAction SilentlyContinue | Where-Object {
+    try { $_.CommandLine -like "*PeritusSecure*" -or $_.CommandLine -like "*-TrayMode*" } catch { $false }
+} | Stop-Process -Force -ErrorAction SilentlyContinue
+Write-Host "  Done." -ForegroundColor Green
+
+# 2. Remove scheduled tasks
+Write-Host "[2/5] Removing scheduled tasks..." -ForegroundColor Yellow
+$mainTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+if ($mainTask) {
+    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
+    Write-Host "  Removed task: $TaskName" -ForegroundColor Green
+} else {
+    Write-Host "  Task '$TaskName' not found (already removed)" -ForegroundColor Gray
+}
+$trayTask = Get-ScheduledTask -TaskName $TrayTaskName -ErrorAction SilentlyContinue
+if ($trayTask) {
+    Unregister-ScheduledTask -TaskName $TrayTaskName -Confirm:$false
+    Write-Host "  Removed task: $TrayTaskName" -ForegroundColor Green
+} else {
+    Write-Host "  Task '$TrayTaskName' not found (already removed)" -ForegroundColor Gray
+}
+
+# 3. Remove startup registry entry
+Write-Host "[3/5] Cleaning registry entries..." -ForegroundColor Yellow
+Remove-ItemProperty -Path "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" -Name "PeritusSecureTray" -ErrorAction SilentlyContinue
+Write-Host "  Done." -ForegroundColor Green
+
+# 4. Remove configuration directory
+Write-Host "[4/5] Removing agent files..." -ForegroundColor Yellow
+if (Test-Path $ConfigPath) {
+    Remove-Item -Path $ConfigPath -Recurse -Force
+    Write-Host "  Removed: $ConfigPath" -ForegroundColor Green
+} else {
+    Write-Host "  Directory not found (already removed)" -ForegroundColor Gray
+}
+
+# 5. Summary
+Write-Host "[5/5] Cleanup complete." -ForegroundColor Yellow
+Write-Host ""
+Write-Host "Peritus Agent has been completely removed." -ForegroundColor Green
+Write-Host "Note: The endpoint will remain visible in the dashboard until manually deleted." -ForegroundColor Gray`}</code>
+              </pre>
+              <Button
+                variant="outline"
+                size="sm"
+                className="absolute top-2 right-2 gap-1.5"
+                onClick={() => {
+                  const script = document.querySelector('[data-removal-script]')?.textContent;
+                  if (script) {
+                    navigator.clipboard.writeText(script);
+                    toast({ title: "Removal script copied to clipboard" });
+                  } else {
+                    // Fallback: grab from the pre element above
+                    const preEl = document.querySelectorAll('pre');
+                    const lastPre = preEl[preEl.length - 1];
+                    if (lastPre?.textContent) {
+                      navigator.clipboard.writeText(lastPre.textContent);
+                      toast({ title: "Removal script copied to clipboard" });
+                    }
+                  }
+                }}
+              >
+                <Copy className="h-3.5 w-3.5" />
+                Copy
+              </Button>
+            </div>
+            <div className="rounded-lg bg-secondary/50 p-4">
+              <p className="text-sm font-medium mb-2">Run as Administrator:</p>
+              <code className="text-xs text-muted-foreground">
+                powershell.exe -ExecutionPolicy Bypass -File .\RemovePeritusAgent.ps1
+              </code>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </MainLayout>
   );
