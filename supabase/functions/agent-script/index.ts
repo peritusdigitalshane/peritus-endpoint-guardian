@@ -1786,6 +1786,26 @@ Write-Log "=========================================="
 Write-Log "Peritus Threat Defence Agent v$AgentVersion"
 Write-Log "=========================================="
 
+# Kill any older instances of this agent to prevent duplicate processes
+try {
+    $myPid = $PID
+    $staleProcesses = Get-CimInstance Win32_Process | Where-Object {
+        $_.Name -eq "powershell.exe" -and
+        $_.ProcessId -ne $myPid -and
+        $_.CommandLine -like "*PeritusSecureAgent.ps1*" -and
+        $_.CommandLine -notlike "*-TrayMode*"
+    }
+    if ($staleProcesses) {
+        foreach ($proc in $staleProcesses) {
+            Write-Log "Terminating stale agent process PID $($proc.ProcessId) (started $($proc.CreationDate))"
+            Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
+        }
+        Write-Log "Cleaned up $(@($staleProcesses).Count) stale agent process(es)"
+    }
+} catch {
+    Write-Log "Could not check for stale processes: $_" -Level "WARN"
+}
+
 if ($Uninstall) { Uninstall-Agent }
 
 $agentToken = $null
