@@ -1735,13 +1735,25 @@ async function handleGetFirewallPolicy(req: Request) {
     );
   }
 
-  // Get the organization's default firewall policy
-  const { data: policy } = await supabase
+  // Get the organization's default firewall policy (fall back to any policy if none marked default)
+  let { data: policy } = await supabase
     .from("firewall_policies")
     .select("id")
     .eq("organization_id", endpoint.organization_id)
     .eq("is_default", true)
     .maybeSingle();
+
+  if (!policy) {
+    // Fallback: use the first available policy for this org
+    const { data: fallbackPolicy } = await supabase
+      .from("firewall_policies")
+      .select("id")
+      .eq("organization_id", endpoint.organization_id)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    policy = fallbackPolicy;
+  }
 
   if (!policy) {
     return new Response(
