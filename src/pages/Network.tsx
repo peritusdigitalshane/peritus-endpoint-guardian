@@ -2,6 +2,7 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ServiceAccessMatrix } from "@/components/network/ServiceAccessMatrix";
 import { FirewallAuditLogs } from "@/components/network/FirewallAuditLogs";
+import { FirewallAuditWorkflow } from "@/components/network/FirewallAuditWorkflow";
 import { Network as NetworkIcon, ScrollText, Radio, KeyRound } from "lucide-react";
 
 export default function Network() {
@@ -14,6 +15,8 @@ export default function Network() {
             Manage firewall policies and monitor network connections
           </p>
         </div>
+
+        <FirewallAuditWorkflow />
 
         <Tabs defaultValue="firewall" className="space-y-6">
           <TabsList>
