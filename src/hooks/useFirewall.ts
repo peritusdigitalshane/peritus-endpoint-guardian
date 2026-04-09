@@ -465,7 +465,7 @@ export function useGenerateTemplateFromAudit() {
           name: `Auto-Generated: ${new Date(session.started_at).toLocaleDateString()} – ${new Date(session.ends_at).toLocaleDateString()}`,
           description: `Whitelist template generated from ${logs?.length || 0} observed connections during 30-day audit. Only observed traffic is allowed; all other inbound traffic will be blocked.`,
           category: "security",
-          rules_json: rules as unknown as Record<string, unknown>[],
+          rules_json: JSON.parse(JSON.stringify(rules)),
           default_mode: "enforce",
         }])
         .select()
