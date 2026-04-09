@@ -162,8 +162,8 @@ function Write-Log {
 }
 
 function Check-AgentUpdate {
-    param([string]$AgentToken)
-    if ($TrayMode) { return $false }
+    param([string]$AgentToken, [switch]$AllowTrayUpdate)
+    if ($TrayMode -and -not $AllowTrayUpdate) { return $false }
     
     if (Test-Path $UpdateLockFile) {
         $lockAge = (Get-Date) - (Get-Item $UpdateLockFile).LastWriteTime
