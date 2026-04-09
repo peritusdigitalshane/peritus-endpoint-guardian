@@ -162,8 +162,8 @@ function Write-Log {
 }
 
 function Check-AgentUpdate {
-    param([string]$AgentToken)
-    if ($TrayMode) { return $false }
+    param([string]$AgentToken, [switch]$AllowTrayUpdate)
+    if ($TrayMode -and -not $AllowTrayUpdate) { return $false }
     
     if (Test-Path $UpdateLockFile) {
         $lockAge = (Get-Date) - (Get-Item $UpdateLockFile).LastWriteTime
@@ -1609,6 +1609,7 @@ function Start-TrayApplication {
     $contextMenu.Items.Add($menuExit) | Out-Null
     $script:trayIcon.ContextMenuStrip = $contextMenu
     $script:trayIcon.Add_DoubleClick({ $status = Get-EndpointStatus -AgentToken $AgentToken; Show-StatusForm -StatusData $status })
+    $script:trayTickCount = 0
     $timer = New-Object System.Windows.Forms.Timer; $timer.Interval = 60000
     $timer.Add_Tick({
         try {
@@ -1616,6 +1617,16 @@ function Start-TrayApplication {
             $status = Get-EndpointStatus -AgentToken $AgentToken
             if ($status -and $status.status) {
                 $script:trayIcon.Text = if ($status.status.realtime_protection) { "Peritus Threat Defence - Protected" } else { "Peritus Threat Defence - Warning" }
+            }
+            # Check for updates every 5 minutes from the tray
+            $script:trayTickCount++
+            if ($script:trayTickCount % 5 -eq 0) {
+                $updated = Check-AgentUpdate -AgentToken $AgentToken -AllowTrayUpdate
+                if ($updated) {
+                    $script:trayIcon.Visible = $false
+                    $script:trayIcon.Dispose()
+                    [System.Windows.Forms.Application]::Exit()
+                }
             }
         } catch { }
     })
