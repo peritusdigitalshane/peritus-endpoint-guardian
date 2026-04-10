@@ -76,7 +76,12 @@ export function FirewallAuditWorkflow() {
 
   // Active audit in progress
   if (activeSession) {
-    return <AuditProgressBanner session={activeSession} />;
+    return (
+      <>
+        <AuditProgressBanner session={activeSession} />
+        <AuditFindingsPanel session={activeSession} />
+      </>
+    );
   }
 
   // Audit completed, ready to generate
