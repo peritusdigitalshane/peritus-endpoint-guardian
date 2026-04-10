@@ -81,13 +81,13 @@ const navSections: NavSection[] = [
     items: [
       { name: "Policies", href: "/policies", icon: FileText },
       { name: "Group Policy", href: "/group-policy", icon: SlidersHorizontal },
+      { name: "Network", href: "/network", icon: Network, requiresNetworkModule: true },
     ],
   },
   {
     label: "Infrastructure",
-    icon: Network,
+    icon: Router,
     items: [
-      { name: "Network", href: "/network", icon: Network, requiresNetworkModule: true },
       { name: "Routers", href: "/routers", icon: Router, requiresRouterModule: true },
     ],
   },
