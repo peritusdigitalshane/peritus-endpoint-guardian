@@ -87,36 +87,39 @@ export function FirewallAuditWorkflow() {
   // Audit completed, ready to generate
   if (completedSession) {
     return (
-      <Card className="border-amber-500/50 bg-amber-500/5">
-        <CardContent className="py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-amber-500/20 flex items-center justify-center">
-                <Sparkles className="h-5 w-5 text-amber-500" />
+      <>
+        <Card className="border-amber-500/50 bg-amber-500/5">
+          <CardContent className="py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-amber-500/20 flex items-center justify-center">
+                  <Sparkles className="h-5 w-5 text-amber-500" />
+                </div>
+                <div>
+                  <p className="font-semibold text-sm">Audit Complete — Ready to Generate Template</p>
+                  <p className="text-xs text-muted-foreground">
+                    30-day audit finished on {format(new Date(completedSession.ends_at), "MMM d, yyyy")}. 
+                    Generate a whitelist template from observed traffic.
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="font-semibold text-sm">Audit Complete — Ready to Generate Template</p>
-                <p className="text-xs text-muted-foreground">
-                  30-day audit finished on {format(new Date(completedSession.ends_at), "MMM d, yyyy")}. 
-                  Generate a whitelist template from observed traffic.
-                </p>
-              </div>
+              <Button 
+                onClick={handleGenerateTemplate} 
+                disabled={generateTemplate.isPending}
+                className="gap-2"
+              >
+                {generateTemplate.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <LayoutTemplate className="h-4 w-4" />
+                )}
+                Generate Template
+              </Button>
             </div>
-            <Button 
-              onClick={handleGenerateTemplate} 
-              disabled={generateTemplate.isPending}
-              className="gap-2"
-            >
-              {generateTemplate.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <LayoutTemplate className="h-4 w-4" />
-              )}
-              Generate Template
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+        <AuditFindingsPanel session={completedSession} />
+      </>
     );
   }
 
