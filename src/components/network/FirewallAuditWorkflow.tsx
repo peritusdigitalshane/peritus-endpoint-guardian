@@ -6,7 +6,6 @@ import { Progress } from "@/components/ui/progress";
 import {
   useFirewallAuditSessions,
   useStartFirewallAudit,
-  useGenerateTemplateFromAudit,
   useCompleteAuditSession,
   useFirewallPolicies,
   FirewallAuditSession,
@@ -29,7 +28,6 @@ import {
   CheckCircle2,
   Sparkles,
   Loader2,
-  LayoutTemplate,
   Radio,
 } from "lucide-react";
 import { differenceInDays, differenceInHours, format } from "date-fns";
@@ -38,16 +36,14 @@ export function FirewallAuditWorkflow() {
   const { data: sessions, isLoading: sessionsLoading } = useFirewallAuditSessions();
   const { data: policies } = useFirewallPolicies();
   const startAudit = useStartFirewallAudit();
-  const generateTemplate = useGenerateTemplateFromAudit();
+  const generateRules = useGeneratePerEndpointRules();
   const completeAudit = useCompleteAuditSession();
   const [showStartDialog, setShowStartDialog] = useState(false);
 
-  // Find the active or most recent session
   const activeSession = sessions?.find((s) => s.status === "auditing");
   const completedSession = sessions?.find((s) => s.status === "completed");
   const latestGenerated = sessions?.find((s) => s.status === "template_generated");
 
-  // Auto-complete audit sessions that have passed their end date
   useEffect(() => {
     if (activeSession) {
       const endsAt = new Date(activeSession.ends_at);
@@ -67,9 +63,12 @@ export function FirewallAuditWorkflow() {
     }
   };
 
-  const handleGenerateTemplate = () => {
-    if (completedSession) {
-      generateTemplate.mutate(completedSession.id);
+  const handleGenerateRules = () => {
+    if (completedSession && defaultPolicy) {
+      generateRules.mutate({
+        sessionId: completedSession.id,
+        policyId: defaultPolicy.id,
+      });
     }
   };
 
@@ -80,7 +79,7 @@ export function FirewallAuditWorkflow() {
     return (
       <>
         <AuditProgressBanner session={activeSession} />
-        <AuditFindingsPanel session={activeSession} />
+        <EndpointAuditMatrix session={activeSession} />
       </>
     );
   }
@@ -97,29 +96,29 @@ export function FirewallAuditWorkflow() {
                   <Sparkles className="h-5 w-5 text-amber-500" />
                 </div>
                 <div>
-                  <p className="font-semibold text-sm">Audit Complete — Ready to Generate Template</p>
+                  <p className="font-semibold text-sm">Audit Complete — Generate Per-Endpoint Rules</p>
                   <p className="text-xs text-muted-foreground">
-                    30-day audit finished on {format(new Date(completedSession.ends_at), "MMM d, yyyy")}. 
-                    Generate a whitelist template from observed traffic.
+                    Review observed traffic below then generate firewall rules scoped to each endpoint. 
+                    Rules start in Audit mode for safe review.
                   </p>
                 </div>
               </div>
               <Button 
-                onClick={handleGenerateTemplate} 
-                disabled={generateTemplate.isPending}
+                onClick={handleGenerateRules} 
+                disabled={generateRules.isPending}
                 className="gap-2"
               >
-                {generateTemplate.isPending ? (
+                {generateRules.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <LayoutTemplate className="h-4 w-4" />
+                  <Sparkles className="h-4 w-4" />
                 )}
-                Generate Template
+                Generate Rules
               </Button>
             </div>
           </CardContent>
         </Card>
-        <AuditFindingsPanel session={completedSession} />
+        <EndpointAuditMatrix session={completedSession} />
       </>
     );
   }
@@ -135,10 +134,10 @@ export function FirewallAuditWorkflow() {
                 <CheckCircle2 className="h-5 w-5 text-green-500" />
               </div>
               <div>
-                <p className="font-semibold text-sm">Template Generated</p>
+                <p className="font-semibold text-sm">Per-Endpoint Rules Generated</p>
                 <p className="text-xs text-muted-foreground">
-                  Whitelist template created on {format(new Date(latestGenerated.updated_at), "MMM d, yyyy")}. 
-                  Apply it using the "Apply Template" button above.
+                  Rules created on {format(new Date(latestGenerated.updated_at), "MMM d, yyyy")} in Audit mode. 
+                  Review in the Firewall Matrix and switch to Enforce when ready.
                 </p>
               </div>
             </div>
@@ -156,7 +155,7 @@ export function FirewallAuditWorkflow() {
     );
   }
 
-  // No audit yet — show start button
+  // No audit yet
   return (
     <>
       <Card className="border-primary/30 bg-primary/5">
@@ -169,8 +168,8 @@ export function FirewallAuditWorkflow() {
               <div>
                 <p className="font-semibold text-sm">Start a 30-Day Network Audit</p>
                 <p className="text-xs text-muted-foreground">
-                  Monitor all inbound traffic for 30 days. After the audit, a whitelist template will be 
-                  auto-generated so you can enforce rules based on real observed traffic.
+                  Monitor all inbound traffic for 30 days. After the audit, per-endpoint firewall rules 
+                  will be generated so each device only allows the traffic it actually needs.
                 </p>
               </div>
             </div>
@@ -190,8 +189,9 @@ export function FirewallAuditWorkflow() {
               This will begin monitoring all inbound network traffic across your endpoints for 30 days. 
               No traffic will be blocked during the audit period — everything is logged only.
               <br /><br />
-              After 30 days, a whitelist template will be automatically generated containing only the 
-              traffic patterns observed during the audit. You can then review and apply it to enforce rules.
+              After the audit, firewall rules will be generated <strong>per endpoint</strong> — each device 
+              will only allow the specific services and sources it was observed using. Rules start in Audit 
+              mode so you can review before enforcing.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
