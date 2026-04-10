@@ -2536,20 +2536,36 @@ const AgentDownload = () => {
   }, []);
 
   const handleCopy = async () => {
+    if (!agentScriptUrl) {
+      // Fallback to embedded script if no URL available
+      try {
+        await navigator.clipboard.writeText(powershellScript);
+        setCopied(true);
+        toast({ title: "Copied to clipboard", description: "PowerShell script has been copied." });
+        setTimeout(() => setCopied(false), 2000);
+      } catch (err) {
+        toast({ title: "Copy failed", description: "Please select and copy the script manually.", variant: "destructive" });
+      }
+      return;
+    }
+
     try {
-      await navigator.clipboard.writeText(powershellScript);
+      setIsDownloadingLatest(true);
+      const response = await fetch(`${agentScriptUrl}&t=${Date.now()}`, { cache: "no-store" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const scriptText = await response.text();
+      await navigator.clipboard.writeText(scriptText);
       setCopied(true);
-      toast({
-        title: "Copied to clipboard",
-        description: "PowerShell script has been copied.",
-      });
+      toast({ title: "Copied to clipboard", description: "Latest PowerShell script has been copied." });
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       toast({
         title: "Copy failed",
-        description: "Please select and copy the script manually.",
+        description: err instanceof Error ? err.message : "Unable to fetch the latest script.",
         variant: "destructive",
       });
+    } finally {
+      setIsDownloadingLatest(false);
     }
   };
 
