@@ -114,14 +114,11 @@ const AgentDownload = () => {
     }
 
     setIsFetchingLatestScript(true);
+    setScriptLoadError(null);
 
     try {
       const response = await fetch(`${agentScriptUrl}&t=${Date.now()}`, {
         cache: "no-store",
-        headers: {
-          "Cache-Control": "no-cache",
-          Pragma: "no-cache",
-        },
       });
 
       if (!response.ok) {
@@ -145,6 +142,7 @@ const AgentDownload = () => {
     }
   }, [agentScriptUrl]);
 
+  // Try to pre-fetch on mount, but don't block the UI if it fails
   useEffect(() => {
     if (!agentScriptUrl) {
       setLatestScript("");
@@ -153,7 +151,11 @@ const AgentDownload = () => {
       return;
     }
 
-    void fetchLatestScript().catch(() => undefined);
+    // Silently attempt to pre-load; errors are non-blocking
+    void fetchLatestScript().catch(() => {
+      // Clear error so user doesn't see it until they actually click
+      setScriptLoadError(null);
+    });
   }, [agentScriptUrl, fetchLatestScript]);
 
   const handleCopy = async () => {
@@ -310,21 +312,13 @@ const AgentDownload = () => {
               </TabsList>
 
               <TabsContent value="download" className="space-y-4 mt-4">
-                {isFetchingLatestScript && !latestScript && (
-                  <Alert>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <AlertTitle>Checking live agent script…</AlertTitle>
-                    <AlertDescription>
-                      Loading the current script directly from the live agent-script function.
-                    </AlertDescription>
-                  </Alert>
-                )}
-
                 {scriptLoadError && (
                   <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>Unable to load the live script</AlertTitle>
-                    <AlertDescription>{scriptLoadError}</AlertDescription>
+                    <AlertTitle>Script load error</AlertTitle>
+                    <AlertDescription>
+                      {scriptLoadError} — Click Download or Copy to retry.
+                    </AlertDescription>
                   </Alert>
                 )}
 
@@ -332,7 +326,7 @@ const AgentDownload = () => {
                   <Button
                     onClick={handleDownload}
                     className="gap-2"
-                    disabled={isFetchingLatestScript || !agentScriptUrl || !latestScript}
+                    disabled={isFetchingLatestScript || !agentScriptUrl}
                   >
                     {isFetchingLatestScript ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                     Download PeritusSecureAgent.ps1
@@ -341,7 +335,7 @@ const AgentDownload = () => {
                     variant="outline"
                     onClick={handleCopy}
                     className="gap-2"
-                    disabled={isFetchingLatestScript || !agentScriptUrl || !latestScript}
+                    disabled={isFetchingLatestScript || !agentScriptUrl}
                   >
                     {copied ? (
                       <CheckCircle className="h-4 w-4 text-status-healthy" />
