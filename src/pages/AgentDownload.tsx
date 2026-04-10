@@ -2717,9 +2717,9 @@ const AgentDownload = () => {
                   <Button
                     onClick={handleDownload}
                     className="gap-2"
-                    disabled={!powershellScript || trayIconLoading || (!trayIconBase64 && !trayIconError)}
+                    disabled={isDownloadingLatest || !agentScriptUrl || trayIconLoading || (!trayIconBase64 && !trayIconError)}
                   >
-                    <Download className="h-4 w-4" />
+                    {isDownloadingLatest ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                     Download PeritusSecureAgent.ps1
                   </Button>
                   <Button
