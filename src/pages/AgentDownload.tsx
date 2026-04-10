@@ -2489,6 +2489,7 @@ const AgentDownload = () => {
   const [trayIconBase64, setTrayIconBase64] = useState<string>("");
   const [trayIconLoading, setTrayIconLoading] = useState<boolean>(true);
   const [trayIconError, setTrayIconError] = useState<string | null>(null);
+  const [isDownloadingLatest, setIsDownloadingLatest] = useState(false);
   const { toast } = useToast();
 
   const orgId = currentOrganization?.id || null;
@@ -2496,6 +2497,9 @@ const AgentDownload = () => {
   const error = !isLoading && !currentOrganization ? "No organization found. Please contact support." : null;
 
   const apiBaseUrl = "https://njdcyjxgtckgtzgzoctw.supabase.co/functions/v1/agent-api";
+  const agentScriptUrl = orgId
+    ? `https://njdcyjxgtckgtzgzoctw.supabase.co/functions/v1/agent-script?org=${encodeURIComponent(orgId)}`
+    : "";
   const powershellScript = useMemo(
     () => (orgId ? generatePowershellScript(orgId, apiBaseUrl, trayIconBase64) : ""),
     [orgId, apiBaseUrl, trayIconBase64]
@@ -2549,21 +2553,43 @@ const AgentDownload = () => {
     }
   };
 
-  const handleDownload = () => {
-    // Prefix UTF-8 BOM to make PowerShell 5.1 consistently parse script files as UTF-8.
-    const blob = new Blob(["\ufeff", powershellScript], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "PeritusSecureAgent.ps1";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast({
-      title: "Download started",
-      description: "PeritusSecureAgent.ps1 is downloading.",
-    });
+  const handleDownload = async () => {
+    if (!agentScriptUrl) return;
+
+    try {
+      setIsDownloadingLatest(true);
+
+      const response = await fetch(`${agentScriptUrl}&t=${Date.now()}`, {
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "PeritusSecureAgent.ps1";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: "Download started",
+        description: "PeritusSecureAgent.ps1 is downloading.",
+      });
+    } catch (downloadError) {
+      toast({
+        title: "Download failed",
+        description: downloadError instanceof Error ? downloadError.message : "Unable to download the latest agent script.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDownloadingLatest(false);
+    }
   };
 
   if (isLoading) {
