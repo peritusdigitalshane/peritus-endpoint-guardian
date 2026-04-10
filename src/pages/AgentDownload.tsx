@@ -114,14 +114,11 @@ const AgentDownload = () => {
     }
 
     setIsFetchingLatestScript(true);
+    setScriptLoadError(null);
 
     try {
       const response = await fetch(`${agentScriptUrl}&t=${Date.now()}`, {
         cache: "no-store",
-        headers: {
-          "Cache-Control": "no-cache",
-          Pragma: "no-cache",
-        },
       });
 
       if (!response.ok) {
@@ -145,6 +142,7 @@ const AgentDownload = () => {
     }
   }, [agentScriptUrl]);
 
+  // Try to pre-fetch on mount, but don't block the UI if it fails
   useEffect(() => {
     if (!agentScriptUrl) {
       setLatestScript("");
@@ -153,7 +151,11 @@ const AgentDownload = () => {
       return;
     }
 
-    void fetchLatestScript().catch(() => undefined);
+    // Silently attempt to pre-load; errors are non-blocking
+    void fetchLatestScript().catch(() => {
+      // Clear error so user doesn't see it until they actually click
+      setScriptLoadError(null);
+    });
   }, [agentScriptUrl, fetchLatestScript]);
 
   const handleCopy = async () => {
