@@ -22,9 +22,6 @@ import {
   Eye,
   Monitor,
   Globe,
-  ShieldAlert,
-  ShieldCheck,
-  Shield,
   Info,
 } from "lucide-react";
 import { useState } from "react";

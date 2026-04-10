@@ -11,7 +11,8 @@ import {
   useFirewallPolicies,
   FirewallAuditSession,
 } from "@/hooks/useFirewall";
-import { AuditFindingsPanel } from "./AuditFindingsPanel";
+import { EndpointAuditMatrix } from "./EndpointAuditMatrix";
+import { useGeneratePerEndpointRules } from "@/hooks/useFirewallAudit";
 import {
   AlertDialog,
   AlertDialogAction,
