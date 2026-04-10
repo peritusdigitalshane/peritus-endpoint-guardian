@@ -516,3 +516,82 @@ export function useCompleteAuditSession() {
     },
   });
 }
+
+// Audit findings summary
+export interface AuditFindingSummary {
+  service_name: string;
+  local_port: number;
+  protocol: string;
+  unique_sources: number;
+  total_connections: number;
+  first_seen: string;
+  last_seen: string;
+  sample_sources: string[];
+}
+
+export function useAuditFindings(session?: FirewallAuditSession | null) {
+  const { currentOrganization } = useTenant();
+
+  return useQuery({
+    queryKey: ["firewall-audit-findings", currentOrganization?.id, session?.id],
+    queryFn: async () => {
+      if (!currentOrganization?.id || !session) return [];
+
+      const { data: logs, error } = await supabase
+        .from("firewall_audit_logs")
+        .select("service_name, local_port, protocol, remote_address, event_time")
+        .eq("organization_id", currentOrganization.id)
+        .gte("event_time", session.started_at)
+        .lte("event_time", session.ends_at)
+        .order("event_time", { ascending: true })
+        .limit(1000);
+
+      if (error) throw error;
+
+      // Aggregate by service+port+protocol
+      const map = new Map<string, {
+        service_name: string;
+        local_port: number;
+        protocol: string;
+        sources: Set<string>;
+        count: number;
+        first_seen: string;
+        last_seen: string;
+      }>();
+
+      (logs || []).forEach((log) => {
+        const key = `${log.service_name}:${log.local_port}:${log.protocol}`;
+        const existing = map.get(key);
+        if (existing) {
+          existing.sources.add(log.remote_address);
+          existing.count++;
+          existing.last_seen = log.event_time;
+        } else {
+          map.set(key, {
+            service_name: log.service_name,
+            local_port: log.local_port,
+            protocol: log.protocol,
+            sources: new Set([log.remote_address]),
+            count: 1,
+            first_seen: log.event_time,
+            last_seen: log.event_time,
+          });
+        }
+      });
+
+      return Array.from(map.values())
+        .map((entry) => ({
+          service_name: entry.service_name,
+          local_port: entry.local_port,
+          protocol: entry.protocol,
+          unique_sources: entry.sources.size,
+          total_connections: entry.count,
+          first_seen: entry.first_seen,
+          last_seen: entry.last_seen,
+          sample_sources: Array.from(entry.sources).slice(0, 5),
+        }))
+        .sort((a, b) => b.total_connections - a.total_connections) as AuditFindingSummary[];
+    },
+    enabled: !!currentOrganization?.id && !!session,
+  });
+}
