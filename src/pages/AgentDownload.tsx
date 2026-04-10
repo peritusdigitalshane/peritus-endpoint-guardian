@@ -312,21 +312,13 @@ const AgentDownload = () => {
               </TabsList>
 
               <TabsContent value="download" className="space-y-4 mt-4">
-                {isFetchingLatestScript && !latestScript && (
-                  <Alert>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <AlertTitle>Checking live agent script…</AlertTitle>
-                    <AlertDescription>
-                      Loading the current script directly from the live agent-script function.
-                    </AlertDescription>
-                  </Alert>
-                )}
-
                 {scriptLoadError && (
                   <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>Unable to load the live script</AlertTitle>
-                    <AlertDescription>{scriptLoadError}</AlertDescription>
+                    <AlertTitle>Script load error</AlertTitle>
+                    <AlertDescription>
+                      {scriptLoadError} — Click Download or Copy to retry.
+                    </AlertDescription>
                   </Alert>
                 )}
 
@@ -334,7 +326,7 @@ const AgentDownload = () => {
                   <Button
                     onClick={handleDownload}
                     className="gap-2"
-                    disabled={isFetchingLatestScript || !agentScriptUrl || !latestScript}
+                    disabled={isFetchingLatestScript || !agentScriptUrl}
                   >
                     {isFetchingLatestScript ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                     Download PeritusSecureAgent.ps1
@@ -343,7 +335,7 @@ const AgentDownload = () => {
                     variant="outline"
                     onClick={handleCopy}
                     className="gap-2"
-                    disabled={isFetchingLatestScript || !agentScriptUrl || !latestScript}
+                    disabled={isFetchingLatestScript || !agentScriptUrl}
                   >
                     {copied ? (
                       <CheckCircle className="h-4 w-4 text-status-healthy" />
