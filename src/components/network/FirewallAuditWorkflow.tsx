@@ -11,6 +11,7 @@ import {
   useFirewallPolicies,
   FirewallAuditSession,
 } from "@/hooks/useFirewall";
+import { AuditFindingsPanel } from "./AuditFindingsPanel";
 import {
   AlertDialog,
   AlertDialogAction,
