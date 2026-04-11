@@ -8,9 +8,10 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Sparkles, ExternalLink } from "lucide-react";
+import { Loader2, Sparkles, ExternalLink, ShieldCheck, CheckCircle, XCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
 
 interface Finding {
@@ -21,23 +22,41 @@ interface Finding {
   affected_software: string;
   affected_version: string | null;
   description: string | null;
+  endpoint_id?: string | null;
   endpoints?: { hostname: string } | null;
+}
+
+interface ProtectionAction {
+  action_type: string;
+  description: string;
+  setting_key: string;
+  setting_value: any;
+  applied: boolean;
 }
 
 interface CveMitigationSheetProps {
   finding: Finding | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  organizationId?: string;
 }
 
 export function CveMitigationSheet({
   finding,
   open,
   onOpenChange,
+  organizationId,
 }: CveMitigationSheetProps) {
   const [advice, setAdvice] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isProtecting, setIsProtecting] = useState(false);
+  const [protectionResult, setProtectionResult] = useState<{
+    actions: ProtectionAction[];
+    summary: string;
+    errors?: string[];
+  } | null>(null);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const fetchAdvice = async () => {
     if (!finding) return;
@@ -83,6 +102,66 @@ export function CveMitigationSheet({
     }
   };
 
+  const handleAutoProtect = async () => {
+    if (!finding || !organizationId) return;
+    setIsProtecting(true);
+    setProtectionResult(null);
+
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "cve-auto-protect",
+        {
+          body: {
+            cve_id: finding.cve_id,
+            severity: finding.severity,
+            cvss_score: finding.cvss_score,
+            affected_software: finding.affected_software,
+            affected_version: finding.affected_version,
+            description: finding.description,
+            endpoint_id: finding.endpoint_id,
+            organization_id: organizationId,
+            finding_id: finding.id,
+          },
+        }
+      );
+
+      if (error) throw error;
+
+      if (data?.error) {
+        toast({
+          title: "Auto-Protect Error",
+          description: data.error,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setProtectionResult({
+        actions: data.actions,
+        summary: data.summary,
+        errors: data.errors,
+      });
+
+      toast({
+        title: "Protection Applied",
+        description: data.summary,
+      });
+
+      // Refresh policies and findings
+      queryClient.invalidateQueries({ queryKey: ["policies"] });
+      queryClient.invalidateQueries({ queryKey: ["vulnerability-findings"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
+    } catch (err: any) {
+      toast({
+        title: "Auto-protect failed",
+        description: err.message || "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProtecting(false);
+    }
+  };
+
   const handleOpenChange = (value: boolean) => {
     onOpenChange(value);
     if (value && !advice && !isLoading) {
@@ -90,6 +169,7 @@ export function CveMitigationSheet({
     }
     if (!value) {
       setAdvice(null);
+      setProtectionResult(null);
     }
   };
 
@@ -141,6 +221,79 @@ export function CveMitigationSheet({
                 </p>
               </SheetDescription>
             </SheetHeader>
+
+            {/* Auto-Protect Button */}
+            {!protectionResult && (
+              <div className="mt-4 p-4 rounded-lg border border-primary/20 bg-primary/5">
+                <div className="flex items-start gap-3">
+                  <ShieldCheck className="h-5 w-5 text-primary mt-0.5" />
+                  <div className="flex-1">
+                    <h4 className="text-sm font-semibold">One-Click Protection</h4>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Automatically configure Defender policies, ASR rules, and update settings across all your policies to protect against this CVE.
+                    </p>
+                    <Button
+                      className="mt-3"
+                      size="sm"
+                      onClick={handleAutoProtect}
+                      disabled={isProtecting || !organizationId}
+                    >
+                      {isProtecting ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <ShieldCheck className="mr-2 h-4 w-4" />
+                      )}
+                      {isProtecting ? "Applying Protections…" : "Protect Against This"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Protection Result */}
+            {protectionResult && (
+              <div className="mt-4 space-y-3">
+                <div className="p-3 rounded-lg border border-green-500/20 bg-green-500/5">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                    <span className="text-sm font-semibold text-green-600 dark:text-green-400">
+                      {protectionResult.summary}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold">Actions Applied:</h4>
+                  {protectionResult.actions.map((action, i) => (
+                    <div
+                      key={i}
+                      className="flex items-start gap-2 p-2 rounded border text-sm"
+                    >
+                      {action.applied ? (
+                        <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
+                      ) : (
+                        <XCircle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
+                      )}
+                      <div>
+                        <p className="font-medium">{action.description}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {action.action_type}: {action.setting_key} = {String(action.setting_value)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {protectionResult.errors && protectionResult.errors.length > 0 && (
+                  <div className="p-3 rounded-lg border border-red-500/20 bg-red-500/5">
+                    <p className="text-xs font-semibold text-red-500 mb-1">Errors:</p>
+                    {protectionResult.errors.map((err, i) => (
+                      <p key={i} className="text-xs text-red-400">{err}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="mt-6">
               {isLoading ? (

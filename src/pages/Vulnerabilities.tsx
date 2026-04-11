@@ -465,6 +465,7 @@ const Vulnerabilities = () => {
         onOpenChange={(open) => {
           if (!open) setMitigationFinding(null);
         }}
+        organizationId={currentOrganization?.id}
       />
     </MainLayout>
   );
