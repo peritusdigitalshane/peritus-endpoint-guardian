@@ -47,11 +47,11 @@ import {
   useVulnerabilityStats,
   useSoftwareInventory,
   useUpdateFindingStatus,
-  
 } from "@/hooks/useVulnerabilities";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 
 const severityConfig: Record<string, { color: string; label: string }> = {
