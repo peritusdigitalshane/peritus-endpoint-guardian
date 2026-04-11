@@ -47,7 +47,7 @@ import {
   useVulnerabilityStats,
   useSoftwareInventory,
   useUpdateFindingStatus,
-  useVulnerabilityScanJobs,
+  
 } from "@/hooks/useVulnerabilities";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
