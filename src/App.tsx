@@ -29,6 +29,7 @@ import EndpointDetail from "./pages/EndpointDetail";
 import Alerts from "./pages/Alerts";
 import LegacyHardening from "./pages/LegacyHardening";
 import Help from "./pages/Help";
+import Vulnerabilities from "./pages/Vulnerabilities";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -202,6 +203,14 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <LegacyHardening />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/vulnerabilities"
+                element={
+                  <ProtectedRoute>
+                    <Vulnerabilities />
                   </ProtectedRoute>
                 }
               />

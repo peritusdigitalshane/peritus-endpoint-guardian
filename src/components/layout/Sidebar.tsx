@@ -16,6 +16,7 @@ import {
   FolderOpen,
   Sparkles,
   Crosshair,
+  Bug,
   Network,
   ClipboardList,
   Router,
@@ -73,6 +74,7 @@ const navSections: NavSection[] = [
       { name: "Threats", href: "/threats", icon: AlertTriangle },
       { name: "Event Logs", href: "/logs", icon: ScrollText },
       { name: "Threat Hunting", href: "/threat-hunting", icon: Crosshair },
+      { name: "Vulnerabilities", href: "/vulnerabilities", icon: Bug },
     ],
   },
   {
