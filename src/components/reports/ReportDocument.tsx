@@ -1,4 +1,4 @@
-import { ReportType, ReportData, SectionVisibility, Essential8Strategy } from "@/hooks/useReports";
+import { ReportType, ReportData, SectionVisibility } from "@/hooks/useReports";
 
 interface ReportDocumentProps {
   reportType: ReportType;
