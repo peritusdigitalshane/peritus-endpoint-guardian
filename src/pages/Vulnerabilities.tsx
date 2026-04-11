@@ -374,6 +374,12 @@ const Vulnerabilities = () => {
                                         Reopen
                                       </DropdownMenuItem>
                                     )}
+                                    <DropdownMenuItem
+                                      onClick={() => setMitigationFinding(finding)}
+                                    >
+                                      <Sparkles className="mr-2 h-4 w-4" />
+                                      AI Mitigation Advice
+                                    </DropdownMenuItem>
                                     <DropdownMenuItem asChild>
                                       <a
                                         href={`https://nvd.nist.gov/vuln/detail/${finding.cve_id}`}
