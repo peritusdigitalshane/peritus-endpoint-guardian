@@ -221,6 +221,11 @@ Deno.serve(async (req) => {
       return await handleApps(req);
     }
 
+    // Route: POST /software-inventory - Report installed software
+    if (path === "/software-inventory" && req.method === "POST") {
+      return await handleSoftwareInventory(req);
+    }
+
     // Route: POST /firewall-logs - Report firewall audit logs
     if (path === "/firewall-logs" && req.method === "POST") {
       return await handleFirewallLogs(req);

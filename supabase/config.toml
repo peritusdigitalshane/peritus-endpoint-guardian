@@ -19,3 +19,6 @@ verify_jwt = false
 
 [functions.router-checkin]
 verify_jwt = false
+
+[functions.vulnerability-scan]
+verify_jwt = false
