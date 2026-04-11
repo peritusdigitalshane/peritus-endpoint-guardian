@@ -39,9 +39,11 @@ import {
   Package,
   Loader2,
   Play,
+  Sparkles,
 } from "lucide-react";
 import { useState } from "react";
 import { VulnerabilityImportDialog } from "@/components/vulnerabilities/VulnerabilityImportDialog";
+import { CveMitigationSheet } from "@/components/vulnerabilities/CveMitigationSheet";
 import {
   useVulnerabilityFindings,
   useVulnerabilityStats,
