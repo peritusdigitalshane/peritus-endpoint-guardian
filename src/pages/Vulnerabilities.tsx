@@ -47,11 +47,11 @@ import {
   useVulnerabilityStats,
   useSoftwareInventory,
   useUpdateFindingStatus,
-  
 } from "@/hooks/useVulnerabilities";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 
 const severityConfig: Record<string, { color: string; label: string }> = {
@@ -81,6 +81,8 @@ const Vulnerabilities = () => {
   const [severityFilter, setSeverityFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
 
+  const queryClient = useQueryClient();
+
   const handleRunScan = async () => {
     if (!currentOrganization) return;
     setIsScanning(true);
@@ -93,6 +95,9 @@ const Vulnerabilities = () => {
         title: "Scan complete",
         description: data.message || `Found ${data.findings} vulnerabilities.`,
       });
+      // Refresh findings and inventory data
+      queryClient.invalidateQueries({ queryKey: ["vulnerability-findings"] });
+      queryClient.invalidateQueries({ queryKey: ["software-inventory"] });
     } catch (err: any) {
       toast({
         title: "Scan failed",
