@@ -631,6 +631,60 @@ export type Database = {
           },
         ]
       }
+      endpoint_software_inventory: {
+        Row: {
+          architecture: string | null
+          created_at: string
+          endpoint_id: string
+          id: string
+          install_date: string | null
+          organization_id: string
+          publisher: string | null
+          software_name: string
+          software_version: string | null
+          updated_at: string
+        }
+        Insert: {
+          architecture?: string | null
+          created_at?: string
+          endpoint_id: string
+          id?: string
+          install_date?: string | null
+          organization_id: string
+          publisher?: string | null
+          software_name: string
+          software_version?: string | null
+          updated_at?: string
+        }
+        Update: {
+          architecture?: string | null
+          created_at?: string
+          endpoint_id?: string
+          id?: string
+          install_date?: string | null
+          organization_id?: string
+          publisher?: string | null
+          software_name?: string
+          software_version?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "endpoint_software_inventory_endpoint_id_fkey"
+            columns: ["endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "endpoints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "endpoint_software_inventory_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       endpoint_status: {
         Row: {
           am_running_mode: string | null
@@ -2727,6 +2781,147 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "uac_policies_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vulnerability_findings: {
+        Row: {
+          affected_software: string
+          affected_version: string | null
+          created_at: string
+          cve_id: string
+          cvss_score: number | null
+          description: string | null
+          endpoint_id: string
+          fixed_version: string | null
+          id: string
+          organization_id: string
+          remediation: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          scan_job_id: string | null
+          severity: string
+          source: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          affected_software: string
+          affected_version?: string | null
+          created_at?: string
+          cve_id: string
+          cvss_score?: number | null
+          description?: string | null
+          endpoint_id: string
+          fixed_version?: string | null
+          id?: string
+          organization_id: string
+          remediation?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          scan_job_id?: string | null
+          severity?: string
+          source?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          affected_software?: string
+          affected_version?: string | null
+          created_at?: string
+          cve_id?: string
+          cvss_score?: number | null
+          description?: string | null
+          endpoint_id?: string
+          fixed_version?: string | null
+          id?: string
+          organization_id?: string
+          remediation?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          scan_job_id?: string | null
+          severity?: string
+          source?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vulnerability_findings_endpoint_id_fkey"
+            columns: ["endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "endpoints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vulnerability_findings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vulnerability_findings_scan_job_id_fkey"
+            columns: ["scan_job_id"]
+            isOneToOne: false
+            referencedRelation: "vulnerability_scan_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vulnerability_scan_jobs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          findings_count: number | null
+          id: string
+          organization_id: string
+          scan_type: string
+          scanned_endpoints: number | null
+          started_at: string | null
+          started_by: string | null
+          status: string
+          total_endpoints: number | null
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          findings_count?: number | null
+          id?: string
+          organization_id: string
+          scan_type?: string
+          scanned_endpoints?: number | null
+          started_at?: string | null
+          started_by?: string | null
+          status?: string
+          total_endpoints?: number | null
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          findings_count?: number | null
+          id?: string
+          organization_id?: string
+          scan_type?: string
+          scanned_endpoints?: number | null
+          started_at?: string | null
+          started_by?: string | null
+          status?: string
+          total_endpoints?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vulnerability_scan_jobs_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
