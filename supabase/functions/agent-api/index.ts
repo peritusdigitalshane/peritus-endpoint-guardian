@@ -221,6 +221,11 @@ Deno.serve(async (req) => {
       return await handleApps(req);
     }
 
+    // Route: POST /software-inventory - Report installed software
+    if (path === "/software-inventory" && req.method === "POST") {
+      return await handleSoftwareInventory(req);
+    }
+
     // Route: POST /firewall-logs - Report firewall audit logs
     if (path === "/firewall-logs" && req.method === "POST") {
       return await handleFirewallLogs(req);
@@ -1880,7 +1885,54 @@ async function handleHealthReport(req: Request) {
       title: `Agent health issues on ${endpoint.hostname}`,
       message: `${criticalErrors.length} error(s) reported: ${criticalErrors.map((e: any) => e.message).join("; ").slice(0, 500)}`,
     });
+}
+
+// POST /software-inventory - Receive installed software from agent
+async function handleSoftwareInventory(req: Request) {
+  const endpoint = await validateAgentToken(req);
+  const body = await req.json();
+
+  const software = Array.isArray(body?.software) ? body.software : [];
+  if (software.length === 0) {
+    return new Response(
+      JSON.stringify({ success: true, message: "No software reported" }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
+
+  // Clear existing inventory for this endpoint and replace with fresh data
+  await supabase
+    .from("endpoint_software_inventory")
+    .delete()
+    .eq("endpoint_id", endpoint.id);
+
+  // Insert new inventory in batches
+  const batchSize = 100;
+  let inserted = 0;
+  for (let i = 0; i < software.length; i += batchSize) {
+    const batch = software.slice(i, i + batchSize).map((s: any) => ({
+      endpoint_id: endpoint.id,
+      organization_id: endpoint.organization_id,
+      software_name: String(s.name || "Unknown").substring(0, 500),
+      software_version: s.version ? String(s.version).substring(0, 100) : null,
+      publisher: s.publisher ? String(s.publisher).substring(0, 500) : null,
+      install_date: s.install_date ? String(s.install_date).substring(0, 50) : null,
+      architecture: s.architecture ? String(s.architecture).substring(0, 20) : null,
+    }));
+
+    const { error } = await supabase.from("endpoint_software_inventory").insert(batch);
+    if (error) {
+      console.error("Software inventory insert error:", error);
+    } else {
+      inserted += batch.length;
+    }
+  }
+
+  return new Response(
+    JSON.stringify({ success: true, software_received: inserted }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
 
   return new Response(
     JSON.stringify({ success: true, errors_received: errors.length }),

@@ -38,14 +38,20 @@ import {
   ShieldOff,
   Package,
   Loader2,
+  Play,
 } from "lucide-react";
 import { useState } from "react";
+import { VulnerabilityImportDialog } from "@/components/vulnerabilities/VulnerabilityImportDialog";
 import {
   useVulnerabilityFindings,
   useVulnerabilityStats,
   useSoftwareInventory,
   useUpdateFindingStatus,
+  
 } from "@/hooks/useVulnerabilities";
+import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
+import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 
 const severityConfig: Record<string, { color: string; label: string }> = {
@@ -67,10 +73,36 @@ const Vulnerabilities = () => {
   const { stats } = useVulnerabilityStats();
   const { data: software } = useSoftwareInventory();
   const updateStatus = useUpdateFindingStatus();
+  const { currentOrganization } = useTenant();
+  const { toast } = useToast();
+  const [isScanning, setIsScanning] = useState(false);
 
   const [search, setSearch] = useState("");
   const [severityFilter, setSeverityFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+
+  const handleRunScan = async () => {
+    if (!currentOrganization) return;
+    setIsScanning(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("vulnerability-scan", {
+        body: { organization_id: currentOrganization.id },
+      });
+      if (error) throw error;
+      toast({
+        title: "Scan complete",
+        description: data.message || `Found ${data.findings} vulnerabilities.`,
+      });
+    } catch (err: any) {
+      toast({
+        title: "Scan failed",
+        description: err.message || "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsScanning(false);
+    }
+  };
 
   const filteredFindings = (findings || []).filter((f) => {
     const matchesSearch =
@@ -97,11 +129,24 @@ const Vulnerabilities = () => {
     <MainLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold">Vulnerability Scanner</h1>
-          <p className="text-muted-foreground">
-            CVE findings across your endpoints from scans, KB gap analysis, and imports
-          </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Vulnerability Scanner</h1>
+            <p className="text-muted-foreground">
+              CVE findings across your endpoints from scans, KB gap analysis, and imports
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <VulnerabilityImportDialog />
+            <Button onClick={handleRunScan} disabled={isScanning}>
+              {isScanning ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Play className="mr-2 h-4 w-4" />
+              )}
+              Run Scan
+            </Button>
+          </div>
         </div>
 
         {/* Stats */}
