@@ -458,6 +458,14 @@ const Vulnerabilities = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      <CveMitigationSheet
+        finding={mitigationFinding}
+        open={!!mitigationFinding}
+        onOpenChange={(open) => {
+          if (!open) setMitigationFinding(null);
+        }}
+      />
     </MainLayout>
   );
 };
