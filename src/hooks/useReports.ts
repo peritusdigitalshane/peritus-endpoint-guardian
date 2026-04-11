@@ -226,6 +226,87 @@ export function useGenerateReportData() {
       ];
     }
 
+    // Essential 8 Maturity Assessment
+    const calcMaturity = (coverage: number): 0 | 1 | 2 | 3 => {
+      if (coverage >= 95) return 3;
+      if (coverage >= 80) return 2;
+      if (coverage >= 50) return 1;
+      return 0;
+    };
+
+    // E8 Strategy 1: Application Control (WDAC)
+    // We approximate from policy assignment (endpoints with WDAC would need wdac_policy_id)
+    const wdacCoverage = Math.round((endpoints?.filter(e => (e as any).wdac_policy_id !== null).length || 0) / (totalEndpoints || 1) * 100);
+    const appControlGaps: string[] = [];
+    if (wdacCoverage < 50) appControlGaps.push("Deploy WDAC policies to endpoints via App Control");
+    if (wdacCoverage < 95) appControlGaps.push("Increase application control coverage across all endpoint groups");
+
+    // E8 Strategy 2: Patch Applications (signature currency as proxy)
+    const patchAppCoverage = signatureCompliance;
+    const patchAppGaps: string[] = [];
+    if (patchAppCoverage < 80) patchAppGaps.push("Reduce signature update interval in Defender policies");
+    if (patchAppCoverage < 95) patchAppGaps.push("Ensure all endpoints have current virus definitions");
+
+    // E8 Strategy 3: Configure Microsoft Office Macro Settings (ASR macro rules)
+    // Use policy assignment as proxy for macro control
+    const macroCoverage = policyAssigned;
+    const macroGaps: string[] = [];
+    if (macroCoverage < 80) macroGaps.push("Enable ASR rules for Office macro blocking in policies");
+    if (macroCoverage < 95) macroGaps.push("Assign Defender policies with macro ASR rules to all endpoints");
+
+    // E8 Strategy 4: User Application Hardening (network protection, exploit protection, script scanning)
+    const hardeningMetrics = [
+      realtimeProtection,
+      behaviorMonitoring,
+      ioavProtection,
+    ];
+    const appHardeningCoverage = Math.round(hardeningMetrics.reduce((a, b) => a + b, 0) / hardeningMetrics.length);
+    const appHardeningGaps: string[] = [];
+    if (appHardeningCoverage < 80) appHardeningGaps.push("Enable network protection and exploit protection in policies");
+    if (ioavProtection < 80) appHardeningGaps.push("Enable download protection (IOAV) across all endpoints");
+
+    // E8 Strategy 5: Restrict Administrative Privileges (UAC)
+    const uacCoverage = Math.round((endpoints?.filter(e => (e as any).uac_policy_id !== null).length || 0) / (totalEndpoints || 1) * 100);
+    const adminGaps: string[] = [];
+    if (uacCoverage < 50) adminGaps.push("Deploy UAC policies to restrict elevation prompts");
+    if (uacCoverage < 95) adminGaps.push("Assign UAC policies to all endpoint groups");
+
+    // E8 Strategy 6: Patch Operating Systems (Windows Update policies)
+    const wuCoverage = Math.round((endpoints?.filter(e => (e as any).windows_update_policy_id !== null).length || 0) / (totalEndpoints || 1) * 100);
+    const osPatchGaps: string[] = [];
+    if (wuCoverage < 50) osPatchGaps.push("Create and assign Windows Update policies");
+    if (wuCoverage < 95) osPatchGaps.push("Ensure all endpoints have a Windows Update policy assigned");
+
+    // E8 Strategy 7: Multi-Factor Authentication
+    // Platform-level MFA - approximate as partial if policies are managed
+    const mfaCoverage = policyAssigned >= 90 ? 60 : policyAssigned >= 50 ? 30 : 10;
+    const mfaGaps: string[] = ["Enable MFA for all user accounts in Settings → MFA"];
+    if (mfaCoverage < 60) mfaGaps.push("Enforce MFA across all administrator accounts");
+
+    // E8 Strategy 8: Regular Backups
+    // Cannot fully assess - show as needing external verification
+    const backupCoverage = 0;
+    const backupGaps: string[] = [
+      "Implement and verify regular backup procedures externally",
+      "Test backup restoration procedures periodically",
+    ];
+
+    const essential8: Essential8Strategy[] = [
+      { name: "Application Control", maturityLevel: calcMaturity(wdacCoverage), coverage: wdacCoverage, description: "Control which applications can execute on endpoints using WDAC policies", gaps: appControlGaps },
+      { name: "Patch Applications", maturityLevel: calcMaturity(patchAppCoverage), coverage: patchAppCoverage, description: "Keep application signatures and definitions up to date", gaps: patchAppGaps },
+      { name: "Configure MS Office Macros", maturityLevel: calcMaturity(macroCoverage), coverage: macroCoverage, description: "Restrict Office macro execution via ASR rules in Defender policies", gaps: macroGaps },
+      { name: "User Application Hardening", maturityLevel: calcMaturity(appHardeningCoverage), coverage: appHardeningCoverage, description: "Harden applications with network protection, exploit protection, and script scanning", gaps: appHardeningGaps },
+      { name: "Restrict Admin Privileges", maturityLevel: calcMaturity(uacCoverage), coverage: uacCoverage, description: "Manage administrative privileges through UAC policy enforcement", gaps: adminGaps },
+      { name: "Patch Operating Systems", maturityLevel: calcMaturity(wuCoverage), coverage: wuCoverage, description: "Ensure operating systems receive timely security updates", gaps: osPatchGaps },
+      { name: "Multi-Factor Authentication", maturityLevel: calcMaturity(mfaCoverage), coverage: mfaCoverage, description: "Require MFA for user authentication to the platform", gaps: mfaGaps },
+      { name: "Regular Backups", maturityLevel: calcMaturity(backupCoverage), coverage: backupCoverage, description: "Regular backups of important data with tested restoration", gaps: backupGaps },
+    ];
+
+    const overallMaturity = Math.min(...essential8.map(s => s.maturityLevel));
+
+    baseData.essential8 = essential8;
+    baseData.essential8OverallMaturity = overallMaturity;
+
     return baseData;
   };
 
