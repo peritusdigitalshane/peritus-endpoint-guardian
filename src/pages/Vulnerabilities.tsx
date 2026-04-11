@@ -39,9 +39,11 @@ import {
   Package,
   Loader2,
   Play,
+  Sparkles,
 } from "lucide-react";
 import { useState } from "react";
 import { VulnerabilityImportDialog } from "@/components/vulnerabilities/VulnerabilityImportDialog";
+import { CveMitigationSheet } from "@/components/vulnerabilities/CveMitigationSheet";
 import {
   useVulnerabilityFindings,
   useVulnerabilityStats,
@@ -80,6 +82,7 @@ const Vulnerabilities = () => {
   const [search, setSearch] = useState("");
   const [severityFilter, setSeverityFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [mitigationFinding, setMitigationFinding] = useState<any>(null);
 
   const queryClient = useQueryClient();
 
@@ -371,6 +374,12 @@ const Vulnerabilities = () => {
                                         Reopen
                                       </DropdownMenuItem>
                                     )}
+                                    <DropdownMenuItem
+                                      onClick={() => setMitigationFinding(finding)}
+                                    >
+                                      <Sparkles className="mr-2 h-4 w-4" />
+                                      AI Mitigation Advice
+                                    </DropdownMenuItem>
                                     <DropdownMenuItem asChild>
                                       <a
                                         href={`https://nvd.nist.gov/vuln/detail/${finding.cve_id}`}
@@ -449,6 +458,14 @@ const Vulnerabilities = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      <CveMitigationSheet
+        finding={mitigationFinding}
+        open={!!mitigationFinding}
+        onOpenChange={(open) => {
+          if (!open) setMitigationFinding(null);
+        }}
+      />
     </MainLayout>
   );
 };
