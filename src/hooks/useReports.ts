@@ -94,6 +94,7 @@ const defaultMonthlyVisibility: SectionVisibility = {
   complianceDetails: true,
   endpointInventory: true,
   recommendations: true,
+  essential8: true,
 };
 
 const defaultInsuranceVisibility: SectionVisibility = {
@@ -104,6 +105,7 @@ const defaultInsuranceVisibility: SectionVisibility = {
   complianceOverview: true,
   threatSummary: true,
   recommendations: true,
+  essential8: true,
 };
 
 export function useReports() {
