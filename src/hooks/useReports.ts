@@ -21,6 +21,14 @@ export interface SecurityReport {
   created_at: string;
 }
 
+export interface Essential8Strategy {
+  name: string;
+  maturityLevel: 0 | 1 | 2 | 3;
+  coverage: number;
+  description: string;
+  gaps: string[];
+}
+
 export interface ReportData {
   // Executive Summary
   organizationName?: string;
@@ -50,6 +58,10 @@ export interface ReportData {
   // Cyber Insurance specific
   securityControls?: SecurityControl[];
   recommendations?: string[];
+
+  // Essential 8
+  essential8?: Essential8Strategy[];
+  essential8OverallMaturity?: number;
 }
 
 export interface SecurityControl {
@@ -70,6 +82,7 @@ export interface SectionVisibility {
   recommendations?: boolean;
   securityControls?: boolean;
   coverageSummary?: boolean;
+  essential8?: boolean;
 }
 
 const defaultMonthlyVisibility: SectionVisibility = {
