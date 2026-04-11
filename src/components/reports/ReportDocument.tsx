@@ -1,4 +1,4 @@
-import { ReportType, ReportData, SectionVisibility } from "@/hooks/useReports";
+import { ReportType, ReportData, SectionVisibility, Essential8Strategy } from "@/hooks/useReports";
 
 interface ReportDocumentProps {
   reportType: ReportType;
@@ -322,6 +322,91 @@ export function ReportDocument({ reportType, title, reportData, visibility }: Re
                   </span>
                 </td>
               </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Essential 8 Maturity Alignment */}
+      {visibility.essential8 && reportData.essential8 && (
+        <div className="section mb-8">
+          <h2 className="section-title text-lg font-semibold mb-4 pb-2 border-b border-gray-200 text-gray-900">
+            Essential Eight Maturity Alignment
+          </h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Assessment of alignment with the Australian Cyber Security Centre (ACSC) Essential Eight framework.
+            Overall maturity level: <strong className="text-gray-900">Level {reportData.essential8OverallMaturity}</strong>
+          </p>
+
+          {/* Maturity Summary */}
+          <div className="grid grid-cols-4 gap-3 mb-6">
+            {[0, 1, 2, 3].map(level => {
+              const count = reportData.essential8!.filter(s => s.maturityLevel === level).length;
+              const bgColor = level === 0 ? "bg-red-50" : level === 1 ? "bg-yellow-50" : level === 2 ? "bg-blue-50" : "bg-green-50";
+              const textColor = level === 0 ? "text-red-700" : level === 1 ? "text-yellow-700" : level === 2 ? "text-blue-700" : "text-green-700";
+              const valueColor = level === 0 ? "text-red-600" : level === 1 ? "text-yellow-600" : level === 2 ? "text-blue-600" : "text-green-600";
+              return (
+                <div key={level} className={`${bgColor} p-3 rounded-lg text-center`}>
+                  <div className={`text-2xl font-bold ${valueColor}`}>{count}</div>
+                  <div className={`text-xs ${textColor}`}>Level {level}</div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Strategy Table */}
+          <table className="table w-full border-collapse">
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="p-3 text-left text-sm font-semibold text-gray-900">Strategy</th>
+                <th className="p-3 text-left text-sm font-semibold text-gray-900">Maturity</th>
+                <th className="p-3 text-left text-sm font-semibold text-gray-900">Coverage</th>
+                <th className="p-3 text-left text-sm font-semibold text-gray-900">Gaps</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reportData.essential8.map((strategy, idx) => {
+                const levelColor = strategy.maturityLevel === 0 ? "text-red-600" : strategy.maturityLevel === 1 ? "text-yellow-600" : strategy.maturityLevel === 2 ? "text-blue-600" : "text-green-600";
+                const levelBg = strategy.maturityLevel === 0 ? "bg-red-100" : strategy.maturityLevel === 1 ? "bg-yellow-100" : strategy.maturityLevel === 2 ? "bg-blue-100" : "bg-green-100";
+                return (
+                  <tr key={idx} className="border-b border-gray-200">
+                    <td className="p-3">
+                      <div className="text-sm font-medium text-gray-900">{strategy.name}</div>
+                      <div className="text-xs text-gray-500 mt-0.5">{strategy.description}</div>
+                    </td>
+                    <td className="p-3">
+                      <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${levelColor} ${levelBg}`}>
+                        Level {strategy.maturityLevel}
+                      </span>
+                    </td>
+                    <td className="p-3 text-sm text-gray-900">
+                      <div className="flex items-center gap-2">
+                        <div className="progress-bar h-2 w-16 bg-gray-200 rounded overflow-hidden">
+                          <div
+                            className="progress-fill h-full"
+                            style={{
+                              width: `${strategy.coverage}%`,
+                              backgroundColor: strategy.maturityLevel >= 2 ? "#2563eb" : strategy.maturityLevel === 1 ? "#ca8a04" : "#dc2626",
+                            }}
+                          />
+                        </div>
+                        <span>{strategy.coverage}%</span>
+                      </div>
+                    </td>
+                    <td className="p-3">
+                      {strategy.gaps.length > 0 ? (
+                        <ul className="text-xs text-gray-600 space-y-0.5">
+                          {strategy.gaps.map((gap, gi) => (
+                            <li key={gi}>• {gap}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <span className="text-xs text-green-600 font-medium">✓ Fully aligned</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -25,6 +25,7 @@ const monthlySections = [
   { key: "complianceOverview", label: "Compliance Overview" },
   { key: "complianceDetails", label: "Compliance Details" },
   { key: "endpointInventory", label: "Endpoint Inventory" },
+  { key: "essential8", label: "Essential Eight Alignment" },
   { key: "recommendations", label: "Recommendations" },
 ];
 
@@ -35,6 +36,7 @@ const insuranceSections = [
   { key: "coverageSummary", label: "Coverage Summary" },
   { key: "complianceOverview", label: "Compliance Status" },
   { key: "threatSummary", label: "Threat History" },
+  { key: "essential8", label: "Essential Eight Alignment" },
   { key: "recommendations", label: "Improvement Areas" },
 ];
 
