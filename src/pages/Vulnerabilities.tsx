@@ -82,6 +82,7 @@ const Vulnerabilities = () => {
   const [search, setSearch] = useState("");
   const [severityFilter, setSeverityFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [mitigationFinding, setMitigationFinding] = useState<any>(null);
 
   const queryClient = useQueryClient();
 
