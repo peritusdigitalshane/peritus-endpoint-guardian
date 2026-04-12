@@ -48,7 +48,7 @@ import {
   Clock,
   Layers,
 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { VulnerabilityImportDialog } from "@/components/vulnerabilities/VulnerabilityImportDialog";
 import { CveMitigationSheet } from "@/components/vulnerabilities/CveMitigationSheet";
 import { VulnerabilityTrendChart } from "@/components/vulnerabilities/VulnerabilityTrendChart";
