@@ -183,8 +183,9 @@ const Vulnerabilities = () => {
   const totalPages = Math.max(1, Math.ceil(filteredFindings.length / ITEMS_PER_PAGE));
   const paginatedFindings = filteredFindings.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
-  // Reset page when filters change
-  useMemo(() => setCurrentPage(1), [search, severityFilter, statusFilter, softwareFilter]);
+  // Reset page when filters change - using useEffect pattern
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useMemo(() => { setCurrentPage(1); }, [search, severityFilter, statusFilter, softwareFilter]);
 
   // Grouped CVE view
   const groupedCves = useMemo(() => {
@@ -230,7 +231,7 @@ const Vulnerabilities = () => {
     }
 
     return Array.from(groups.values()).sort((a, b) => (b.cvss_score ?? 0) - (a.cvss_score ?? 0));
-  }, [filteredFindings]);
+  }, [filteredFindings, findings]);
 
   // Selection handlers
   const toggleSelect = (id: string) => {
@@ -746,8 +747,6 @@ const Vulnerabilities = () => {
                                   className="font-medium text-primary hover:underline text-left"
                                   onClick={() => {
                                     setSoftwareFilter(sw.software_name);
-                                    // Switch to findings tab
-                                    const tab = document.querySelector('[data-state="active"][value="inventory"]');
                                     const findingsTab = document.querySelector('[value="findings"]') as HTMLElement;
                                     if (findingsTab) findingsTab.click();
                                   }}
