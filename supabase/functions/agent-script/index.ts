@@ -534,7 +534,91 @@ function Send-Heartbeat {
             Write-Log "Network module not enabled - skipping firewall telemetry"
         }
     } catch { $script:NetworkModuleEnabled = $false }
+
+    # Process any pending commands from the platform
+    try {
+        if ($response -and $response.commands -and $response.commands.Count -gt 0) {
+            Write-Log "Received $($response.commands.Count) command(s) from platform"
+            foreach ($cmd in $response.commands) {
+                Execute-PlatformCommand -Command $cmd -AgentToken $AgentToken
+            }
+        }
+    } catch {
+        Write-Log "Error processing commands: $_" -Level "WARN"
+    }
+
     Write-Log "Heartbeat sent successfully"
+}
+
+function Execute-PlatformCommand {
+    param($Command, [string]$AgentToken)
+    $cmdId = $Command.id
+    $cmdType = $Command.command_type
+    $cmdParams = $Command.parameters
+    Write-Log "Executing command: $cmdType (ID: $cmdId)"
+    
+    $success = $false
+    $result = @{}
+
+    try {
+        switch ($cmdType) {
+            "install_updates" {
+                Write-Log "Triggering Windows Update scan and install..."
+                
+                # Use UsoClient for modern Windows 10/11
+                try {
+                    Start-Process -FilePath "UsoClient.exe" -ArgumentList "StartScan" -NoNewWindow -Wait -ErrorAction Stop
+                    Start-Sleep -Seconds 5
+                    Start-Process -FilePath "UsoClient.exe" -ArgumentList "StartInstall" -NoNewWindow -Wait -ErrorAction Stop
+                    $result.method = "UsoClient"
+                    $result.message = "Windows Update scan and install triggered via UsoClient"
+                    $success = $true
+                    Write-Log "Windows Update triggered successfully via UsoClient"
+                } catch {
+                    Write-Log "UsoClient failed, trying wuauclt..." -Level "WARN"
+                    try {
+                        Start-Process -FilePath "wuauclt.exe" -ArgumentList "/detectnow /updatenow" -NoNewWindow -Wait -ErrorAction Stop
+                        $result.method = "wuauclt"
+                        $result.message = "Windows Update triggered via wuauclt"
+                        $success = $true
+                        Write-Log "Windows Update triggered successfully via wuauclt"
+                    } catch {
+                        $result.error = "Both UsoClient and wuauclt failed: $_"
+                        Write-Log "Windows Update trigger failed: $_" -Level "ERROR"
+                    }
+                }
+
+                # Also trigger Defender signature update
+                try {
+                    Update-MpSignature -ErrorAction SilentlyContinue
+                    $result.signature_update = "Triggered"
+                    Write-Log "Defender signature update triggered"
+                } catch {
+                    $result.signature_update = "Failed: $_"
+                }
+            }
+            default {
+                $result.error = "Unknown command type: $cmdType"
+                Write-Log "Unknown command type: $cmdType" -Level "WARN"
+            }
+        }
+    } catch {
+        $result.error = "$_"
+        Write-Log "Command execution failed: $_" -Level "ERROR"
+    }
+
+    # Report result back to platform
+    try {
+        $body = @{
+            command_id = $cmdId
+            success = $success
+            result = $result
+        }
+        Invoke-ApiRequest -Endpoint "/command-result" -Body $body -AgentToken $AgentToken
+        Write-Log "Command result reported for $cmdId (success: $success)"
+    } catch {
+        Write-Log "Failed to report command result: $_" -Level "WARN"
+    }
 }
 
 # ==================== FIREWALL TELEMETRY (Network Module) ====================

@@ -40,6 +40,7 @@ import {
   Loader2,
   Play,
   Sparkles,
+  Download,
 } from "lucide-react";
 import { useState } from "react";
 import { VulnerabilityImportDialog } from "@/components/vulnerabilities/VulnerabilityImportDialog";
@@ -49,6 +50,7 @@ import {
   useVulnerabilityStats,
   useSoftwareInventory,
   useUpdateFindingStatus,
+  usePatchDevice,
 } from "@/hooks/useVulnerabilities";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
@@ -75,6 +77,7 @@ const Vulnerabilities = () => {
   const { stats } = useVulnerabilityStats();
   const { data: software } = useSoftwareInventory();
   const updateStatus = useUpdateFindingStatus();
+  const patchDevice = usePatchDevice();
   const { currentOrganization } = useTenant();
   const { toast } = useToast();
   const [isScanning, setIsScanning] = useState(false);
@@ -342,6 +345,18 @@ const Vulnerabilities = () => {
                                   <DropdownMenuContent align="end">
                                     {finding.status === "open" && (
                                       <>
+                                        <DropdownMenuItem
+                                          onClick={() =>
+                                            patchDevice.mutate({
+                                              endpointId: finding.endpoint_id,
+                                              organizationId: finding.organization_id,
+                                              cveId: finding.cve_id,
+                                            })
+                                          }
+                                        >
+                                          <Download className="mr-2 h-4 w-4" />
+                                          Patch Device
+                                        </DropdownMenuItem>
                                         <DropdownMenuItem
                                           onClick={() =>
                                             updateStatus.mutate({ id: finding.id, status: "mitigated" })

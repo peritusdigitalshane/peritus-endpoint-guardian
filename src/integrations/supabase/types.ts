@@ -301,6 +301,66 @@ export type Database = {
           },
         ]
       }
+      endpoint_commands: {
+        Row: {
+          command_type: string
+          completed_at: string | null
+          created_at: string
+          endpoint_id: string
+          id: string
+          issued_at: string
+          issued_by: string | null
+          organization_id: string
+          parameters: Json | null
+          result: Json | null
+          sent_at: string | null
+          status: string
+        }
+        Insert: {
+          command_type: string
+          completed_at?: string | null
+          created_at?: string
+          endpoint_id: string
+          id?: string
+          issued_at?: string
+          issued_by?: string | null
+          organization_id: string
+          parameters?: Json | null
+          result?: Json | null
+          sent_at?: string | null
+          status?: string
+        }
+        Update: {
+          command_type?: string
+          completed_at?: string | null
+          created_at?: string
+          endpoint_id?: string
+          id?: string
+          issued_at?: string
+          issued_by?: string | null
+          organization_id?: string
+          parameters?: Json | null
+          result?: Json | null
+          sent_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "endpoint_commands_endpoint_id_fkey"
+            columns: ["endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "endpoints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "endpoint_commands_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       endpoint_event_logs: {
         Row: {
           created_at: string

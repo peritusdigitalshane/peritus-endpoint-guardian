@@ -271,6 +271,11 @@ Deno.serve(async (req) => {
       return await handleGetStatus(req);
     }
 
+    // Route: POST /command-result - Report command execution result
+    if (path === "/command-result" && req.method === "POST") {
+      return await handleCommandResult(req);
+    }
+
     // Route: POST /health - Report agent health/errors
     if (path === "/health" && req.method === "POST") {
       return await handleHealthReport(req);
@@ -518,12 +523,64 @@ async function handleHeartbeat(req: Request) {
     .eq("id", endpoint.organization_id)
     .single();
 
+  // Fetch pending commands for this endpoint
+  const { data: pendingCommands } = await supabase
+    .from("endpoint_commands")
+    .select("id, command_type, parameters")
+    .eq("endpoint_id", endpoint.id)
+    .eq("status", "pending")
+    .order("issued_at", { ascending: true })
+    .limit(10);
+
+  // Mark fetched commands as sent
+  if (pendingCommands && pendingCommands.length > 0) {
+    const commandIds = pendingCommands.map((c: any) => c.id);
+    await supabase
+      .from("endpoint_commands")
+      .update({ status: "sent", sent_at: new Date().toISOString() })
+      .in("id", commandIds);
+  }
+
   return new Response(
     JSON.stringify({ 
       success: true, 
       message: "Heartbeat received",
       network_module_enabled: org?.network_module_enabled ?? false,
+      commands: pendingCommands || [],
     }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+
+// POST /command-result - Agent reports result of executed command
+async function handleCommandResult(req: Request) {
+  const endpoint = await validateAgentToken(req);
+  const body = await req.json();
+  const { command_id, success, result } = body;
+
+  if (!command_id) {
+    return new Response(
+      JSON.stringify({ error: "command_id is required" }),
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  const { error } = await supabase
+    .from("endpoint_commands")
+    .update({
+      status: success ? "completed" : "failed",
+      completed_at: new Date().toISOString(),
+      result: result || null,
+    })
+    .eq("id", command_id)
+    .eq("endpoint_id", endpoint.id);
+
+  if (error) {
+    console.error("Error updating command result:", error);
+  }
+
+  return new Response(
+    JSON.stringify({ success: true }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
 }

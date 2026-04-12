@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { useToast } from "@/hooks/use-toast";
 
 export function useVulnerabilityFindings() {
   const { currentOrganization } = useTenant();
@@ -107,6 +108,47 @@ export function useUpdateFindingStatus() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["vulnerability-findings"] });
+    },
+  });
+}
+
+export function usePatchDevice() {
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({
+      endpointId,
+      organizationId,
+      cveId,
+    }: {
+      endpointId: string;
+      organizationId: string;
+      cveId: string;
+    }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await supabase
+        .from("endpoint_commands")
+        .insert({
+          endpoint_id: endpointId,
+          organization_id: organizationId,
+          command_type: "install_updates",
+          parameters: { triggered_by_cve: cveId },
+          issued_by: user?.id,
+        });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Patch command queued",
+        description: "The device will install updates on its next check-in.",
+      });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Failed to queue patch command",
+        description: err.message,
+        variant: "destructive",
+      });
     },
   });
 }
