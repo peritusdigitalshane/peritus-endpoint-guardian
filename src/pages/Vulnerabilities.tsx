@@ -40,6 +40,7 @@ import {
   Loader2,
   Play,
   Sparkles,
+  Download,
 } from "lucide-react";
 import { useState } from "react";
 import { VulnerabilityImportDialog } from "@/components/vulnerabilities/VulnerabilityImportDialog";
@@ -76,6 +77,7 @@ const Vulnerabilities = () => {
   const { stats } = useVulnerabilityStats();
   const { data: software } = useSoftwareInventory();
   const updateStatus = useUpdateFindingStatus();
+  const patchDevice = usePatchDevice();
   const { currentOrganization } = useTenant();
   const { toast } = useToast();
   const [isScanning, setIsScanning] = useState(false);
