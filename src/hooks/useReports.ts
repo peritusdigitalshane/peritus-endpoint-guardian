@@ -29,6 +29,20 @@ export interface Essential8Strategy {
   gaps: string[];
 }
 
+export interface Essential8EndpointAlignment {
+  endpointId: string;
+  hostname: string;
+  isOnline: boolean;
+  appControl: boolean;
+  patchApps: boolean;
+  officeMacros: boolean;
+  appHardening: boolean;
+  adminPrivileges: boolean;
+  patchOS: boolean;
+  overallMaturity: 0 | 1 | 2 | 3;
+  alignedCount: number;
+}
+
 export interface ReportData {
   // Executive Summary
   organizationName?: string;
@@ -62,6 +76,7 @@ export interface ReportData {
   // Essential 8
   essential8?: Essential8Strategy[];
   essential8OverallMaturity?: number;
+  essential8Endpoints?: Essential8EndpointAlignment[];
 }
 
 export interface SecurityControl {
