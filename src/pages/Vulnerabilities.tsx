@@ -347,6 +347,18 @@ const Vulnerabilities = () => {
                                       <>
                                         <DropdownMenuItem
                                           onClick={() =>
+                                            patchDevice.mutate({
+                                              endpointId: finding.endpoint_id,
+                                              organizationId: finding.organization_id,
+                                              cveId: finding.cve_id,
+                                            })
+                                          }
+                                        >
+                                          <Download className="mr-2 h-4 w-4" />
+                                          Patch Device
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          onClick={() =>
                                             updateStatus.mutate({ id: finding.id, status: "mitigated" })
                                           }
                                         >
