@@ -48,7 +48,7 @@ import {
   Clock,
   Layers,
 } from "lucide-react";
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { VulnerabilityImportDialog } from "@/components/vulnerabilities/VulnerabilityImportDialog";
 import { CveMitigationSheet } from "@/components/vulnerabilities/CveMitigationSheet";
 import { VulnerabilityTrendChart } from "@/components/vulnerabilities/VulnerabilityTrendChart";
@@ -184,12 +184,7 @@ const Vulnerabilities = () => {
   const paginatedFindings = filteredFindings.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
   // Reset page when filters change
-  const filterKey = `${search}|${severityFilter}|${statusFilter}|${softwareFilter}`;
-  const prevFilterKey = useState({ current: filterKey })[0];
-  if (prevFilterKey.current !== filterKey) {
-    prevFilterKey.current = filterKey;
-    if (currentPage !== 1) setCurrentPage(1);
-  }
+  useEffect(() => { setCurrentPage(1); }, [search, severityFilter, statusFilter, softwareFilter]);
 
   // Grouped CVE view
   const groupedCves = useMemo(() => {
