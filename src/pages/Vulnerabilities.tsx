@@ -183,9 +183,13 @@ const Vulnerabilities = () => {
   const totalPages = Math.max(1, Math.ceil(filteredFindings.length / ITEMS_PER_PAGE));
   const paginatedFindings = filteredFindings.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
-  // Reset page when filters change - using useEffect pattern
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useMemo(() => { setCurrentPage(1); }, [search, severityFilter, statusFilter, softwareFilter]);
+  // Reset page when filters change
+  const filterKey = `${search}|${severityFilter}|${statusFilter}|${softwareFilter}`;
+  const prevFilterKey = useState({ current: filterKey })[0];
+  if (prevFilterKey.current !== filterKey) {
+    prevFilterKey.current = filterKey;
+    if (currentPage !== 1) setCurrentPage(1);
+  }
 
   // Grouped CVE view
   const groupedCves = useMemo(() => {
