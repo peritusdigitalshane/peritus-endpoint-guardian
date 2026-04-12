@@ -112,6 +112,38 @@ export function useUpdateFindingStatus() {
   });
 }
 
+export function useBulkUpdateFindingStatus() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ ids, status }: { ids: string[]; status: string }) => {
+      const { error } = await supabase
+        .from("vulnerability_findings")
+        .update({
+          status,
+          resolved_at: status !== "open" ? new Date().toISOString() : null,
+        })
+        .in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["vulnerability-findings"] });
+      toast({
+        title: "Bulk update complete",
+        description: `Updated ${vars.ids.length} findings to "${vars.status}".`,
+      });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Bulk update failed",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+}
+
 export function usePatchDevice() {
   const { toast } = useToast();
 
@@ -146,6 +178,51 @@ export function usePatchDevice() {
     onError: (err: any) => {
       toast({
         title: "Failed to queue patch command",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+}
+
+export function useBulkPatchDevices() {
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (
+      findings: Array<{ endpointId: string; organizationId: string; cveId: string }>
+    ) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      // Deduplicate by endpoint to avoid duplicate patch commands
+      const uniqueEndpoints = new Map<string, { endpointId: string; organizationId: string; cveIds: string[] }>();
+      for (const f of findings) {
+        if (!uniqueEndpoints.has(f.endpointId)) {
+          uniqueEndpoints.set(f.endpointId, { endpointId: f.endpointId, organizationId: f.organizationId, cveIds: [] });
+        }
+        uniqueEndpoints.get(f.endpointId)!.cveIds.push(f.cveId);
+      }
+
+      const commands = Array.from(uniqueEndpoints.values()).map((ep) => ({
+        endpoint_id: ep.endpointId,
+        organization_id: ep.organizationId,
+        command_type: "install_updates",
+        parameters: { triggered_by_cves: ep.cveIds },
+        issued_by: user?.id,
+      }));
+
+      const { error } = await supabase.from("endpoint_commands").insert(commands);
+      if (error) throw error;
+      return commands.length;
+    },
+    onSuccess: (count) => {
+      toast({
+        title: "Bulk patch queued",
+        description: `Patch commands queued for ${count} device(s).`,
+      });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Bulk patch failed",
         description: err.message,
         variant: "destructive",
       });
