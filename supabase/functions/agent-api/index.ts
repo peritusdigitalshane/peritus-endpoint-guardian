@@ -518,11 +518,30 @@ async function handleHeartbeat(req: Request) {
     .eq("id", endpoint.organization_id)
     .single();
 
+  // Fetch pending commands for this endpoint
+  const { data: pendingCommands } = await supabase
+    .from("endpoint_commands")
+    .select("id, command_type, parameters")
+    .eq("endpoint_id", endpoint.id)
+    .eq("status", "pending")
+    .order("issued_at", { ascending: true })
+    .limit(10);
+
+  // Mark fetched commands as sent
+  if (pendingCommands && pendingCommands.length > 0) {
+    const commandIds = pendingCommands.map((c: any) => c.id);
+    await supabase
+      .from("endpoint_commands")
+      .update({ status: "sent", sent_at: new Date().toISOString() })
+      .in("id", commandIds);
+  }
+
   return new Response(
     JSON.stringify({ 
       success: true, 
       message: "Heartbeat received",
       network_module_enabled: org?.network_module_enabled ?? false,
+      commands: pendingCommands || [],
     }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
