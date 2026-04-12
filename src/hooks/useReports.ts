@@ -332,8 +332,49 @@ export function useGenerateReportData() {
 
     const overallMaturity = Math.min(...essential8.map(s => s.maturityLevel));
 
+    // Per-endpoint Essential 8 alignment
+    const essential8Endpoints: Essential8EndpointAlignment[] = (endpoints || []).map(endpoint => {
+      const ep = endpoint as any;
+      const status = statuses?.find(s => s.endpoint_id === ep.id);
+      
+      // App Control: has WDAC policy
+      const appControl = !!ep.wdac_policy_id;
+      // Patch Apps: has Windows Update policy + current signatures
+      const sigCurrent = status?.antivirus_signature_age !== null && status?.antivirus_signature_age !== undefined && status.antivirus_signature_age <= 1;
+      const patchApps = !!ep.windows_update_policy_id && sigCurrent;
+      // Office Macros: has Defender policy (ASR rules)
+      const officeMacros = !!ep.policy_id;
+      // App Hardening: realtime + behavior + ioav + defender policy
+      const appHardening = !!(status?.realtime_protection_enabled && status?.behavior_monitor_enabled && status?.ioav_protection_enabled && ep.policy_id);
+      // Admin Privileges: has UAC policy
+      const adminPrivileges = !!ep.uac_policy_id;
+      // Patch OS: has Windows Update policy
+      const patchOS = !!ep.windows_update_policy_id;
+
+      const checks = [appControl, patchApps, officeMacros, appHardening, adminPrivileges, patchOS];
+      const alignedCount = checks.filter(Boolean).length;
+      
+      // Per-endpoint maturity: 0-2 aligned = L0, 3 = L1, 4-5 = L2, 6 = L3
+      const overallMaturity: 0 | 1 | 2 | 3 = alignedCount >= 6 ? 3 : alignedCount >= 4 ? 2 : alignedCount >= 3 ? 1 : 0;
+
+      return {
+        endpointId: ep.id,
+        hostname: ep.hostname,
+        isOnline: ep.is_online,
+        appControl,
+        patchApps,
+        officeMacros,
+        appHardening,
+        adminPrivileges,
+        patchOS,
+        overallMaturity,
+        alignedCount,
+      };
+    });
+
     baseData.essential8 = essential8;
     baseData.essential8OverallMaturity = overallMaturity;
+    baseData.essential8Endpoints = essential8Endpoints;
 
     return baseData;
   };
