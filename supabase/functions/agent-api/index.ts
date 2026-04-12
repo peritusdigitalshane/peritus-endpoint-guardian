@@ -552,6 +552,39 @@ async function handleHeartbeat(req: Request) {
   );
 }
 
+// POST /command-result - Agent reports result of executed command
+async function handleCommandResult(req: Request) {
+  const endpoint = await validateAgentToken(req);
+  const body = await req.json();
+  const { command_id, success, result } = body;
+
+  if (!command_id) {
+    return new Response(
+      JSON.stringify({ error: "command_id is required" }),
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  const { error } = await supabase
+    .from("endpoint_commands")
+    .update({
+      status: success ? "completed" : "failed",
+      completed_at: new Date().toISOString(),
+      result: result || null,
+    })
+    .eq("id", command_id)
+    .eq("endpoint_id", endpoint.id);
+
+  if (error) {
+    console.error("Error updating command result:", error);
+  }
+
+  return new Response(
+    JSON.stringify({ success: true }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+
 // POST /threats - Report threats from agent
 async function handleThreats(req: Request) {
   const endpoint = await validateAgentToken(req);
