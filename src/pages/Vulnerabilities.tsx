@@ -49,6 +49,7 @@ import {
   useVulnerabilityStats,
   useSoftwareInventory,
   useUpdateFindingStatus,
+  usePatchDevice,
 } from "@/hooks/useVulnerabilities";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
