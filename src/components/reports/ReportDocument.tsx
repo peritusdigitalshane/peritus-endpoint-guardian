@@ -409,6 +409,58 @@ export function ReportDocument({ reportType, title, reportData, visibility }: Re
               })}
             </tbody>
           </table>
+
+          {/* Per-Device Alignment */}
+          {reportData.essential8Endpoints && reportData.essential8Endpoints.length > 0 && (
+            <div className="mt-6">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3">Per-Device Essential Eight Alignment</h3>
+              <table className="table w-full border-collapse text-xs">
+                <thead>
+                  <tr className="bg-gray-100">
+                    <th className="p-2 text-left font-semibold text-gray-900">Device</th>
+                    <th className="p-2 text-center font-semibold text-gray-900">Status</th>
+                    <th className="p-2 text-center font-semibold text-gray-900" title="Application Control">App Ctrl</th>
+                    <th className="p-2 text-center font-semibold text-gray-900" title="Patch Applications">Patch Apps</th>
+                    <th className="p-2 text-center font-semibold text-gray-900" title="Office Macros">Macros</th>
+                    <th className="p-2 text-center font-semibold text-gray-900" title="User Application Hardening">Hardening</th>
+                    <th className="p-2 text-center font-semibold text-gray-900" title="Restrict Admin Privileges">Admin Priv</th>
+                    <th className="p-2 text-center font-semibold text-gray-900" title="Patch Operating Systems">Patch OS</th>
+                    <th className="p-2 text-center font-semibold text-gray-900">Maturity</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reportData.essential8Endpoints.map((ep) => {
+                    const levelColor = ep.overallMaturity === 0 ? "text-red-600 bg-red-100" : ep.overallMaturity === 1 ? "text-yellow-600 bg-yellow-100" : ep.overallMaturity === 2 ? "text-blue-600 bg-blue-100" : "text-green-600 bg-green-100";
+                    const check = (val: boolean) => val 
+                      ? <span className="text-green-600 font-bold">✓</span> 
+                      : <span className="text-red-400">✗</span>;
+                    return (
+                      <tr key={ep.endpointId} className="border-b border-gray-200">
+                        <td className="p-2 font-medium text-gray-900">{ep.hostname}</td>
+                        <td className="p-2 text-center">
+                          <span className={`inline-block w-2 h-2 rounded-full ${ep.isOnline ? "bg-green-500" : "bg-gray-400"}`} />
+                        </td>
+                        <td className="p-2 text-center">{check(ep.appControl)}</td>
+                        <td className="p-2 text-center">{check(ep.patchApps)}</td>
+                        <td className="p-2 text-center">{check(ep.officeMacros)}</td>
+                        <td className="p-2 text-center">{check(ep.appHardening)}</td>
+                        <td className="p-2 text-center">{check(ep.adminPrivileges)}</td>
+                        <td className="p-2 text-center">{check(ep.patchOS)}</td>
+                        <td className="p-2 text-center">
+                          <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${levelColor}`}>
+                            L{ep.overallMaturity}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <p className="text-xs text-gray-500 mt-2">
+                ✓ = Aligned | ✗ = Gap identified | MFA and Backups are assessed at the organisational level, not per device.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
