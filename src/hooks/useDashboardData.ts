@@ -163,18 +163,25 @@ export function useLatestEndpointStatuses() {
       
       if (endpointIds.length === 0) return [];
 
-      // Get the latest status for each endpoint
-      const { data, error } = await supabase
-        .from("endpoint_status")
-        .select("*")
-        .in("endpoint_id", endpointIds)
-        .order("collected_at", { ascending: false });
+      // Get the latest status for each endpoint using a per-endpoint approach
+      // to avoid the 1000-row default limit truncating results
+      const allStatuses: any[] = [];
+      const batchSize = 50;
+      for (let i = 0; i < endpointIds.length; i += batchSize) {
+        const batch = endpointIds.slice(i, i + batchSize);
+        const { data, error } = await supabase
+          .from("endpoint_status")
+          .select("*")
+          .in("endpoint_id", batch)
+          .order("collected_at", { ascending: false })
+          .limit(batch.length * 2); // At most 2 status records per endpoint
+        if (error) throw error;
+        if (data) allStatuses.push(...data);
+      }
 
-      if (error) throw error;
-      
       // Group by endpoint_id and take the latest
       const latestByEndpoint = new Map<string, EndpointStatus>();
-      for (const status of data || []) {
+      for (const status of allStatuses) {
         if (!latestByEndpoint.has(status.endpoint_id)) {
           latestByEndpoint.set(status.endpoint_id, status as EndpointStatus);
         }
