@@ -186,9 +186,6 @@ export function useLatestEndpointStatuses() {
           latestByEndpoint.set(status.endpoint_id, status as EndpointStatus);
         }
       }
-          latestByEndpoint.set(status.endpoint_id, status as EndpointStatus);
-        }
-      }
       
       return Array.from(latestByEndpoint.values());
     },
