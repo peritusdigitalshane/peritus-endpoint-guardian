@@ -1750,13 +1750,10 @@ async function handleFirewallLogs(req: Request) {
     );
   }
 
-  let insertedCount = 0;
-
-  for (const log of logs) {
-    if (!log?.service_name || !log?.remote_address) continue;
-
-    // Insert firewall audit log
-    const { error } = await supabase.from("firewall_audit_logs").insert({
+  // Build batch of valid logs
+  const logsToInsert = logs
+    .filter((log: any) => log?.service_name && log?.remote_address)
+    .map((log: any) => ({
       organization_id: endpoint.organization_id,
       endpoint_id: endpoint.id,
       rule_id: log.rule_id || null,
@@ -1767,9 +1764,17 @@ async function handleFirewallLogs(req: Request) {
       protocol: log.protocol || "tcp",
       direction: log.direction || "inbound",
       event_time: log.event_time || new Date().toISOString(),
-    });
+    }));
 
-    if (!error) insertedCount++;
+  let insertedCount = 0;
+
+  // Insert in batches of 200 instead of one-by-one
+  const fwBatchSize = 200;
+  for (let i = 0; i < logsToInsert.length; i += fwBatchSize) {
+    const batch = logsToInsert.slice(i, i + fwBatchSize);
+    const { error } = await supabase.from("firewall_audit_logs").insert(batch);
+    if (!error) insertedCount += batch.length;
+    else console.error("Firewall log batch insert error:", error);
   }
 
   console.log(`[${VERSION}] Firewall logs inserted: ${insertedCount} of ${logs.length}`);
@@ -1942,6 +1947,12 @@ async function handleHealthReport(req: Request) {
       title: `Agent health issues on ${endpoint.hostname}`,
       message: `${criticalErrors.length} error(s) reported: ${criticalErrors.map((e: any) => e.message).join("; ").slice(0, 500)}`,
     });
+  }
+
+  return new Response(
+    JSON.stringify({ success: true, errors_received: errors.length }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
 }
 
 // POST /software-inventory - Receive installed software from agent
@@ -1987,12 +1998,6 @@ async function handleSoftwareInventory(req: Request) {
 
   return new Response(
     JSON.stringify({ success: true, software_received: inserted }),
-    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-  );
-}
-
-  return new Response(
-    JSON.stringify({ success: true, errors_received: errors.length }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
 }
