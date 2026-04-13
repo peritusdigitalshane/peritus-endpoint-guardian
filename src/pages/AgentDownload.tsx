@@ -27,11 +27,19 @@ $ConfigPath = "$env:ProgramData\PeritusSecure"
 
 Write-Host "=== Peritus Agent Removal ===" -ForegroundColor Cyan
 
-# 1. Stop any running tray processes
-Write-Host "[1/5] Stopping tray processes..." -ForegroundColor Yellow
-Get-Process -Name "powershell" -ErrorAction SilentlyContinue | Where-Object {
-    try { $_.CommandLine -like "*PeritusSecure*" -or $_.CommandLine -like "*-TrayMode*" } catch { $false }
-} | Stop-Process -Force -ErrorAction SilentlyContinue
+# 1. Stop any running agent and tray processes
+Write-Host "[1/5] Stopping agent processes..." -ForegroundColor Yellow
+try {
+    $myPid = $PID
+    Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue | Where-Object {
+        $_.ProcessId -ne $myPid -and $_.CommandLine -like "*PeritusSecure*"
+    } | ForEach-Object {
+        Write-Host "  Stopping process $($_.ProcessId)..." -ForegroundColor Gray
+        Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+} catch {
+    Write-Host "  Could not enumerate processes: $_" -ForegroundColor Gray
+}
 Write-Host "  Done." -ForegroundColor Green
 
 # 2. Remove scheduled tasks
